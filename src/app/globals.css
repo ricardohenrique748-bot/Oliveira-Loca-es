@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-black: #0b0b0b;
+    --brand-yellow: #f5d90a;
+    --brand-yellow-dark: #c9b200;
+    --status-ok: #16a34a;
+    --status-alerta: #d97706;
+    --status-critico: #dc2626;
+
+    --background: 220 20% 98%;
+    --foreground: 222 20% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 20% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 20% 12%;
+    /* amarelo da marca só em ações e destaques; texto escuro por cima (contraste AA) */
+    --primary: 53 92% 50%;
+    --primary-foreground: 240 6% 10%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 240 6% 10%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 88%;
+    --ring: 240 6% 10%;
+    --radius: 0.375rem;
+
+    /* gráficos — paleta categórica validada (ordem fixa) */
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-neg: #e34948;
+    --chart-grid: #e6e5e1;
+    --chart-axis: #52514e;
+    --chart-surface: #ffffff;
+  }
+
+  .dark {
+    --background: 240 6% 7%;
+    --foreground: 0 0% 96%;
+    --card: 240 5% 10%;
+    --card-foreground: 0 0% 96%;
+    --popover: 240 5% 10%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 53 92% 50%;
+    --primary-foreground: 240 6% 10%;
+    --secondary: 240 4% 15%;
+    --secondary-foreground: 0 0% 96%;
+    --muted: 240 4% 15%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 96%;
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 4% 17%;
+    --input: 240 4% 21%;
+    --ring: 53 92% 50%;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-neg: #e66767;
+    --chart-grid: #2c2c2a;
+    --chart-axis: #c3c2b7;
+    --chart-surface: #141414;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "tnum" 1;
+  }
+  h1, h2, h3 {
+    @apply font-display font-medium;
+  }
+  /* foco visível (AA) */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer utilities {
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* login: brilho amarelo atrás da logo */
+@keyframes login-brilho {
+  0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.08); }
+}
+/* login: autopreenchimento do navegador sem o fundo azul-claro */
+.login-campo:-webkit-autofill,
+.login-campo:-webkit-autofill:hover,
+.login-campo:-webkit-autofill:focus {
+  -webkit-text-fill-color: #fff;
+  -webkit-box-shadow: 0 0 0 1000px #131313 inset;
+  caret-color: #fff;
+  transition: background-color 9999s;
+}
+/* login: caminhão atravessando a estrada */
+@keyframes login-caminhao {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100vw); }
+}
+@keyframes login-girar {
+  to { transform: rotate(360deg); }
+}
+@keyframes login-sacudir {
+  to { transform: translateY(-1px); }
+}
+@keyframes login-rastro {
+  0%, 100% { opacity: 0; transform: translateX(6px); }
+  50% { opacity: 0.8; transform: translateX(0); }
+}
+.login-caminhao { animation: login-caminhao 11s linear infinite; }
+.login-roda { transform-box: fill-box; transform-origin: center; animation: login-girar 0.6s linear infinite; }
+.login-chassi { animation: login-sacudir 0.25s ease-in-out infinite alternate; }
+.login-rastro { animation: login-rastro 0.8s ease-in-out infinite; }

@@ -1,0 +1,56 @@
+import { z } from "zod";
+import { dataObr, dataOpc, moedaObr, moedaOpc, textoOpc, uuidObr, uuidOpc } from "./cadastros";
+
+export const contratoSchema = z.object({
+  empresa_id: uuidObr("a empresa"),
+  cliente_id: uuidObr("o cliente"),
+  obra_id: uuidOpc,
+  veiculo_id: uuidObr("o veículo"),
+  numero: textoOpc,
+  valor_mensal: moedaObr("o valor mensal").refine((v) => v > 0, "Informe o valor mensal"),
+  valor_repasse_mensal: moedaOpc,
+  dia_corte_inicio: z.coerce.number().refine((v) => v === 1 || v === 21, "Corte deve ser dia 1 ou 21"),
+  prazo_pagamento_dias: z.number({ invalid_type_error: "Informe o prazo" }).int().min(0).max(365),
+  data_inicio: dataObr("a data de início"),
+  data_fim: dataOpc,
+  status: z.enum(["ativo", "encerrado", "suspenso"]),
+  observacoes: textoOpc,
+}).superRefine((c, ctx) => {
+  if (c.data_fim && c.data_fim < c.data_inicio) ctx.addIssue({ code: "custom", path: ["data_fim"], message: "Fim antes do início" });
+});
+export type ContratoForm = z.input<typeof contratoSchema>;
+
+export const desmobilizarSchema = z.object({
+  contrato_id: z.string().uuid(),
+  data: dataObr("a data de desmobilização"),
+});
+
+/** Edição na grade de medições (estilo planilha) */
+export const edicaoMedicaoSchema = z.object({
+  id: z.string().uuid(),
+  dias: z.number().int().min(0).max(31).optional(),
+  acrescimos: z.number().min(0).optional(),
+  descontos: z.number().min(0).optional(),
+  numero_nf: z.string().trim().max(30).nullable().optional(),
+  data_emissao: dataOpc.optional(),
+  data_vencimento: dataOpc.optional(),
+  observacoes: z.string().trim().max(1000).nullable().optional(),
+});
+export type EdicaoMedicao = z.infer<typeof edicaoMedicaoSchema>;
+
+export const recebimentoSchema = z.object({
+  medicao_id: z.string().uuid(),
+  data: dataObr("a data do recebimento"),
+  valor: z.number({ invalid_type_error: "Informe o valor" }).positive("Valor deve ser maior que zero"),
+  conta_bancaria_id: uuidOpc,
+  comprovante_url: textoOpc,
+  observacoes: textoOpc,
+});
+export type RecebimentoForm = z.input<typeof recebimentoSchema>;
+
+export const pagarRepasseSchema = z.object({
+  repasse_id: z.string().uuid(),
+  data: dataObr("a data do pagamento"),
+  comprovante_url: textoOpc,
+  confirmar_adiantado: z.boolean().default(false),
+});

@@ -1,0 +1,175 @@
+import type { SupabaseServer } from "@/lib/supabase/server";
+import { addCompetencia, addDias, competenciaDe, diffDias, fimDoMes, somar } from "@/lib/calculos";
+import { getConfig } from "@/lib/config";
+
+export interface FiltrosDashboard {
+  empresaId: string | null;
+  mes: string; // yyyy-MM
+  clienteId: string | null;
+  placa: string | null;
+  hoje: string;
+  veReceita: boolean;
+}
+
+export interface ItemHoje {
+  tipo: string;
+  titulo: string;
+  detalhe: string;
+  valor?: number;
+  href: string;
+  acao: string;
+  severidade: "info" | "alerta" | "critico";
+}
+
+/** Carrega KPIs, painel "Hoje" e séries dos gráficos do dashboard. */
+export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard) {
+  const cfg = await getConfig();
+  const ini = `${f.mes}-01`;
+  const fim = fimDoMes(ini);
+  const iniAnt = `${addCompetencia(f.mes, -1)}-01`;
+  const ini12 = `${addCompetencia(f.mes, -11)}-01`;
+  const em5 = addDias(f.hoje, Number(cfg.alerta_dias_fatura) || 5);
+  const em7 = addDias(f.hoje, Number(cfg.alerta_dias_pagar) || 7);
+
+  const emp = <T extends { eq: (c: string, v: string) => T }>(q: T, col = "empresa_id") => (f.empresaId ? q.eq(col, f.empresaId) : q);
+  const med = <T extends { eq: (c: string, v: string) => T; ilike: (c: string, v: string) => T }>(q: T) => {
+    let r = emp(q);
+    if (f.clienteId) r = r.eq("cliente_id", f.clienteId);
+    if (f.placa) r = r.ilike("placa", `%${f.placa}%`);
+    return r;
+  };
+  const vazio = Promise.resolve({ data: [] as never[] });
+
+  const [
+    medicoes12, abertas, recebimentos, repasses, contas, veiculos, preventivas, osAbertas, docs, margem, manut, fluxo,
+  ] = await Promise.all([
+    f.veReceita ? med(sb.from("medicoes_v").select("data_emissao, valor_final, status").gte("data_emissao", ini12).lte("data_emissao", fim).neq("status", "cancelado")) : vazio,
+    f.veReceita ? med(sb.from("medicoes_v").select("id, placa, cliente_fantasia, periodo_fim, valor_final, saldo, status, status_exibicao, data_vencimento, numero_nf").in("status", ["a_faturar", "faturado", "recebido_parcial"])) : vazio,
+    f.veReceita ? (() => {
+      let q = sb.from("recebimentos").select("data, valor, medicoes!inner(empresa_id, contrato_id, contratos!inner(cliente_id, veiculos!inner(placa)))").gte("data", ini12).lte("data", fim);
+      if (f.empresaId) q = q.eq("medicoes.empresa_id", f.empresaId);
+      if (f.clienteId) q = q.eq("medicoes.contratos.cliente_id", f.clienteId);
+      if (f.placa) q = q.ilike("medicoes.contratos.veiculos.placa", `%${f.placa}%`);
+      return q;
+    })() : vazio,
+    f.veReceita ? emp(sb.from("repasses_v").select("id, locador_nome, placa, valor_liquido, status").in("status", ["previsto", "liberado"])) : vazio,
+    f.veReceita ? emp(sb.from("contas_pagar").select("id, descricao, vencimento, valor").is("pago_em", null).lte("vencimento", addDias(f.hoje, 90))) : vazio,
+    emp(sb.from("veiculos").select("id, placa, status").neq("status", "vendido")),
+    emp(sb.from("vw_preventivas_status").select("plano_id, placa, servico, status")),
+    emp(sb.from("ordens_servico").select("id, numero, data_abertura, descricao_problema, status, veiculos(placa)").in("status", ["aberta", "em_execucao", "aguardando_peca"])),
+    sb.from("documentos_veiculo").select("id, tipo, validade, veiculos!inner(placa, empresa_id)").lte("validade", addDias(f.hoje, 30)).order("validade"),
+    f.veReceita ? emp(sb.from("vw_margem_placa_mes").select("veiculo_id, placa, receita, margem, margem_pct").eq("mes", ini)) : vazio,
+    emp(sb.from("vw_manutencao_custos").select("mes, tipo, custo").gte("mes", ini12).lte("mes", ini)),
+    f.veReceita ? emp(sb.from("vw_fluxo_caixa_projetado").select("data, tipo, valor").gte("data", f.hoje).lte("data", addDias(f.hoje, 90))) : vazio,
+  ]);
+
+  // ----- KPIs -----
+  const doMes = (d: string | null, i: string, fm: string) => !!d && d >= i && d <= fm;
+  const m12 = (medicoes12.data ?? []) as { data_emissao: string; valor_final: number; status: string }[];
+  const faturado = somar(m12.filter((m) => m.status !== "a_faturar" && doMes(m.data_emissao, ini, fim)).map((m) => m.valor_final));
+  const faturadoAnt = somar(m12.filter((m) => m.status !== "a_faturar" && doMes(m.data_emissao, iniAnt, fimDoMes(iniAnt))).map((m) => m.valor_final));
+  type Ab = { id: string; placa: string; cliente_fantasia: string; periodo_fim: string; valor_final: number; saldo: number; status: string; status_exibicao: string; data_vencimento: string | null; numero_nf: string | null };
+  const ab = (abertas.data ?? []) as Ab[];
+  const aFaturar = ab.filter((m) => m.status === "a_faturar");
+  const aReceber = ab.filter((m) => m.status !== "a_faturar");
+  const vencidas = aReceber.filter((m) => m.status_exibicao === "vencido");
+  const rep = (repasses.data ?? []) as { id: string; locador_nome: string; placa: string; valor_liquido: number; status: string }[];
+  const cts = (contas.data ?? []) as { id: string; descricao: string; vencimento: string; valor: number }[];
+  const veics = veiculos.data ?? [];
+  const prev = (preventivas.data ?? []) as { plano_id: string; placa: string; servico: string; status: string }[];
+  const docsEmp = ((docs.data ?? []) as unknown as { id: string; tipo: string; validade: string; veiculos: { placa: string; empresa_id: string } }[])
+    .filter((d) => !f.empresaId || d.veiculos.empresa_id === f.empresaId);
+
+  const kpis = {
+    faturado,
+    variacao: faturadoAnt > 0 ? ((faturado - faturadoAnt) / faturadoAnt) * 100 : null,
+    aFaturar: somar(aFaturar.map((m) => m.valor_final)),
+    qtdAFaturar: aFaturar.length,
+    aReceber: somar(aReceber.map((m) => m.saldo)),
+    vencido: somar(vencidas.map((m) => m.saldo)),
+    qtdVencidas: vencidas.length,
+    repasses: somar(rep.map((r) => r.valor_liquido)),
+    qtdRepasses: rep.length,
+    pagar7: somar(cts.filter((c) => c.vencimento <= em7).map((c) => c.valor)),
+    qtdPagar7: cts.filter((c) => c.vencimento <= em7).length,
+    frotaLocada: veics.filter((v) => v.status === "locado").length,
+    frotaTotal: veics.length,
+    preventivasVencidas: prev.filter((p) => p.status === "vencida").length,
+  };
+
+  // ----- Hoje -----
+  const hoje: ItemHoje[] = [];
+  for (const m of aFaturar.filter((m) => m.periodo_fim < f.hoje))
+    hoje.push({ tipo: "Faturar", titulo: `${m.placa} · ${m.cliente_fantasia}`, detalhe: `período encerrado em ${m.periodo_fim.split("-").reverse().join("/")}`, valor: m.valor_final, href: `/medicoes?comp=todas&placa=${m.placa}`, acao: "Faturar", severidade: "alerta" });
+  for (const m of vencidas)
+    hoje.push({ tipo: "Vencida", titulo: `NF ${m.numero_nf ?? "—"} · ${m.cliente_fantasia}`, detalhe: `${diffDias(m.data_vencimento!, f.hoje)} dias em atraso · ${m.placa}`, valor: m.saldo, href: `/receber?id=${m.id}`, acao: "Cobrar", severidade: "critico" });
+  for (const m of aReceber.filter((m) => m.status_exibicao !== "vencido" && m.data_vencimento && m.data_vencimento <= em5))
+    hoje.push({ tipo: "Vence em breve", titulo: `NF ${m.numero_nf ?? "—"} · ${m.cliente_fantasia}`, detalhe: `vence ${m.data_vencimento!.split("-").reverse().join("/")}`, valor: m.saldo, href: `/receber?id=${m.id}`, acao: "Lembrar", severidade: "info" });
+  for (const r of rep.filter((r) => r.status === "liberado"))
+    hoje.push({ tipo: "Repasse liberado", titulo: `${r.locador_nome} · ${r.placa}`, detalhe: "cliente já pagou", valor: r.valor_liquido, href: "/repasses?status=liberado", acao: "Pagar", severidade: "info" });
+  for (const c of cts.filter((c) => c.vencimento <= f.hoje))
+    hoje.push({ tipo: c.vencimento < f.hoje ? "Conta vencida" : "Pagar hoje", titulo: c.descricao, detalhe: `vencimento ${c.vencimento.split("-").reverse().join("/")}`, valor: c.valor, href: `/pagar?id=${c.id}`, acao: "Pagar", severidade: c.vencimento < f.hoje ? "critico" : "alerta" });
+  const limiteOS = Number(cfg.alerta_dias_os_aberta) || 3;
+  for (const o of (osAbertas.data ?? []) as unknown as { id: string; numero: number; data_abertura: string; descricao_problema: string; veiculos: { placa: string } | null }[]) {
+    const dias = diffDias(o.data_abertura, f.hoje);
+    if (dias > limiteOS) hoje.push({ tipo: "OS aberta", titulo: `OS #${o.numero} · ${o.veiculos?.placa ?? ""}`, detalhe: `há ${dias} dias · ${o.descricao_problema.slice(0, 60)}`, href: `/manutencao/ordens/${o.id}`, acao: "Ver OS", severidade: "alerta" });
+  }
+  for (const d of docsEmp) {
+    const dias = diffDias(f.hoje, d.validade);
+    hoje.push({ tipo: "Documento", titulo: `${d.tipo.replace(/_/g, " ")} · ${d.veiculos.placa}`, detalhe: dias < 0 ? `vencido há ${-dias} dias` : dias === 0 ? "vence hoje" : `vence em ${dias} dias`, href: "/manutencao/documentos?prazo=30", acao: "Renovar", severidade: dias <= 0 ? "critico" : dias <= 15 ? "alerta" : "info" });
+  }
+  const peso = { critico: 0, alerta: 1, info: 2 };
+  hoje.sort((a, b) => peso[a.severidade] - peso[b.severidade]);
+
+  // ----- Gráficos -----
+  const meses = Array.from({ length: 12 }, (_, i) => addCompetencia(f.mes, i - 11));
+  const rec = (recebimentos.data ?? []) as { data: string; valor: number }[];
+  const faturamento12 = meses.map((c) => ({
+    mes: c,
+    faturado: somar(m12.filter((m) => m.status !== "a_faturar" && m.data_emissao && competenciaDe(m.data_emissao) === c).map((m) => m.valor_final)),
+    recebido: somar(rec.filter((r) => competenciaDe(r.data) === c).map((r) => r.valor)),
+  }));
+
+  const faixas = ["a_vencer", "1-30", "31-60", "61-90", "90+"] as const;
+  const aging = faixas.map((fx) => ({
+    faixa: fx,
+    valor: somar(aReceber.filter((m) => {
+      if (!m.data_vencimento || m.data_vencimento >= f.hoje) return fx === "a_vencer";
+      const d = diffDias(m.data_vencimento, f.hoje);
+      return fx === (d <= 30 ? "1-30" : d <= 60 ? "31-60" : d <= 90 ? "61-90" : "90+");
+    }).map((m) => m.saldo)),
+  }));
+
+  const mg = ((margem.data ?? []) as { veiculo_id: string; placa: string; receita: number; margem: number; margem_pct: number | null }[])
+    .filter((x) => !f.placa || x.placa.includes(f.placa));
+  const ordenadas = [...mg].sort((a, b) => b.margem - a.margem);
+  const margemTop = ordenadas.slice(0, 10);
+  const margemPiores = ordenadas.slice(-10).reverse().filter((x) => !margemTop.includes(x) || ordenadas.length <= 10);
+
+  const statusFrota = ["locado", "disponivel", "manutencao", "parado"].map((s) => ({ status: s, qtd: veics.filter((v) => v.status === s).length }));
+
+  const mt = (manut.data ?? []) as { mes: string; tipo: string; custo: number }[];
+  const manutencao12 = meses.map((c) => ({
+    mes: c,
+    preventiva: somar(mt.filter((x) => x.mes.startsWith(c) && x.tipo === "preventiva").map((x) => x.custo)),
+    corretiva: somar(mt.filter((x) => x.mes.startsWith(c) && x.tipo === "corretiva").map((x) => x.custo)),
+    outras: somar(mt.filter((x) => x.mes.startsWith(c) && (x.tipo === "pneu" || x.tipo === "inspecao")).map((x) => x.custo)),
+  }));
+
+  const fl = (fluxo.data ?? []) as { data: string; tipo: string; valor: number }[];
+  let saldo = 0;
+  const fluxo90 = Array.from({ length: 91 }, (_, i) => {
+    const d = addDias(f.hoje, i);
+    const entradas = somar(fl.filter((x) => x.data === d && x.tipo === "entrada").map((x) => x.valor));
+    const saidas = somar(fl.filter((x) => x.data === d && x.tipo === "saida").map((x) => x.valor));
+    saldo = Math.round((saldo + entradas - saidas) * 100) / 100;
+    return { data: d, entradas, saidas, saldo };
+  });
+  // vencidos (antes de hoje) entram no 1º dia como pendência
+  const atrasadoEntrada = somar(vencidas.map((m) => m.saldo));
+  const atrasadoSaida = somar(cts.filter((c) => c.vencimento < f.hoje).map((c) => c.valor));
+
+  return { kpis, hoje, faturamento12, aging, margemTop, margemPiores, statusFrota, manutencao12, fluxo90, atrasado: { entrada: atrasadoEntrada, saida: atrasadoSaida } };
+}
+
+export type DadosDashboard = Awaited<ReturnType<typeof carregarDashboard>>;

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+out/
+coverage/
+.env
+.env.local
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+playwright-report/
+test-results/
+scripts/importacao/planilhas/
+scripts/importacao/relatorios/
+supabase/.temp/
+supabase/.branches/
+.vercel
