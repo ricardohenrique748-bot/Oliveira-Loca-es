@@ -1,6 +1,7 @@
 "use server";
 import { z } from "zod";
 import { exigirEscrita } from "@/lib/auth";
+import type { LinhaReceber } from "./client";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { recebimentoSchema } from "@/lib/schemas/operacao";
@@ -44,6 +45,26 @@ export async function estornarRecebimento(id: string) {
     checar(await supabase.from("recebimentos").delete().eq("id", z.string().uuid().parse(id)));
     return null;
   }, REVALIDAR, "Recebimento estornado");
+}
+
+/** Faturas com saldo em aberto para o "Lançar recebimento", buscando por placa, NF ou cliente (empresa do topo). */
+export async function buscarFaturasAbertas(busca: string) {
+  return executar(async () => {
+    const s = await exigirEscrita("receber");
+    const supabase = await createClient();
+    let q = supabase.from("medicoes_v").select(`id, empresa_id, empresa_apelido, cliente_id, cliente_fantasia, obra_id, obra_nome, placa, periodo_inicio, periodo_fim,
+      numero_nf, data_emissao, data_vencimento, valor_final, valor_recebido, saldo, status, status_exibicao, dias_atraso, data_ultimo_recebimento`)
+      .in("status", ["faturado", "recebido_parcial"]).gt("saldo", 0);
+    if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
+    const termo = busca.trim();
+    if (termo) {
+      const placa = termo.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const livre = termo.replace(/[^\p{L}\p{N} ]/gu, "");
+      q = q.or([placa && `placa.ilike.%${placa}%`, livre && `numero_nf.ilike.%${livre}%`, livre && `cliente_fantasia.ilike.%${livre}%`].filter(Boolean).join(","));
+    }
+    const { data } = await q.order("data_vencimento", { ascending: true, nullsFirst: false }).limit(30);
+    return (data ?? []) as LinhaReceber[];
+  });
 }
 
 export async function listarRecebimentos(medicaoId: string) {

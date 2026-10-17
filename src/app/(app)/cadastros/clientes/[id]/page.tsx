@@ -57,7 +57,7 @@ export default function ClienteDetalhePage() {
     return (
       <div className="py-12 text-center space-y-4">
         <p className="text-muted-foreground">Cliente não encontrado.</p>
-        <Link to="/cadastros/clientes" className="text-primary underline">Voltar para clientes</Link>
+        <Link to="/cadastros/clientes" className="text-primary-ink underline">Voltar para clientes</Link>
       </div>
     );
   }

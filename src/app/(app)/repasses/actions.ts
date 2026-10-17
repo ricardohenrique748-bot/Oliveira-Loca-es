@@ -3,6 +3,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar, traduzirErro } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { pagarRepasseSchema } from "@/lib/schemas/operacao";
+import type { Repasse } from "./client";
 
 const REVALIDAR = ["/repasses", "/pagar", "/dashboard"];
 
@@ -32,6 +33,28 @@ export async function verificarAdiantamento(repasseId: string) {
   } catch (e) {
     return { ok: false as const, ...traduzirErro(e) };
   }
+}
+
+/** Repasses pendentes para o "Lançar pagamento", buscando por locador, placa ou cliente (empresa do topo). Liberados primeiro. */
+export async function buscarRepassesPendentes(busca: string) {
+  return executar(async () => {
+    const s = await exigirEscrita("repasses");
+    const supabase = await createClient();
+    let q = supabase.from("repasses_v").select(`id, medicao_id, locador_id, locador_nome, empresa_id, empresa_apelido, veiculo_id, placa, valor_repasse_mensal,
+      valor_bruto, valor_abatimentos, valor_liquido, data_prevista, data_pagamento, adiantado, aprovado_por, comprovante_url, status,
+      periodo_inicio, periodo_fim, dias, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado`)
+      .in("status", ["previsto", "liberado"]);
+    if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
+    const termo = busca.trim();
+    if (termo) {
+      const placa = termo.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const livre = termo.replace(/[^\p{L}\p{N} ]/gu, "");
+      q = q.or([placa && `placa.ilike.%${placa}%`, livre && `locador_nome.ilike.%${livre}%`, livre && `cliente_nome.ilike.%${livre}%`].filter(Boolean).join(","));
+    }
+    const { data } = await q.order("status").order("periodo_inicio").limit(40);
+    // "liberado" (cliente já pagou) antes de "previsto"
+    return ((data ?? []) as Repasse[]).sort((a, b) => Number(b.status === "liberado") - Number(a.status === "liberado"));
+  });
 }
 
 export async function cancelarRepasse(repasseId: string) {

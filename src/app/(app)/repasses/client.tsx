@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, ChevronDown, ChevronRight, FileText, Loader2, Wallet } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, FileText, Loader2, Plus, Search, Wallet } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, Checkbox, Label, Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ import { somar } from "@/lib/calculos";
 import { exportarPDF } from "@/lib/exportar";
 import { ROTULOS } from "@/lib/schemas/cadastros";
 import { cn } from "@/lib/utils";
-import { pagarRepasse } from "./actions";
+import { buscarRepassesPendentes, pagarRepasse } from "./actions";
 
 export type Repasse = {
   id: string; medicao_id: string; locador_id: string; locador_nome: string; empresa_id: string; empresa_apelido: string; veiculo_id: string; placa: string;
@@ -33,6 +33,7 @@ const STATUS_MEDICAO: Record<string, string> = { a_faturar: "A faturar", faturad
 export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }: { repasses: Repasse[]; abatimentos: Abatimento[]; locadores: Locador[]; podeEditar: boolean }) {
   const router = useRouter();
   const [pagando, setPagando] = React.useState<Repasse | null>(null);
+  const [lancando, setLancando] = React.useState(false);
   const [abertos, setAbertos] = React.useState<Set<string>>(new Set());
 
   const grupos = React.useMemo(() => {
@@ -78,7 +79,8 @@ export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }
   return (
     <div className="space-y-4">
       <Cabecalho titulo="Repasses a locadores"
-        descricao="Repasse = (mensal ÷ 30) × dias − despesas “descontar do locador”. Líquido nunca fica negativo: o saldo passa para o próximo repasse." />
+        descricao="Repasse = (mensal ÷ 30) × dias − despesas “descontar do locador”. Líquido nunca fica negativo: o saldo passa para o próximo repasse."
+        acoes={podeEditar && <Button onClick={() => setLancando(true)}><Plus /> Lançar pagamento</Button>} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard titulo="Pendentes (líquido)" valor={<Moeda valor={somar(pendentes.map((r) => r.valor_liquido))} />} sub={`${pendentes.length} repasses`} icone={Wallet} />
@@ -197,8 +199,73 @@ export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }
         </Card>
       ))}
 
+      <DialogoLancar aberto={lancando} onOpenChange={setLancando} onEscolher={(r) => { setLancando(false); setPagando(r); }} />
       <DialogoPagar repasse={pagando} onOpenChange={(v) => !v && setPagando(null)} onFeito={() => router.refresh()} />
     </div>
+  );
+}
+
+/** Passo 1 do lançamento: escolher o repasse pendente; o passo 2 é o diálogo de pagamento. */
+function DialogoLancar({ aberto, onOpenChange, onEscolher }: { aberto: boolean; onOpenChange: (v: boolean) => void; onEscolher: (r: Repasse) => void }) {
+  const [busca, setBusca] = React.useState("");
+  const [itens, setItens] = React.useState<Repasse[] | null>(null);
+
+  React.useEffect(() => {
+    if (!aberto) return;
+    let ativo = true;
+    setItens(null);
+    const t = setTimeout(async () => {
+      const r = await buscarRepassesPendentes(busca);
+      if (!ativo) return;
+      if (r.ok) setItens(r.dados);
+      else { toast.error(r.erro); setItens([]); }
+    }, busca ? 300 : 0);
+    return () => { ativo = false; clearTimeout(t); };
+  }, [aberto, busca]);
+
+  React.useEffect(() => { if (!aberto) setBusca(""); }, [aberto]);
+
+  return (
+    <Dialog open={aberto} onOpenChange={onOpenChange}>
+      <DialogContent tamanho="lg">
+        <DialogHeader>
+          <DialogTitle>Lançar pagamento de repasse</DialogTitle>
+          <DialogDescription>Escolha o repasse que foi pago ao locador. Em seguida você informa a data e o comprovante.</DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input autoFocus value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por locador, placa ou cliente…" aria-label="Buscar repasse" className="pl-9" />
+        </div>
+        <div className="max-h-[50vh] min-h-40 overflow-y-auto">
+          {itens === null ? (
+            <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Buscando repasses…</p>
+          ) : itens.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">{busca ? "Nenhum repasse pendente encontrado." : "Não há repasses pendentes."}</p>
+          ) : (
+            <ul className="space-y-1">
+              {itens.map((r) => (
+                <li key={r.id}>
+                  <button type="button" onClick={() => onEscolher(r)}
+                    className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm"><span className="font-semibold">{r.locador_nome}</span> · <span className="font-mono">{formatPlaca(r.placa)}</span> <span className="text-xs text-muted-foreground">{r.empresa_apelido}</span></p>
+                      <p className="truncate text-xs text-muted-foreground">{r.cliente_nome} · {formatPeriodo(r.periodo_inicio, r.periodo_fim)} · {r.dias} dias</p>
+                    </div>
+                    {r.status === "liberado"
+                      ? <Badge variant="ok">Cliente pagou</Badge>
+                      : <Badge variant="alerta" title="O cliente ainda não pagou esta medição: pagar agora é adiantamento">Aguardando cliente</Badge>}
+                    <div className="text-right">
+                      <Moeda valor={r.valor_liquido} className="text-sm font-semibold" />
+                      {r.valor_abatimentos > 0 && <p className="text-[11px] text-muted-foreground">bruto {formatBRL(r.valor_bruto)}</p>}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

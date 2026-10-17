@@ -104,7 +104,7 @@ export function OrdensCliente({ linhas, veiculos, fornecedores, planos, podeEdit
                   return (
                     <Card key={o.id} draggable={podeEditar && o.status !== "fechada"}
                       onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setArrastando(o.id); }} onDragEnd={() => setArrastando(null)}
-                      className={cn("cursor-pointer space-y-1.5 p-3 text-sm hover:border-brand-yellow", o.status !== "fechada" && dias > 3 && "border-l-4 border-l-status-alerta")}
+                      className={cn("cursor-pointer space-y-1.5 p-3 text-sm hover:border-primary", o.status !== "fechada" && dias > 3 && "border-l-4 border-l-status-alerta")}
                       onClick={() => router.push(`/manutencao/ordens/${o.id}`)}>
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-semibold">#{o.numero} <span className="font-mono">{formatPlaca(o.placa)}</span></span>

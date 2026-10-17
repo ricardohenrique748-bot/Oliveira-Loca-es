@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --brand-black: #0b0b0b;
     --brand-yellow: #f5d90a;
     --brand-yellow-dark: #c9b200;
@@ -11,66 +12,71 @@
     --status-alerta: #d97706;
     --status-critico: #dc2626;
 
-    --background: 220 20% 98%;
-    --foreground: 222 20% 12%;
+    /* visual "glass" nas cores da logo: amarelo #FCE501 sobre preto */
+    --background: 240 5% 96%;
+    --foreground: 240 6% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 222 20% 12%;
+    --card-foreground: 240 6% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 20% 12%;
-    /* amarelo da marca só em ações e destaques; texto escuro por cima (contraste AA) */
-    --primary: 53 92% 50%;
-    --primary-foreground: 240 6% 10%;
-    --secondary: 240 5% 96%;
+    --popover-foreground: 240 6% 10%;
+    --primary: 54 98% 50%;
+    --primary-hover: 54 100% 44%;
+    --primary-foreground: 0 0% 4%;
+    /* amarelo escurecido para texto/ícone sobre fundo claro (contraste AA) */
+    --primary-ink: 50 100% 26%;
+    --secondary: 240 2% 93%;
     --secondary-foreground: 240 6% 10%;
-    --muted: 220 14% 96%;
+    --muted: 240 2% 93%;
     --muted-foreground: 220 9% 46%;
-    --accent: 220 14% 96%;
+    --accent: 240 2% 93%;
     --accent-foreground: 240 6% 10%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 91%;
-    --input: 220 13% 88%;
-    --ring: 240 6% 10%;
-    --radius: 0.375rem;
+    --border: 240 6% 90%;
+    --input: 240 5% 86%;
+    --ring: 50 100% 40%;
+    --radius: 0.75rem;
 
     /* gráficos — paleta categórica validada (ordem fixa) */
     --series-1: #2a78d6;
     --series-2: #eb6834;
     --series-3: #1baf7a;
     --series-neg: #e34948;
-    --chart-grid: #e6e5e1;
-    --chart-axis: #52514e;
+    --chart-grid: #e4e4e7;
+    --chart-axis: #52525b;
     --chart-surface: #ffffff;
   }
 
   .dark {
-    --background: 240 6% 7%;
-    --foreground: 0 0% 96%;
-    --card: 240 5% 10%;
-    --card-foreground: 0 0% 96%;
-    --popover: 240 5% 10%;
-    --popover-foreground: 0 0% 96%;
-    --primary: 53 92% 50%;
-    --primary-foreground: 240 6% 10%;
-    --secondary: 240 4% 15%;
-    --secondary-foreground: 0 0% 96%;
-    --muted: 240 4% 15%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 240 4% 16%;
-    --accent-foreground: 0 0% 96%;
+    --background: 0 0% 7%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 11%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 54 98% 50%;
+    --primary-hover: 54 100% 44%;
+    --primary-foreground: 0 0% 4%;
+    --primary-ink: 54 98% 50%;
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 14%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 63% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 4% 17%;
-    --input: 240 4% 21%;
-    --ring: 53 92% 50%;
+    --border: 0 0% 16%;
+    --input: 0 0% 20%;
+    --ring: 54 98% 50%;
 
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
     --series-neg: #e66767;
-    --chart-grid: #2c2c2a;
-    --chart-axis: #c3c2b7;
-    --chart-surface: #141414;
+    --chart-grid: #2a2a2a;
+    --chart-axis: #a1a1aa;
+    --chart-surface: #1c1c1c;
   }
 
   * {
@@ -81,7 +87,7 @@
     font-feature-settings: "tnum" 1;
   }
   h1, h2, h3 {
-    @apply font-display font-medium;
+    @apply font-display font-bold;
   }
   /* foco visível (AA) */
   :focus-visible {
@@ -93,38 +99,65 @@
   .num {
     font-variant-numeric: tabular-nums;
   }
+  /* logo amarela sem fundo: no tema claro ganha um contorno escuro fino para não sumir */
+  :root:not(.dark) .logo-marca {
+    filter: drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.9)) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+  }
+  /* painéis pretos do dashboard: gráficos nas cores da logo, em qualquer tema */
+  .painel-escuro {
+    --series-1: #fce501;
+    --series-2: #a1a1aa;
+    --series-3: #52525b;
+    --series-neg: #ef4444;
+    --chart-grid: rgba(255, 255, 255, 0.08);
+    --chart-axis: rgba(255, 255, 255, 0.5);
+    --chart-surface: #0b0b0b;
+  }
 }
 
-/* login: brilho amarelo atrás da logo */
-@keyframes login-brilho {
-  0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
-  50% { opacity: 1; transform: translateX(-50%) scale(1.08); }
-}
 /* login: autopreenchimento do navegador sem o fundo azul-claro */
 .login-campo:-webkit-autofill,
 .login-campo:-webkit-autofill:hover,
 .login-campo:-webkit-autofill:focus {
-  -webkit-text-fill-color: #fff;
-  -webkit-box-shadow: 0 0 0 1000px #131313 inset;
-  caret-color: #fff;
+  -webkit-text-fill-color: hsl(var(--foreground));
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--card)) inset;
+  caret-color: hsl(var(--foreground));
   transition: background-color 9999s;
 }
-/* login: caminhão atravessando a estrada */
-@keyframes login-caminhao {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(100vw); }
+
+/* bolhas de luz, órbitas e ícones flutuantes (login e destaques) */
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -40px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.95); }
 }
-@keyframes login-girar {
-  to { transform: rotate(360deg); }
+@keyframes float {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -8px; }
 }
-@keyframes login-sacudir {
-  to { transform: translateY(-1px); }
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+@keyframes spin-slow-reverse { to { transform: rotate(-360deg); } }
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-@keyframes login-rastro {
-  0%, 100% { opacity: 0; transform: translateX(6px); }
-  50% { opacity: 0.8; transform: translateX(0); }
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }
-.login-caminhao { animation: login-caminhao 11s linear infinite; }
-.login-roda { transform-box: fill-box; transform-origin: center; animation: login-girar 0.6s linear infinite; }
-.login-chassi { animation: login-sacudir 0.25s ease-in-out infinite alternate; }
-.login-rastro { animation: login-rastro 0.8s ease-in-out infinite; }
+.animate-blob { animation: blob 14s ease-in-out infinite; }
+.animate-float { animation: float 4s ease-in-out infinite; }
+.animate-spin-slow { animation: spin-slow 30s linear infinite; }
+.animate-spin-slow-reverse { animation: spin-slow-reverse 40s linear infinite; }
+.animate-fade-in-up { animation: fade-in-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-scale-in { animation: scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+/* login: cena da locação (caminhão indo e voltando da obra) */
+@keyframes login-girar { to { transform: rotate(360deg); } }
+@keyframes login-sacudir { to { transform: translateY(-1px); } }
+@keyframes login-estrada { to { background-position: -30px 0; } }
+.login-roda { animation: login-girar 0.6s linear infinite; }
+.login-chassi { animation: login-sacudir 0.22s ease-in-out infinite alternate; }
+.login-estrada { animation: login-estrada 0.5s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-blob, .animate-float, .animate-spin-slow, .animate-spin-slow-reverse { animation: none; }
+}

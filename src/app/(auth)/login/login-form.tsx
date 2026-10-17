@@ -9,7 +9,7 @@ import { entrar, type EstadoLogin } from "./actions";
 import { Item } from "./animacao";
 
 const CHAVE_EMAIL = "login:email";
-const CAMPO = "login-campo h-11 border-white/10 bg-white/[0.03] text-white placeholder:text-neutral-600 transition-colors hover:border-white/20 focus-visible:border-brand-yellow focus-visible:ring-brand-yellow/25 focus-visible:ring-offset-0";
+const CAMPO = "login-campo h-12 bg-foreground/5 backdrop-blur-sm baixa:h-11 curta:h-10";
 
 export function LoginForm({ next }: { next?: string }) {
   const navigate = useNavigate();
@@ -56,38 +56,38 @@ export function LoginForm({ next }: { next?: string }) {
   }
 
   return (
-    <form action={acao} onSubmit={aoEnviar} className="space-y-5 [@media(max-height:800px)]:space-y-4">
+    <form action={acao} onSubmit={aoEnviar} className="space-y-5 baixa:space-y-3.5 curta:space-y-2.5">
       <input type="hidden" name="next" value={next ?? ""} />
       <Item className="space-y-2">
-        <Label htmlFor="email" className="text-neutral-300">E-mail</Label>
+        <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">E-mail</Label>
         <div className="relative">
-          <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-500" />
+          <Mail className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input ref={emailRef} id="email" name="email" type="email" autoComplete="username" required autoFocus
-            placeholder="voce@empresa.com.br" className={cn(CAMPO, "pl-10")} defaultValue={estado.email} />
+            placeholder="seu@email.com" className={cn(CAMPO, "pl-10")} defaultValue={estado.email} />
         </div>
       </Item>
       <Item className="space-y-2">
-        <Label htmlFor="senha" className="text-neutral-300">Senha</Label>
+        <Label htmlFor="senha" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Senha</Label>
         <div className="relative">
-          <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-500" />
+          <Lock className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input ref={senhaRef} id="senha" name="senha" type={verSenha ? "text" : "password"} autoComplete="current-password" required
-            className={cn(CAMPO, "px-10")} />
+            className={cn(CAMPO, "px-10")} placeholder="••••••••" />
           <button type="button" onClick={() => setVerSenha((v) => !v)} aria-label={verSenha ? "Ocultar senha" : "Mostrar senha"}
-            className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-neutral-500 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow/40">
+            className="absolute right-1 top-1/2 z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 active:scale-90">
             {verSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </button>
         </div>
       </Item>
       <Item>
-        <label htmlFor="lembrar" className="flex w-fit cursor-pointer items-center gap-2 text-sm text-neutral-400">
+        <label htmlFor="lembrar" className="flex w-fit cursor-pointer items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
           <Checkbox id="lembrar" name="lembrar" checked={lembrar} onCheckedChange={(v) => setLembrar(!!v)}
-            className="border-neutral-600" />
-          Lembrar de mim
+            />
+          Lembrar e-mail
         </label>
       </Item>
-      {estado.erro && <p role="alert" className="text-sm text-red-400">{estado.erro}</p>}
+      {estado.erro && <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-500">{estado.erro}</p>}
       <Item>
-        <Button type="submit" className="h-11 w-full font-semibold transition-transform active:scale-[0.98]" disabled={pendente}>
+        <Button type="submit" className="h-12 baixa:h-11 curta:h-10 w-full rounded-full text-sm font-bold uppercase tracking-wide" disabled={pendente}>
           {pendente ? <Loader2 className="animate-spin" /> : <LogIn />} Entrar
         </Button>
       </Item>

@@ -3,7 +3,6 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { hojeSP } from "@/lib/format";
-import { Sidebar } from "@/components/layout/sidebar";
 import { Header, type AlertaHeader } from "@/components/layout/header";
 
 export default function AppLayout({ children }: { children?: React.ReactNode }) {
@@ -44,7 +43,7 @@ export default function AppLayout({ children }: { children?: React.ReactNode }) 
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <img src="/logo-oliveira.svg" alt="Oliveira Locações" className="h-12 w-auto animate-pulse" />
+          <img src="/logo-oliveira.svg" alt="Oliveira Locações" className="logo-marca h-16 w-auto animate-pulse" />
           <p className="text-sm text-muted-foreground">Carregando painel...</p>
         </div>
       </div>
@@ -59,12 +58,11 @@ export default function AppLayout({ children }: { children?: React.ReactNode }) 
     <div className="min-h-screen bg-background">
       <a
         href="#conteudo"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-brand-yellow focus:px-3 focus:py-2 focus:text-brand-black"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
       >
         Pular para o conteúdo
       </a>
-      <Sidebar perfil={sessao.perfil} />
-      <div className="lg:pl-[17rem]">
+      <div>
         <Header
           nome={sessao.nome}
           email={sessao.email}

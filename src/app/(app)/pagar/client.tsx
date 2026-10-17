@@ -350,8 +350,8 @@ function Calendario({ mes, linhas, diaSel, onDia }: { mes: string; linhas: Linha
           const tudoPago = doDia.length > 0 && doDia.every((l) => l.pago_em);
           return (
             <button key={d} type="button" onClick={() => onDia(d)} aria-pressed={diaSel === d} aria-label={`${formatData(d)}: ${doDia.length} contas`}
-              className={cn("flex min-h-[4.5rem] flex-col rounded-md border p-1 text-left text-xs transition-colors hover:border-brand-yellow",
-                d === hoje && "ring-2 ring-brand-yellow", diaSel === d && "bg-accent", vencido && "border-status-critico", tudoPago && "bg-green-50 dark:bg-green-950/30")}>
+              className={cn("flex min-h-[4.5rem] flex-col rounded-md border p-1 text-left text-xs transition-colors hover:border-primary",
+                d === hoje && "ring-2 ring-primary", diaSel === d && "bg-accent", vencido && "border-status-critico", tudoPago && "bg-green-50 dark:bg-green-950/30")}>
               <span className="font-semibold">{Number(d.slice(8))}</span>
               {doDia.length > 0 && (
                 <>

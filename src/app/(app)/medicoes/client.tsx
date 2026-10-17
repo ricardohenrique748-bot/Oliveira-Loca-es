@@ -166,7 +166,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
 
       <div className="flex flex-wrap items-center gap-2">
         {selecionados.length > 0 && podeEditar && (
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-brand-yellow bg-accent px-3 py-1.5 text-sm">
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary bg-accent px-3 py-1.5 text-sm">
             <span className="font-medium">{selecionados.length} selecionada(s)</span>
             <Button size="xs" onClick={() => setFaturarAberto(true)}><CheckCheck /> Marcar como faturado</Button>
             <Button size="xs" variant="outline" onClick={async () => { const r = await rodarAcao(voltarParaAFaturar(selecionados.map((s) => s.id))); if (r.ok) router.refresh(); }}><Undo2 /> Voltar p/ a faturar</Button>
@@ -259,7 +259,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
         {linhas.map((m) => {
           const ed = editavel(m);
           return (
-            <Card key={m.id} className={cn("space-y-2 p-3", selecao.has(m.id) && "border-brand-yellow")}>
+            <Card key={m.id} className={cn("space-y-2 p-3", selecao.has(m.id) && "border-primary")}>
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-mono font-semibold">{formatPlaca(m.placa)} <span className="font-sans text-xs font-normal text-muted-foreground">{m.empresa_apelido}</span></p>

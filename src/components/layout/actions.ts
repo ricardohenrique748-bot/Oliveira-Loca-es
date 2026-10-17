@@ -1,12 +1,8 @@
-import { COOKIE_EMPRESA, getSessao } from "@/lib/auth";
+import { getSessao, selecionarEmpresa } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 
 export async function definirEmpresa(empresaId: string | null) {
-  if (typeof window !== "undefined") {
-    if (empresaId) localStorage.setItem(COOKIE_EMPRESA, empresaId);
-    else localStorage.removeItem(COOKIE_EMPRESA);
-    window.dispatchEvent(new CustomEvent("oliveira:empresa", { detail: empresaId }));
-  }
+  selecionarEmpresa(empresaId);
 }
 
 export async function marcarAlertasLidos(ids: string[]) {

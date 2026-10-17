@@ -68,7 +68,7 @@ export default function ContratoDetalhePage() {
     return (
       <div className="py-12 text-center space-y-4">
         <p className="text-muted-foreground">Contrato não encontrado.</p>
-        <Link to="/contratos" className="text-primary underline">Voltar para contratos</Link>
+        <Link to="/contratos" className="text-primary-ink underline">Voltar para contratos</Link>
       </div>
     );
   }

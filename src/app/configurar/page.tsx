@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { supabaseEnv } from "@/lib/supabase/env";
 
 const Codigo = ({ children }: { children: React.ReactNode }) => (
-  <code className="rounded bg-neutral-800 px-1.5 py-0.5 text-brand-yellow">{children}</code>
+  <code className="rounded bg-neutral-800 px-1.5 py-0.5 text-primary">{children}</code>
 );
 
 /** Exibida quando o .env.local ainda não tem as chaves do Supabase. */
@@ -14,7 +14,7 @@ export default function Configurar() {
       <div className="w-full max-w-2xl space-y-6 rounded-lg border border-neutral-800 bg-neutral-950 p-6">
         <img src="/logo-oliveira.svg" alt="Oliveira Locações" className="h-24 w-auto" />
         <div>
-          <h1 className="text-2xl text-brand-yellow">Falta conectar o banco de dados</h1>
+          <h1 className="text-2xl text-primary">Falta conectar o banco de dados</h1>
           <p className="mt-1 text-sm text-neutral-400">
             O arquivo <Codigo>.env.local</Codigo> na pasta do projeto ainda não tem a URL e a chave do Supabase.
           </p>

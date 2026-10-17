@@ -51,6 +51,16 @@ export async function getSessao(forceRefresh = false): Promise<Sessao | null> {
   return cachedSessao;
 }
 
+/** Troca a empresa selecionada: grava a escolha, atualiza a sessão em memória e avisa as telas para recarregar. */
+export function selecionarEmpresa(empresaId: string | null) {
+  if (typeof window === "undefined") return;
+  if (empresaId) localStorage.setItem(COOKIE_EMPRESA, empresaId);
+  else localStorage.removeItem(COOKIE_EMPRESA);
+  // antes do evento: quem recarrega ao ouvi-lo já lê a empresa nova via getSessao()
+  if (cachedSessao) cachedSessao.empresaId = empresaId;
+  window.dispatchEvent(new CustomEvent("oliveira:empresa", { detail: empresaId }));
+}
+
 export class ErroPermissao extends Error {}
 
 /** Para checagem de permissão de escrita antes de salvar/excluir. */
@@ -111,20 +121,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     });
-    return () => subscription.unsubscribe();
+    // troca de empresa feita em qualquer lugar (cabeçalho, filtros): o estado do contexto acompanha
+    const aoTrocarEmpresa = (e: Event) => {
+      const empresaId = (e as CustomEvent<string | null>).detail ?? null;
+      setSessao((ant) => (ant && ant.empresaId !== empresaId ? { ...ant, empresaId } : ant));
+    };
+    window.addEventListener("oliveira:empresa", aoTrocarEmpresa);
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("oliveira:empresa", aoTrocarEmpresa);
+    };
   }, [carregar]);
 
-  const trocarEmpresa = useCallback((empresaId: string | null) => {
-    if (typeof window !== "undefined") {
-      if (empresaId) localStorage.setItem(COOKIE_EMPRESA, empresaId);
-      else localStorage.removeItem(COOKIE_EMPRESA);
-    }
-    setSessao((ant) => (ant ? { ...ant, empresaId } : null));
-    if (cachedSessao) cachedSessao.empresaId = empresaId;
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("oliveira:empresa", { detail: empresaId }));
-    }
-  }, []);
+  const trocarEmpresa = useCallback((empresaId: string | null) => selecionarEmpresa(empresaId), []);
 
   const sair = useCallback(async () => {
     cachedSessao = null;

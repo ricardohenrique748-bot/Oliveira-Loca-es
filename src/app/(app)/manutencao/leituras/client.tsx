@@ -54,7 +54,7 @@ export function LeiturasCliente({ veiculos, filtroInicial, podeEditar }: { veicu
           const kmBaixo = x.km != null && x.km < v.km_atual;
           const hBaixo = x.horimetro != null && x.horimetro < v.horimetro_atual;
           return (
-            <Card key={v.id} className={cn("p-3", (x.km != null || x.horimetro != null) && "border-brand-yellow")}>
+            <Card key={v.id} className={cn("p-3", (x.km != null || x.horimetro != null) && "border-primary")}>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div><span className="font-mono text-lg font-bold">{formatPlaca(v.placa)}</span> <span className="text-xs text-muted-foreground">{v.modelo}</span></div>
                 <StatusBadge status={v.status} />

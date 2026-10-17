@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { HandCoins, Mail, MessageCircle, Trash2 } from "lucide-react";
+import { HandCoins, Loader2, Mail, MessageCircle, Plus, Search, Trash2 } from "lucide-react";
 import { Badge, Label, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import { InputMoeda } from "@/components/app/campos";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { formatBRL, formatData, formatPeriodo, formatPlaca, hojeSP, linkEmail, linkWhatsApp, preencherTemplate } from "@/lib/format";
 import { somar } from "@/lib/calculos";
-import { baixarEmLote, estornarRecebimento, listarRecebimentos, registrarRecebimento } from "./actions";
+import { baixarEmLote, buscarFaturasAbertas, estornarRecebimento, listarRecebimentos, registrarRecebimento } from "./actions";
 
 export type LinhaReceber = {
   id: string; empresa_id: string; empresa_apelido: string; cliente_id: string; cliente_fantasia: string; obra_id: string | null; obra_nome: string | null;
@@ -44,6 +44,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
   const url = useUrlParams();
   const [baixando, setBaixando] = React.useState<LinhaReceber | null>(null);
   const [lote, setLote] = React.useState<LinhaReceber[] | null>(null);
+  const [lancando, setLancando] = React.useState(false);
 
   const contatosDe = React.useCallback((m: LinhaReceber) =>
     contatos.filter((c) => c.cliente_id === m.cliente_id && (!c.obra_id || c.obra_id === m.obra_id)), [contatos]);
@@ -92,9 +93,10 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
 
   return (
     <div className="space-y-4">
-      <Cabecalho titulo="Contas a receber" descricao="Medições faturadas. Baixa total ou parcial; o status da medição e a liberação do repasse são atualizados automaticamente." />
+      <Cabecalho titulo="Contas a receber" descricao="Medições faturadas. Baixa total ou parcial; o status da medição e a liberação do repasse são atualizados automaticamente."
+        acoes={podeEditar && <Button onClick={() => setLancando(true)}><Plus /> Lançar recebimento</Button>} />
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard titulo="Total em aberto" valor={<Moeda valor={totalAberto} />} destaque={!faixaAtual} href="/receber" />
         {FAIXAS.map((f) => (
           <button key={f.chave} type="button" className="text-left" onClick={() => url.set({ faixa: faixaAtual === f.chave ? null : f.chave, status: null })}>
@@ -126,9 +128,72 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
         ] }} />
 
       <DialogoBaixa medicao={baixando} contas={contas} podeEditar={podeEditar} onOpenChange={(v) => !v && setBaixando(null)} onFeito={() => router.refresh()} />
+      <DialogoLancar aberto={lancando} onOpenChange={setLancando} onEscolher={(m) => { setLancando(false); setBaixando(m); }} />
       <DialogoLote lote={lote} contas={contas} onOpenChange={(v) => !v && setLote(null)} onFeito={() => router.refresh()} />
       <p className="text-xs text-muted-foreground">Cobrança usa os contatos marcados “recebe fatura” do cliente/obra e os templates em <Link href="/configuracoes" className="underline">Configurações</Link>.</p>
     </div>
+  );
+}
+
+/** Passo 1 do lançamento: escolher a fatura em aberto; o passo 2 é o diálogo de baixa. */
+function DialogoLancar({ aberto, onOpenChange, onEscolher }: { aberto: boolean; onOpenChange: (v: boolean) => void; onEscolher: (m: LinhaReceber) => void }) {
+  const [busca, setBusca] = React.useState("");
+  const [faturas, setFaturas] = React.useState<LinhaReceber[] | null>(null);
+
+  React.useEffect(() => {
+    if (!aberto) return;
+    let ativo = true;
+    setFaturas(null);
+    const t = setTimeout(async () => {
+      const r = await buscarFaturasAbertas(busca);
+      if (!ativo) return;
+      if (r.ok) setFaturas(r.dados);
+      else { toast.error(r.erro); setFaturas([]); }
+    }, busca ? 300 : 0);
+    return () => { ativo = false; clearTimeout(t); };
+  }, [aberto, busca]);
+
+  React.useEffect(() => { if (!aberto) setBusca(""); }, [aberto]);
+
+  return (
+    <Dialog open={aberto} onOpenChange={onOpenChange}>
+      <DialogContent tamanho="lg">
+        <DialogHeader>
+          <DialogTitle>Lançar recebimento</DialogTitle>
+          <DialogDescription>Escolha a fatura em aberto que foi paga. Em seguida você informa data, valor e conta.</DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input autoFocus value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por placa, NF ou cliente…" aria-label="Buscar fatura" className="pl-9" />
+        </div>
+        <div className="max-h-[50vh] min-h-40 overflow-y-auto">
+          {faturas === null ? (
+            <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Buscando faturas…</p>
+          ) : faturas.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">{busca ? "Nenhuma fatura em aberto encontrada." : "Não há faturas em aberto."}</p>
+          ) : (
+            <ul className="space-y-1">
+              {faturas.map((m) => (
+                <li key={m.id}>
+                  <button type="button" onClick={() => onEscolher(m)}
+                    className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm"><span className="font-mono font-semibold">{formatPlaca(m.placa)}</span> · NF {m.numero_nf ?? "—"} <span className="text-xs text-muted-foreground">{m.empresa_apelido}</span></p>
+                      <p className="truncate text-xs text-muted-foreground">{m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""} · venc. {formatData(m.data_vencimento)}</p>
+                    </div>
+                    {m.status_exibicao === "vencido" && <Badge variant="critico">{m.dias_atraso} d</Badge>}
+                    <div className="text-right">
+                      <Moeda valor={m.saldo} className="text-sm font-semibold" />
+                      {m.valor_recebido > 0 && <p className="text-[11px] text-muted-foreground">de {formatBRL(m.valor_final)}</p>}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

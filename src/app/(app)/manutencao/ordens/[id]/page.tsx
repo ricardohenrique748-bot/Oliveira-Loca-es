@@ -64,7 +64,7 @@ export default function OrdemDetalhePage() {
     return (
       <div className="py-12 text-center space-y-4">
         <p className="text-muted-foreground">Ordem de serviço não encontrada.</p>
-        <Link to="/manutencao/ordens" className="text-primary underline">Voltar para ordens de serviço</Link>
+        <Link to="/manutencao/ordens" className="text-primary-ink underline">Voltar para ordens de serviço</Link>
       </div>
     );
   }

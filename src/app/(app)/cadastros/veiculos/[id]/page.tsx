@@ -72,7 +72,7 @@ export default function VeiculoDetalhePage() {
     return (
       <div className="py-12 text-center space-y-4">
         <p className="text-muted-foreground">Veículo não encontrado.</p>
-        <Link to="/cadastros/veiculos" className="text-primary underline">Voltar para veículos</Link>
+        <Link to="/cadastros/veiculos" className="text-primary-ink underline">Voltar para veículos</Link>
       </div>
     );
   }

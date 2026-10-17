@@ -41,7 +41,7 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
   const vazio = Promise.resolve({ data: [] as never[] });
 
   const [
-    medicoes12, abertas, recebimentos, repasses, contas, veiculos, preventivas, osAbertas, docs, margem, manut, fluxo,
+    medicoes12, abertas, recebimentos, repasses, contas, veiculos, preventivas, osAbertas, docs, fluxo,
   ] = await Promise.all([
     f.veReceita ? med(sb.from("medicoes_v").select("data_emissao, valor_final, status").gte("data_emissao", ini12).lte("data_emissao", fim).neq("status", "cancelado")) : vazio,
     f.veReceita ? med(sb.from("medicoes_v").select("id, placa, cliente_fantasia, periodo_fim, valor_final, saldo, status, status_exibicao, data_vencimento, numero_nf").in("status", ["a_faturar", "faturado", "recebido_parcial"])) : vazio,
@@ -58,8 +58,6 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
     emp(sb.from("vw_preventivas_status").select("plano_id, placa, servico, status")),
     emp(sb.from("ordens_servico").select("id, numero, data_abertura, descricao_problema, status, veiculos(placa)").in("status", ["aberta", "em_execucao", "aguardando_peca"])),
     sb.from("documentos_veiculo").select("id, tipo, validade, veiculos!inner(placa, empresa_id)").lte("validade", addDias(f.hoje, 30)).order("validade"),
-    f.veReceita ? emp(sb.from("vw_margem_placa_mes").select("veiculo_id, placa, receita, margem, margem_pct").eq("mes", ini)) : vazio,
-    emp(sb.from("vw_manutencao_custos").select("mes, tipo, custo").gte("mes", ini12).lte("mes", ini)),
     f.veReceita ? emp(sb.from("vw_fluxo_caixa_projetado").select("data, tipo, valor").gte("data", f.hoje).lte("data", addDias(f.hoje, 90))) : vazio,
   ]);
 
@@ -90,11 +88,15 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
     qtdVencidas: vencidas.length,
     repasses: somar(rep.map((r) => r.valor_liquido)),
     qtdRepasses: rep.length,
+    repassesLiberado: somar(rep.filter((r) => r.status === "liberado").map((r) => r.valor_liquido)),
+    repassesPrevisto: somar(rep.filter((r) => r.status === "previsto").map((r) => r.valor_liquido)),
     pagar7: somar(cts.filter((c) => c.vencimento <= em7).map((c) => c.valor)),
     qtdPagar7: cts.filter((c) => c.vencimento <= em7).length,
     frotaLocada: veics.filter((v) => v.status === "locado").length,
     frotaTotal: veics.length,
     preventivasVencidas: prev.filter((p) => p.status === "vencida").length,
+    preventivasProximas: prev.filter((p) => p.status === "proxima").length,
+    preventivasEmDia: prev.filter((p) => p.status === "em_dia").length,
   };
 
   // ----- Hoje -----
@@ -140,21 +142,7 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
     }).map((m) => m.saldo)),
   }));
 
-  const mg = ((margem.data ?? []) as { veiculo_id: string; placa: string; receita: number; margem: number; margem_pct: number | null }[])
-    .filter((x) => !f.placa || x.placa.includes(f.placa));
-  const ordenadas = [...mg].sort((a, b) => b.margem - a.margem);
-  const margemTop = ordenadas.slice(0, 10);
-  const margemPiores = ordenadas.slice(-10).reverse().filter((x) => !margemTop.includes(x) || ordenadas.length <= 10);
-
   const statusFrota = ["locado", "disponivel", "manutencao", "parado"].map((s) => ({ status: s, qtd: veics.filter((v) => v.status === s).length }));
-
-  const mt = (manut.data ?? []) as { mes: string; tipo: string; custo: number }[];
-  const manutencao12 = meses.map((c) => ({
-    mes: c,
-    preventiva: somar(mt.filter((x) => x.mes.startsWith(c) && x.tipo === "preventiva").map((x) => x.custo)),
-    corretiva: somar(mt.filter((x) => x.mes.startsWith(c) && x.tipo === "corretiva").map((x) => x.custo)),
-    outras: somar(mt.filter((x) => x.mes.startsWith(c) && (x.tipo === "pneu" || x.tipo === "inspecao")).map((x) => x.custo)),
-  }));
 
   const fl = (fluxo.data ?? []) as { data: string; tipo: string; valor: number }[];
   let saldo = 0;
@@ -169,7 +157,7 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
   const atrasadoEntrada = somar(vencidas.map((m) => m.saldo));
   const atrasadoSaida = somar(cts.filter((c) => c.vencimento < f.hoje).map((c) => c.valor));
 
-  return { kpis, hoje, faturamento12, aging, margemTop, margemPiores, statusFrota, manutencao12, fluxo90, atrasado: { entrada: atrasadoEntrada, saida: atrasadoSaida } };
+  return { kpis, hoje, faturamento12, aging, statusFrota, fluxo90, atrasado: { entrada: atrasadoEntrada, saida: atrasadoSaida } };
 }
 
 export type DadosDashboard = Awaited<ReturnType<typeof carregarDashboard>>;

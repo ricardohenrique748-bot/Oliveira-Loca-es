@@ -7,7 +7,7 @@ import { RegistrarServiceWorker } from "@/components/pwa";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider defaultTheme="light" storageKey="oliveira-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="oliveira-theme">
       <AuthProvider>
         <TooltipProvider delayDuration={300}>
           {children}

@@ -20,8 +20,8 @@ export function Cabecalho({ titulo, descricao, acoes, voltar }: {
     <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {voltar && <Link href={voltar.href} className="text-xs text-muted-foreground hover:text-foreground">← {voltar.rotulo}</Link>}
-        <SplitText key={titulo} text={titulo} className="truncate text-[26px] font-normal leading-tight sm:text-[32px]" />
-        {descricao && <div className="mt-1 text-sm text-muted-foreground sm:text-base">{descricao}</div>}
+        <SplitText key={titulo} text={titulo} className="truncate text-2xl font-black uppercase leading-tight tracking-tight sm:text-3xl" />
+        {descricao && <div className="mt-1 text-xs font-medium uppercase text-muted-foreground sm:text-sm">{descricao}</div>}
       </div>
       {acoes && <div className="flex flex-wrap items-center gap-2">{acoes}</div>}
     </div>

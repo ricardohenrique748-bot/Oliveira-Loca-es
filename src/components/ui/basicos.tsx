@@ -19,7 +19,7 @@ Label.displayName = "Label";
 
 // ---------- Card ----------
 export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("rounded-md border bg-card text-card-foreground", className)} {...props} />
+  <div ref={ref} className={cn("rounded-2xl border border-foreground/[0.06] bg-card text-card-foreground shadow-sm dark:shadow-xl dark:shadow-black/30", className)} {...props} />
 ));
 Card.displayName = "Card";
 export const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
@@ -27,7 +27,7 @@ export const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<
 ));
 CardHeader.displayName = "CardHeader";
 export const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("font-display text-lg leading-tight font-medium", className)} {...props} />
+  <div ref={ref} className={cn("font-display text-base font-bold uppercase leading-tight tracking-tight", className)} {...props} />
 ));
 CardTitle.displayName = "CardTitle";
 export const CardDescription = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
@@ -45,7 +45,7 @@ export const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-brand-yellow bg-brand-yellow/15 text-brand-black dark:text-brand-yellow",
+        default: "border-primary/30 bg-primary/15 text-primary-ink",
         secondary: "border-transparent bg-secondary text-secondary-foreground",
         outline: "text-foreground",
         ok: "border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300",
@@ -111,7 +111,7 @@ export function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivEl
 export const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root>, React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>>(
   ({ className, ...props }, ref) => (
     <CheckboxPrimitive.Root ref={ref}
-      className={cn("peer h-4 w-4 shrink-0 rounded-[5px] border border-input shadow-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-brand-black data-[state=checked]:bg-brand-yellow data-[state=checked]:text-brand-black data-[state=indeterminate]:bg-brand-yellow data-[state=indeterminate]:text-brand-black", className)}
+      className={cn("peer h-4 w-4 shrink-0 rounded-[5px] border border-input shadow-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground", className)}
       {...props}>
       <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
         {props.checked === "indeterminate" ? <Minus className="h-3.5 w-3.5" strokeWidth={3} /> : <Check className="h-3.5 w-3.5" strokeWidth={3} />}
@@ -125,7 +125,7 @@ Checkbox.displayName = "Checkbox";
 export const Switch = React.forwardRef<React.ElementRef<typeof SwitchPrimitives.Root>, React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>>(
   ({ className, ...props }, ref) => (
     <SwitchPrimitives.Root ref={ref}
-      className={cn("peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-brand-yellow data-[state=unchecked]:bg-input", className)}
+      className={cn("peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input", className)}
       {...props}>
       <SwitchPrimitives.Thumb className="pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=checked]:bg-white data-[state=unchecked]:translate-x-0" />
     </SwitchPrimitives.Root>

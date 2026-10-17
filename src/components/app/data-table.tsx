@@ -110,7 +110,7 @@ export function DataTable<T>({
       {(exportar || topo || (selecionavel && selecionados.length > 0)) && (
         <div className="flex flex-wrap items-center gap-2">
           {selecionavel && selecionados.length > 0 && acoesLote && (
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-brand-yellow bg-accent px-3 py-1.5 text-sm">
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary bg-accent px-3 py-1.5 text-sm">
               <span className="font-medium">{selecionados.length} selecionado(s)</span>
               {acoesLote(selecionados, () => setSelecao({}))}
             </div>
@@ -187,7 +187,7 @@ export function DataTable<T>({
       <div className={cn("space-y-2 md:hidden", url.pendente && "opacity-60")}>
         {dados.length === 0 && <Card className="p-6 text-center text-sm text-muted-foreground">{vazio}</Card>}
         {table.getRowModel().rows.map((row) => (
-          <Card key={row.id} className={cn("p-3", classeLinha?.(row.original), row.getIsSelected() && "border-brand-yellow")}
+          <Card key={row.id} className={cn("p-3", classeLinha?.(row.original), row.getIsSelected() && "border-primary")}
             onClick={aoClicarLinha ? () => aoClicarLinha(row.original) : undefined}>
             {selecionavel && (
               <div className="mb-2 flex justify-end">
