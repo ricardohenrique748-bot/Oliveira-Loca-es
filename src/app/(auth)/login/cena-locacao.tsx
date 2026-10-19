@@ -16,7 +16,7 @@ const ETAPAS = ["Retirada", "Locação", "Devolução"];
 /** Caminhão munck (guindauto) de perfil, virado para a direita; o braço sobe quando `braco` é verdadeiro. */
 function Munck({ braco, andando }: { braco: boolean; andando: boolean }) {
   return (
-    <svg viewBox="0 0 160 66" className="w-full stroke-primary" fill="none" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" aria-hidden>
+    <svg viewBox="0 -28 160 94" className="w-full stroke-primary overflow-visible" fill="none" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" aria-hidden>
       {/* carroceria e chassi */}
       <path d="M12 36H98V44H12Z" className="fill-brand-black" />
       <path d="M8 44H150V52H8Z" className="fill-brand-black" />
@@ -25,7 +25,9 @@ function Munck({ braco, andando }: { braco: boolean; andando: boolean }) {
       {/* braço: gira em torno do topo da coluna */}
       <g className="transition-transform duration-700 ease-in-out" style={{ transformOrigin: "105px 28px", transform: braco ? "rotate(30deg)" : "rotate(0deg)" }}>
         <path d="M105 25L20 21V27L105 32Z" className="fill-brand-black" />
-        <path d="M22 27V38M18 38H26L22 43Z" strokeWidth={2} />
+        <g className="transition-transform duration-700 ease-in-out" style={{ transformOrigin: "22px 27px", transform: braco ? "rotate(-30deg)" : "rotate(0deg)" }}>
+          <path d="M22 27V38M18 38H26L22 43Z" strokeWidth={2} />
+        </g>
       </g>
       {/* cabine */}
       <path d="M116 52V24Q116 20 120 20H136L150 36V52Z" className="fill-brand-black" />
@@ -120,10 +122,10 @@ export function CenaLocacao() {
         <div className="absolute inset-x-0 bottom-3 border-t border-white/15" />
         <div className={cn("absolute inset-x-0 bottom-1 h-[2px] [background-image:repeating-linear-gradient(to_right,rgb(252_229_1/0.35)_0_14px,transparent_14px_30px)] [background-size:30px_2px]", andando && !reduzido && "login-estrada")} />
         {/* caminhão */}
-        <div className="absolute bottom-[10px] w-[var(--caminhao)]"
+        <div className="absolute bottom-[10px] w-[var(--caminhao)] overflow-visible"
           style={{ left: f.x ? "calc(100% - var(--caminhao) - 2.5rem)" : "2.5rem", transition: `left ${viagem} cubic-bezier(0.45, 0, 0.25, 1)` }}>
-          <div className="transition-transform duration-300" style={{ transform: f.olhaDireita ? "scaleX(1)" : "scaleX(-1)" }}>
-            <div className={cn(andando && !reduzido && "login-chassi")}><Munck braco={f.braco} andando={andando && !reduzido} /></div>
+          <div className="transition-transform duration-300 overflow-visible" style={{ transform: f.olhaDireita ? "scaleX(1)" : "scaleX(-1)" }}>
+            <div className={cn("overflow-visible", andando && !reduzido && "login-chassi")}><Munck braco={f.braco} andando={andando && !reduzido} /></div>
           </div>
         </div>
       </div>
