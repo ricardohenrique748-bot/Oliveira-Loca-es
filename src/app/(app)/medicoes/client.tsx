@@ -12,7 +12,7 @@ import type { Opcao } from "@/components/ui/select";
 import { Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
-import { calcularValorMedicao, calcularVencimento, hojeSP, somar } from "@/lib/calculos";
+import { baseCobranca, calcularValorMedicao, calcularVencimento, hojeSP, somar, type TipoCobranca } from "@/lib/calculos";
 import { formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ export type LinhaMedicao = {
   cliente_id: string; cliente_fantasia: string; obra_nome: string | null; placa: string; proprietario: string; prazo_pagamento_dias: number;
   dia_corte_inicio: number; valor_recebido: number; repasse_liquido: number | null; margem: number;
   contrato_numero: string | number | null; cliente_nome: string | null; veiculo_tipo: string | null; saldo: number;
+  tipo_cobranca: TipoCobranca | null;
 };
 
 type Editavel = Pick<LinhaMedicao, "dias" | "acrescimos" | "descontos" | "numero_nf" | "data_emissao" | "data_vencimento" | "observacoes">;
@@ -78,7 +79,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
     });
   };
   const calc = (m: LinhaMedicao) => calcularValorMedicao({
-    valorMensal: m.valor_mensal, dias: valor(m, "dias"), acrescimos: valor(m, "acrescimos"), descontos: valor(m, "descontos"), baseDias,
+    valorMensal: m.valor_mensal, dias: valor(m, "dias"), acrescimos: valor(m, "acrescimos"), descontos: valor(m, "descontos"), baseDias: baseCobranca(m.tipo_cobranca, baseDias),
   });
   const alterados = Object.keys(edicoes).filter((id) => {
     const m = linhas.find((l) => l.id === id);
@@ -195,31 +196,35 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
         </div>
       </div>
 
-      {/* grade desktop */}
+      {/* grade desktop: largura fixa por coluna, cabe na tela sem rolagem horizontal */}
       <Card className={cn("hidden overflow-hidden md:block", url.pendente && "opacity-60")}>
-        <Table ref={tabela} onKeyDown={navegar}>
+        <Table ref={tabela} onKeyDown={navegar} className="table-fixed text-xs [&_td]:px-1.5 [&_td]:py-1.5 [&_th]:h-10 [&_th]:px-1.5 [&_th]:text-xs">
+          <colgroup>
+            <col className="w-[2.5%]" /><col className="w-[15%]" /><col className="w-[8.5%]" /><col className="w-[4.5%]" />
+            <col className="w-[8%]" /><col className="w-[8%]" /><col className="w-[9%]" /><col className="w-[7%]" />
+            <col className="w-[9.5%]" /><col className="w-[9.5%]" /><col className="w-[7.5%]" /><col className="w-[8%]" /><col className="w-[3%]" />
+          </colgroup>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-8"><Checkbox aria-label="Selecionar todas" checked={todos ? true : selecao.size ? "indeterminate" : false}
+              <TableHead><Checkbox aria-label="Selecionar todas" checked={todos ? true : selecao.size ? "indeterminate" : false}
                 onCheckedChange={(v) => setSelecao(v ? new Set(linhas.map((l) => l.id)) : new Set())} /></TableHead>
               <TableHead>Placa / cliente</TableHead>
               <TableHead>Período</TableHead>
-              <TableHead className="w-16 text-right">Dias</TableHead>
-              <TableHead className="text-right">Mensal</TableHead>
-              <TableHead className="w-32 text-right">Acréscimos</TableHead>
-              <TableHead className="w-32 text-right">Descontos</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
-              <TableHead className="w-24">NF</TableHead>
-              <TableHead className="w-36">Emissão</TableHead>
-              <TableHead className="w-36">Vencimento</TableHead>
+              <TableHead className="text-right">Dias</TableHead>
+              <TableHead className="text-right">Acréscimos</TableHead>
+              <TableHead className="text-right">Descontos</TableHead>
+              <TableHead className="text-right" title="Valor final (mensal abaixo)">Valor</TableHead>
+              <TableHead>NF</TableHead>
+              <TableHead>Emissão</TableHead>
+              <TableHead>Vencimento</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="min-w-[10rem]">Observações</TableHead>
-              <TableHead className="w-10"><span className="sr-only">Abrir</span></TableHead>
+              <TableHead>Obs.</TableHead>
+              <TableHead><span className="sr-only">Abrir</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {linhas.length === 0 && (
-              <TableRow><TableCell colSpan={14}className="h-24 text-center text-muted-foreground">
+              <TableRow><TableCell colSpan={13} className="h-24 text-center text-sm text-muted-foreground">
                 Nenhuma medição {competencia === "todas" ? "pendente" : competencia === "historico" ? "encontrada" : `em ${formatCompetencia(competencia)}`}. {podeEditar && "Use “Gerar medições do período”."}
               </TableCell></TableRow>
             )}
@@ -227,30 +232,36 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
               const ed = editavel(m);
               const { valorFinal } = calc(m);
               const mudou = alterados.includes(m.id);
+              const campo = "h-8 w-full min-w-0 px-1.5 text-xs";
+              const data = cn(campo, "[&::-webkit-calendar-picker-indicator]:m-0 [&::-webkit-calendar-picker-indicator]:w-3");
               return (
                 <TableRow key={m.id} data-state={selecao.has(m.id) ? "selected" : undefined} className={cn(mudou && "bg-accent/50", m.status_exibicao === "vencido" && "border-l-2 border-l-status-critico")}>
                   <TableCell><Checkbox aria-label={`Selecionar ${m.placa}`} checked={selecao.has(m.id)} onCheckedChange={() => alternar(m.id)} /></TableCell>
-                  <TableCell className="cursor-pointer" onClick={() => setDetalhe(m)} title="Abrir medição">
-                    <span className="font-mono font-semibold hover:underline">{formatPlaca(m.placa)}</span>
-                    {m.proprietario === "locador" && <Badge variant="info" className="ml-1">Sub</Badge>}
-                    {m.final && <Badge variant="neutro" className="ml-1">Final</Badge>}
-                    <p className="max-w-[14rem] truncate text-xs text-muted-foreground">{m.empresa_apelido} · {m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""}</p>
+                  <TableCell className="cursor-pointer" onClick={() => setDetalhe(m)} title={`${m.empresa_apelido} · ${m.cliente_fantasia}${m.obra_nome ? ` · ${m.obra_nome}` : ""}`}>
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono text-sm font-semibold hover:underline">{formatPlaca(m.placa)}</span>
+                      {m.proprietario === "locador" && <Badge variant="info" className="px-1.5 py-0 text-[10px]">Sub</Badge>}
+                      {m.final && <Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Final</Badge>}
+                    </div>
+                    <p className="truncate text-muted-foreground">{m.empresa_apelido} · {m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""}</p>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-xs">{formatPeriodo(m.periodo_inicio, m.periodo_fim)}</TableCell>
+                  <TableCell className="leading-tight">{formatData(m.periodo_inicio)}<br /><span className="text-muted-foreground">a {formatData(m.periodo_fim)}</span></TableCell>
                   <TableCell>
-                    <InputNumero data-linha={i} data-col="dias" aria-label="Dias" className="h-8 w-14 px-2 text-right" value={valor(m, "dias")}
+                    <InputNumero data-linha={i} data-col="dias" aria-label="Dias" className={cn(campo, "text-right")} value={valor(m, "dias")}
                       disabled={!podeEditar || m.status !== "a_faturar"} onChange={(v) => editar(m, "dias", Math.min(31, v ?? 0))} />
                   </TableCell>
-                  <TableCell className="num text-right text-xs text-muted-foreground"><Moeda valor={m.valor_mensal} /></TableCell>
-                  <TableCell><InputMoeda data-linha={i} data-col="acrescimos" aria-label="Acréscimos" className="h-8" permitirVazio={false} disabled={!ed} value={valor(m, "acrescimos")} onChange={(v) => editar(m, "acrescimos", v ?? 0)} /></TableCell>
-                  <TableCell><InputMoeda data-linha={i} data-col="descontos" aria-label="Descontos" className="h-8" permitirVazio={false} disabled={!ed} value={valor(m, "descontos")} onChange={(v) => editar(m, "descontos", v ?? 0)} /></TableCell>
-                  <TableCell className="text-right font-semibold"><Moeda valor={valorFinal} /></TableCell>
-                  <TableCell><Input data-linha={i} data-col="numero_nf" aria-label="Número da NF" className="h-8 px-2" disabled={!ed} value={valor(m, "numero_nf") ?? ""} onChange={(e) => editar(m, "numero_nf", e.target.value || null)} /></TableCell>
-                  <TableCell><Input data-linha={i} data-col="data_emissao" aria-label="Data de emissão" type="date" className="h-8 px-2" disabled={!ed} value={valor(m, "data_emissao") ?? ""} onChange={(e) => editar(m, "data_emissao", e.target.value || null)} /></TableCell>
-                  <TableCell><Input data-linha={i} data-col="data_vencimento" aria-label="Vencimento" type="date" className="h-8 px-2" disabled={!ed} value={valor(m, "data_vencimento") ?? ""} onChange={(e) => editar(m, "data_vencimento", e.target.value || null)} /></TableCell>
-                  <TableCell><StatusBadge status={m.status_exibicao} /></TableCell>
-                  <TableCell><Input data-linha={i} data-col="observacoes" aria-label="Observações" className="h-8 px-2" disabled={!podeEditar || m.status === "cancelado"} value={valor(m, "observacoes") ?? ""} onChange={(e) => editar(m, "observacoes", e.target.value || null)} /></TableCell>
-                  <TableCell><Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Abrir medição ${m.placa}`} onClick={() => setDetalhe(m)}><Eye /></Button></TableCell>
+                  <TableCell><InputMoeda data-linha={i} data-col="acrescimos" aria-label="Acréscimos" className={cn(campo, "pl-7")} permitirVazio={false} disabled={!ed} value={valor(m, "acrescimos")} onChange={(v) => editar(m, "acrescimos", v ?? 0)} /></TableCell>
+                  <TableCell><InputMoeda data-linha={i} data-col="descontos" aria-label="Descontos" className={cn(campo, "pl-7")} permitirVazio={false} disabled={!ed} value={valor(m, "descontos")} onChange={(v) => editar(m, "descontos", v ?? 0)} /></TableCell>
+                  <TableCell className="text-right leading-tight">
+                    <span className="text-sm font-semibold"><Moeda valor={valorFinal} /></span><br />
+                    <span className="text-[11px] text-muted-foreground" title="Valor mensal">mensal <Moeda valor={m.valor_mensal} /></span>
+                  </TableCell>
+                  <TableCell><Input data-linha={i} data-col="numero_nf" aria-label="Número da NF" className={campo} disabled={!ed} value={valor(m, "numero_nf") ?? ""} onChange={(e) => editar(m, "numero_nf", e.target.value || null)} /></TableCell>
+                  <TableCell><Input data-linha={i} data-col="data_emissao" aria-label="Data de emissão" type="date" className={data} disabled={!ed} value={valor(m, "data_emissao") ?? ""} onChange={(e) => editar(m, "data_emissao", e.target.value || null)} /></TableCell>
+                  <TableCell><Input data-linha={i} data-col="data_vencimento" aria-label="Vencimento" type="date" className={data} disabled={!ed} value={valor(m, "data_vencimento") ?? ""} onChange={(e) => editar(m, "data_vencimento", e.target.value || null)} /></TableCell>
+                  <TableCell><StatusBadge status={m.status_exibicao} className="whitespace-nowrap px-1.5 text-[11px]" /></TableCell>
+                  <TableCell><Input data-linha={i} data-col="observacoes" aria-label="Observações" className={campo} title={valor(m, "observacoes") ?? ""} disabled={!podeEditar || m.status === "cancelado"} value={valor(m, "observacoes") ?? ""} onChange={(e) => editar(m, "observacoes", e.target.value || null)} /></TableCell>
+                  <TableCell><Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Abrir medição ${m.placa}`} onClick={() => setDetalhe(m)}><Eye /></Button></TableCell>
                 </TableRow>
               );
             })}
@@ -258,8 +269,8 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
           {linhas.length > 0 && (
             <TableFooter>
               <TableRow>
-                <TableCell colSpan={7}>{linhas.length} medições{total > linhas.length ? ` (de ${total})` : ""}</TableCell>
-                <TableCell className="text-right"><Moeda valor={totalValor} /></TableCell>
+                <TableCell colSpan={6}>{linhas.length} medições{total > linhas.length ? ` (de ${total})` : ""}</TableCell>
+                <TableCell className="text-right text-sm"><Moeda valor={totalValor} /></TableCell>
                 <TableCell colSpan={6} />
               </TableRow>
             </TableFooter>
@@ -350,7 +361,7 @@ async function pdfMedicao(m: LinhaMedicao, baseDias: number) {
     resumo,
     totais: ["Total da medição", "", "", "", "", "", "", m.valor_final],
     rodape: [
-      `Cálculo: (valor mensal ÷ ${baseDias}) × ${m.dias} dias = ${brl(m.valor_base)}; + acréscimos ${brl(m.acrescimos)} − descontos ${brl(m.descontos)} = ${brl(m.valor_final)}.`,
+      `Cálculo: ${m.tipo_cobranca === "diaria" ? `diária ${brl(m.valor_mensal)}` : `(valor mensal ÷ ${baseDias})`} × ${m.dias} dias = ${brl(m.valor_base)}; + acréscimos ${brl(m.acrescimos)} − descontos ${brl(m.descontos)} = ${brl(m.valor_final)}.`,
       ...(m.observacoes ? [`Observações: ${m.observacoes}`] : []),
       "", "", "",
       "______________________________________          ______________________________________",
@@ -440,7 +451,7 @@ function DialogoDetalhe({ medicao: m, baseDias, onOpenChange }: { medicao: Linha
             <Table>
               <TableBody>
                 <TableRow><TableCell>Valor mensal</TableCell><TableCell className="text-right"><Moeda valor={m.valor_mensal} /></TableCell></TableRow>
-                <TableRow><TableCell>Valor base (mensal ÷ {baseDias} × {m.dias} dias)</TableCell><TableCell className="text-right"><Moeda valor={m.valor_base} /></TableCell></TableRow>
+                <TableRow><TableCell>Valor base ({m.tipo_cobranca === "diaria" ? "diária" : `mensal ÷ ${baseDias}`} × {m.dias} dias)</TableCell><TableCell className="text-right"><Moeda valor={m.valor_base} /></TableCell></TableRow>
                 <TableRow><TableCell>Acréscimos</TableCell><TableCell className="text-right"><Moeda valor={m.acrescimos} /></TableCell></TableRow>
                 <TableRow><TableCell>Descontos</TableCell><TableCell className="text-right">− <Moeda valor={m.descontos} /></TableCell></TableRow>
               </TableBody>

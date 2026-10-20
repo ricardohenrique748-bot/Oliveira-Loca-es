@@ -19,7 +19,7 @@ import type { OpcoesContrato } from "./dados";
 
 export type LinhaContrato = {
   id: string; numero: string | null; empresa_id: string; cliente_id: string; obra_id: string | null; veiculo_id: string;
-  valor_mensal: number; valor_repasse_mensal: number | null; dia_corte_inicio: number; prazo_pagamento_dias: number;
+  tipo_cobranca: "mensal" | "diaria"; valor_mensal: number; valor_repasse_mensal: number | null; dia_corte_inicio: number; prazo_pagamento_dias: number;
   data_inicio: string; data_fim: string | null; data_desmobilizacao: string | null; status: "ativo" | "encerrado" | "suspenso"; observacoes: string | null;
   empresa: string; cliente: string; obra: string | null; placa: string; modelo: string | null; proprietario: "proprio" | "locador";
 };
@@ -29,28 +29,35 @@ export type ContratoFormTela = ContratoForm & { sublocado?: "sim" | "nao" };
 
 export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<ContratoFormTela>[] {
   const locador = (v: ContratoFormTela) => v.sublocado === "sim" || opcoes.veiculos.find((x) => x.value === v.veiculo_id)?.proprietario === "locador";
+  // diária: só cliente, veículo, valor e data — o resto fica no padrão
+  const diaria = (v: ContratoFormTela) => v.tipo_cobranca === "diaria";
+  const mensal = (v: ContratoFormTela) => !diaria(v);
   return [
+    { nome: "tipo_cobranca", rotulo: "Tipo de cobrança", tipo: "select", col: 2, opcoes: [{ value: "mensal", label: "Mensal" }, { value: "diaria", label: "Diária" }] },
     { nome: "empresa_id", rotulo: "Empresa emissora", tipo: "select", opcoes: empresas, obrigatorio: true, col: 2 },
-    { nome: "numero", rotulo: "Nº do contrato", col: 2 },
-    { nome: "status", rotulo: "Status", tipo: "select", opcoes: [{ value: "ativo", label: "Ativo" }, { value: "suspenso", label: "Suspenso" }, { value: "encerrado", label: "Encerrado" }], col: 2 },
+    { nome: "numero", rotulo: "Nº do contrato", col: 2, visivel: mensal, placeholder: "Automático", ajuda: "Deixe vazio para gerar (ex.: OL-012/26)" },
+    { nome: "status", rotulo: "Status", tipo: "select", visivel: mensal, opcoes: [{ value: "ativo", label: "Ativo" }, { value: "suspenso", label: "Suspenso" }, { value: "encerrado", label: "Encerrado" }], col: 2 },
     { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: opcoes.clientes, obrigatorio: true, col: 3 },
-    { nome: "obra_id", rotulo: "Obra", tipo: "select", vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3 },
+    { nome: "obra_id", rotulo: "Obra", tipo: "select", visivel: mensal, vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3 },
     { nome: "sublocado", rotulo: "Sublocado?", tipo: "select", col: 2, opcoes: [{ value: "nao", label: "Não — frota própria" }, { value: "sim", label: "Sim — veículo de locador" }] },
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", obrigatorio: true, col: 4, opcoes: (v) => opcoes.veiculos.filter((x) =>
       (!v.empresa_id || x.empresa_id === v.empresa_id) && (!v.sublocado || (x.proprietario === "locador") === (v.sublocado === "sim"))) },
-    { nome: "valor_mensal", rotulo: "Valor mensal (cliente)", tipo: "moeda", obrigatorio: true, col: 3 },
-    { nome: "valor_repasse_mensal", rotulo: "Repasse mensal (locador)", tipo: "moeda", col: 3, visivel: locador, ajuda: "Valor fixo mensal pago ao dono do veículo" },
-    { nome: "dia_corte_inicio", rotulo: "Período de medição", tipo: "select", col: 2, opcoes: [{ value: "1", label: "Dia 01 ao fim do mês" }, { value: "21", label: "Dia 21 ao dia 20" }] },
-    { nome: "prazo_pagamento_dias", rotulo: "Prazo de pagamento (dias)", tipo: "numero", col: 2 },
-    { nome: "data_inicio", rotulo: "Início (mobilização)", tipo: "data", obrigatorio: true, col: 2 },
-    { nome: "data_fim", rotulo: "Término previsto", tipo: "data", col: 2 },
+    { nome: "valor_mensal", rotulo: "Valor mensal (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: mensal },
+    { nome: "valor_mensal", rotulo: "Valor da diária (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: diaria, ajuda: "Medição = diária × dias trabalhados" },
+    { nome: "valor_repasse_mensal", rotulo: "Repasse mensal (locador)", tipo: "moeda", col: 3, visivel: (v) => mensal(v) && locador(v), ajuda: "Valor fixo mensal pago ao dono do veículo" },
+    { nome: "valor_repasse_mensal", rotulo: "Repasse por dia (locador)", tipo: "moeda", col: 3, visivel: (v) => diaria(v) && locador(v), ajuda: "Valor por dia pago ao dono do veículo" },
+    { nome: "dia_corte_inicio", rotulo: "Período de medição", tipo: "select", col: 2, visivel: mensal, opcoes: [{ value: "1", label: "Dia 01 ao fim do mês" }, { value: "21", label: "Dia 21 ao dia 20" }] },
+    { nome: "prazo_pagamento_dias", rotulo: "Prazo de pagamento (dias)", tipo: "numero", col: 2, visivel: mensal },
+    { nome: "data_inicio", rotulo: "Início (mobilização)", tipo: "data", obrigatorio: true, col: 2, visivel: mensal },
+    { nome: "data_inicio", rotulo: "Data de início", tipo: "data", obrigatorio: true, col: 3, visivel: diaria },
+    { nome: "data_fim", rotulo: "Término previsto", tipo: "data", col: 2, visivel: mensal },
     { nome: "observacoes", rotulo: "Observações", tipo: "textarea", col: 6 },
   ];
 }
 
 export function valoresContrato(c: LinhaContrato): ContratoFormTela {
   return {
-    sublocado: c.proprietario === "locador" ? "sim" : "nao", empresa_id: c.empresa_id, cliente_id: c.cliente_id, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
+    sublocado: c.proprietario === "locador" ? "sim" : "nao", tipo_cobranca: c.tipo_cobranca, empresa_id: c.empresa_id, cliente_id: c.cliente_id, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
     valor_mensal: c.valor_mensal, valor_repasse_mensal: c.valor_repasse_mensal, dia_corte_inicio: c.dia_corte_inicio as never,
     prazo_pagamento_dias: c.prazo_pagamento_dias, data_inicio: c.data_inicio, data_fim: c.data_fim, status: c.status, observacoes: c.observacoes,
   };
@@ -94,13 +101,15 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
     ) },
     { id: "cliente", header: "Cliente / obra", cell: ({ row: { original: c } }) => <div><p>{c.cliente}</p>{c.obra && <p className="text-xs text-muted-foreground">{c.obra}</p>}</div> },
     { accessorKey: "empresa", header: "Empresa" },
-    { accessorKey: "valor_mensal", header: "Valor mensal", meta: { direita: true, ordem: "valor_mensal" }, cell: ({ getValue }) => <Moeda valor={getValue() as number} /> },
+    { accessorKey: "valor_mensal", header: "Valor", meta: { direita: true, ordem: "valor_mensal" }, cell: ({ row: { original: c } }) => (
+      <span><Moeda valor={c.valor_mensal} />{c.tipo_cobranca === "diaria" && <span className="text-xs text-muted-foreground">/dia</span>}</span>
+    ) },
     { accessorKey: "valor_repasse_mensal", header: "Repasse", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number | null} /> },
     { id: "margem", header: "Margem prevista", meta: { direita: true }, cell: ({ row: { original: c } }) => {
       const m = c.valor_mensal - (c.valor_repasse_mensal ?? 0);
       return <span><Moeda valor={m} sinal /> <span className="text-xs text-muted-foreground">{Math.round((m / c.valor_mensal) * 100)}%</span></span>;
     } },
-    { id: "corte", header: "Período", cell: ({ row }) => (row.original.dia_corte_inicio === 1 ? "01 → fim" : "21 → 20") },
+    { id: "corte", header: "Período", cell: ({ row: { original: c } }) => (c.tipo_cobranca === "diaria" ? <Badge variant="info">Diária</Badge> : c.dia_corte_inicio === 1 ? "01 → fim" : "21 → 20") },
     { accessorKey: "data_inicio", header: "Início", meta: { ordem: "data_inicio" }, cell: ({ row: { original: c } }) => (
       <span>{formatData(c.data_inicio)}{c.data_desmobilizacao && <span className="block text-xs text-muted-foreground">desmob. {formatData(c.data_desmobilizacao)}</span>}</span>
     ) },
@@ -120,7 +129,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
           <FiltroSelectUrl param="corte" rotulo="Período" opcoes={[{ value: "1", label: "01 → fim" }, { value: "21", label: "21 → 20" }]} />
         </>}
-        novo={{ sublocado: "nao", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null }}
+        novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null }}
         paraForm={(c) => ({ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never })}
         salvar={salvarContrato} podeEditar={podeEditar}
         acoesLinha={(c) => podeEditar && c.status === "ativo" ? (
@@ -129,7 +138,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
         exportar={{ nome: "contratos", colunas: [
           { titulo: "Placa", valor: (c) => c.placa }, { titulo: "Contrato", valor: (c) => c.numero }, { titulo: "Empresa", valor: (c) => c.empresa },
           { titulo: "Cliente", valor: (c) => c.cliente, largura: 24 }, { titulo: "Obra", valor: (c) => c.obra, largura: 24 },
-          { titulo: "Valor mensal", valor: (c) => c.valor_mensal, tipo: "moeda" }, { titulo: "Repasse", valor: (c) => c.valor_repasse_mensal, tipo: "moeda" },
+          { titulo: "Cobrança", valor: (c) => (c.tipo_cobranca === "diaria" ? "Diária" : "Mensal") }, { titulo: "Valor (mensal ou diária)", valor: (c) => c.valor_mensal, tipo: "moeda" }, { titulo: "Repasse", valor: (c) => c.valor_repasse_mensal, tipo: "moeda" },
           { titulo: "Margem prevista", valor: (c) => c.valor_mensal - (c.valor_repasse_mensal ?? 0), tipo: "moeda" },
           { titulo: "Corte", valor: (c) => c.dia_corte_inicio }, { titulo: "Prazo (dias)", valor: (c) => c.prazo_pagamento_dias },
           { titulo: "Início", valor: (c) => c.data_inicio, tipo: "data" }, { titulo: "Desmobilização", valor: (c) => c.data_desmobilizacao, tipo: "data" },

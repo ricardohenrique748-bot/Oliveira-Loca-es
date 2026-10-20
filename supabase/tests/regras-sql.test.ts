@@ -285,6 +285,23 @@ describe("manutenção", () => {
 });
 
 describe("contratos", () => {
+  it("gera o número automaticamente (prefixo da empresa, sequência por ano)", async () => {
+    await q("begin");
+    try {
+      const novo = async (empresa: string, inicio: string, numero: string | null = null) => (await q<{ numero: string }>(
+        `insert into public.contratos (empresa_id, cliente_id, veiculo_id, valor_mensal, dia_corte_inicio, prazo_pagamento_dias, data_inicio, status, numero)
+         values ($1, '44444444-0000-0000-0000-000000000001', '88888888-0000-0000-0000-000000000001', 1000, 1, 30, $2, 'encerrado', $3) returning numero`,
+        [empresa, inicio, numero]))[0].numero;
+      expect(await novo(OLIVEIRA, "2026-10-20")).toBe("OL-012/26");
+      expect(await novo(OLIVEIRA, "2026-11-01")).toBe("OL-013/26");
+      expect(await novo(OLIVEIRA, "2027-01-05")).toBe("OL-001/27");
+      expect(await novo(TDTS, "2026-10-20")).toBe("TD-010/26");
+      expect(await novo(OLIVEIRA, "2026-10-20", "MANUAL-1")).toBe("MANUAL-1");
+    } finally {
+      await q("rollback");
+    }
+  });
+
   it("desmobilizar gera medição final, encerra contrato e libera veículo", async () => {
     const K = "99999999-0000-0000-0000-000000000005"; // TDTS, corte 1, set/2026 a faturar
     const [{ id }] = await q<{ id: string }>("select public.fn_desmobilizar_contrato($1, '2026-10-09') as id", [K]);

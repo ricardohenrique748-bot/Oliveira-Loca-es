@@ -4,7 +4,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { edicaoMedicaoSchema, lancamentoMedicaoSchema } from "@/lib/schemas/operacao";
-import { diffDias, minData, periodoContendo, proximoPeriodo, type DiaCorte, type Periodo } from "@/lib/calculos";
+import { diffDias, minData, periodoContendo, proximoPeriodo, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
 
 const REVALIDAR = ["/medicoes", "/receber", "/repasses", "/dashboard"];
 const competencia = z.string().regex(/^\d{4}-\d{2}$/, "Competência inválida");
@@ -63,6 +63,7 @@ export interface ContratoLancamento {
   placa: string;
   cliente: string;
   obra: string | null;
+  tipo_cobranca: TipoCobranca;
   valor_mensal: number;
   data_inicio: string;
   /** menor entre término previsto e desmobilização */
@@ -77,7 +78,7 @@ export async function dadosLancamento(contratoId: string) {
     const id = z.string().uuid().parse(contratoId);
     const supabase = await createClient();
     const { data: c } = await supabase.from("contratos")
-      .select("id, valor_mensal, dia_corte_inicio, data_inicio, data_fim, data_desmobilizacao, clientes(razao_social, nome_fantasia), obras(nome), veiculos(placa)")
+      .select("id, tipo_cobranca, valor_mensal, dia_corte_inicio, data_inicio, data_fim, data_desmobilizacao, clientes(razao_social, nome_fantasia), obras(nome), veiculos(placa)")
       .eq("id", id).maybeSingle();
     if (!c) throw new Error("Contrato não encontrado");
     const { data: ultima } = await supabase.from("medicoes").select("periodo_inicio, periodo_fim")
@@ -85,7 +86,7 @@ export async function dadosLancamento(contratoId: string) {
     const ultimo = ultima ? { inicio: ultima.periodo_inicio, fim: ultima.periodo_fim } : null;
     return {
       id: c.id, placa: c.veiculos?.placa ?? "", cliente: c.clientes?.nome_fantasia ?? c.clientes?.razao_social ?? "", obra: c.obras?.nome ?? null,
-      valor_mensal: Number(c.valor_mensal), data_inicio: c.data_inicio, data_fim_efetiva: minData(c.data_fim, c.data_desmobilizacao),
+      tipo_cobranca: c.tipo_cobranca as TipoCobranca, valor_mensal: Number(c.valor_mensal), data_inicio: c.data_inicio, data_fim_efetiva: minData(c.data_fim, c.data_desmobilizacao),
       ultimo_periodo: ultimo,
       sugestao: ultimo ? proximoPeriodo(ultimo.fim) : periodoContendo(c.dia_corte_inicio as DiaCorte, c.data_inicio),
     } satisfies ContratoLancamento;

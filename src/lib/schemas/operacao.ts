@@ -7,7 +7,9 @@ export const contratoSchema = z.object({
   obra_id: uuidOpc,
   veiculo_id: uuidObr("o veículo"),
   numero: textoOpc,
-  valor_mensal: moedaObr("o valor mensal").refine((v) => v > 0, "Informe o valor mensal"),
+  /** diária: valor_mensal / valor_repasse_mensal guardam o valor POR DIA */
+  tipo_cobranca: z.enum(["mensal", "diaria"]).default("mensal"),
+  valor_mensal: moedaObr("o valor").refine((v) => v > 0, "Informe o valor"),
   valor_repasse_mensal: moedaOpc,
   dia_corte_inicio: z.coerce.number().refine((v) => v === 1 || v === 21, "Corte deve ser dia 1 ou 21"),
   prazo_pagamento_dias: z.number({ invalid_type_error: "Informe o prazo" }).int().min(0).max(365),

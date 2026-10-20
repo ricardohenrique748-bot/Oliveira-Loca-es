@@ -441,6 +441,7 @@ export type Database = {
           observacoes: string | null
           prazo_pagamento_dias: number
           status: Database["public"]["Enums"]["status_contrato"]
+          tipo_cobranca: string
           updated_at: string
           valor_mensal: number
           valor_repasse_mensal: number | null
@@ -461,6 +462,7 @@ export type Database = {
           observacoes?: string | null
           prazo_pagamento_dias?: number
           status?: Database["public"]["Enums"]["status_contrato"]
+          tipo_cobranca?: string
           updated_at?: string
           valor_mensal: number
           valor_repasse_mensal?: number | null
@@ -481,6 +483,7 @@ export type Database = {
           observacoes?: string | null
           prazo_pagamento_dias?: number
           status?: Database["public"]["Enums"]["status_contrato"]
+          tipo_cobranca?: string
           updated_at?: string
           valor_mensal?: number
           valor_repasse_mensal?: number | null
@@ -1621,6 +1624,7 @@ export type Database = {
           saldo: number | null
           status: Database["public"]["Enums"]["status_medicao"] | null
           status_exibicao: string | null
+          tipo_cobranca: string | null
           updated_at: string | null
           valor_base: number | null
           valor_final: number | null

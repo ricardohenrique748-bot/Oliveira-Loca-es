@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { Moeda } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
-import { calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde } from "@/lib/calculos";
+import { baseCobranca, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde } from "@/lib/calculos";
 import { formatPeriodo, formatPlaca } from "@/lib/format";
 import { dadosLancamento, lancarMedicao, type ContratoLancamento } from "./actions";
 
@@ -57,10 +57,11 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   // dias automáticos a partir do período (até o usuário editar à mão)
   React.useEffect(() => {
     if (!info || diasManual || !inicio || !fim || fim < inicio) return;
-    setDias(calcularDiasPeriodoLivre({ periodo: { inicio, fim }, dataInicioContrato: info.data_inicio, dataFimEfetiva: info.data_fim_efetiva, baseDias }));
+    const entrada = { periodo: { inicio, fim }, dataInicioContrato: info.data_inicio, dataFimEfetiva: info.data_fim_efetiva, baseDias };
+    setDias(info.tipo_cobranca === "diaria" ? calcularDiasCorridos(entrada) : calcularDiasPeriodoLivre(entrada));
   }, [info, inicio, fim, diasManual, baseDias]);
 
-  const valor = info ? calcularValorMedicao({ valorMensal: info.valor_mensal, dias, acrescimos, descontos, baseDias }).valorFinal : 0;
+  const valor = info ? calcularValorMedicao({ valorMensal: info.valor_mensal, dias, acrescimos, descontos, baseDias: baseCobranca(info.tipo_cobranca, baseDias) }).valorFinal : 0;
   const invalido = !info || !inicio || !fim || fim < inicio || dias < 1;
 
   const lancar = async () => {
@@ -93,7 +94,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
             <div className="rounded-md bg-muted p-3 text-sm">
               <p><span className="font-mono font-semibold">{formatPlaca(info.placa)}</span> · {info.cliente}{info.obra ? ` · ${info.obra}` : ""}</p>
               <p className="text-xs text-muted-foreground">
-                Mensal <Moeda valor={info.valor_mensal} /> · Última medição: {info.ultimo_periodo ? formatPeriodo(info.ultimo_periodo.inicio, info.ultimo_periodo.fim) : "nenhuma"}
+                {info.tipo_cobranca === "diaria" ? "Diária" : "Mensal"} <Moeda valor={info.valor_mensal} /> · Última medição: {info.ultimo_periodo ? formatPeriodo(info.ultimo_periodo.inicio, info.ultimo_periodo.fim) : "nenhuma"}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -127,7 +128,9 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
               <Label htmlFor="lancar-obs">Observações</Label>
               <Input id="lancar-obs" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
             </div>
-            <p className="text-xs text-muted-foreground">Mês cheio conta {baseDias} dias. Valor = (mensal ÷ {baseDias}) × dias + acréscimos − descontos.</p>
+            <p className="text-xs text-muted-foreground">{info.tipo_cobranca === "diaria"
+              ? <>Diária: conta os dias corridos. Valor = diária × dias + acréscimos − descontos.</>
+              : <>Mês cheio conta {baseDias} dias. Valor = (mensal ÷ {baseDias}) × dias + acréscimos − descontos.</>}</p>
           </>}
         </div>
         <DialogFooter>

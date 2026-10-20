@@ -19,7 +19,7 @@ export default function ContratoDetalhePage() {
     const supabase = createClient();
     const { data: c } = await supabase
       .from("contratos")
-      .select(`id, numero, empresa_id, cliente_id, obra_id, veiculo_id, valor_mensal, valor_repasse_mensal, dia_corte_inicio, prazo_pagamento_dias,
+      .select(`id, numero, empresa_id, cliente_id, obra_id, veiculo_id, tipo_cobranca, valor_mensal, valor_repasse_mensal, dia_corte_inicio, prazo_pagamento_dias,
         data_inicio, data_fim, data_desmobilizacao, status, observacoes, empresas(apelido), clientes(razao_social, nome_fantasia), obras(nome), veiculos!inner(placa, modelo, proprietario)`)
       .eq("id", id)
       .maybeSingle();
@@ -42,6 +42,7 @@ export default function ContratoDetalhePage() {
         cliente_id: c.cliente_id,
         obra_id: c.obra_id,
         veiculo_id: c.veiculo_id,
+        tipo_cobranca: c.tipo_cobranca as "mensal" | "diaria",
         valor_mensal: c.valor_mensal,
         valor_repasse_mensal: c.valor_repasse_mensal,
         dia_corte_inicio: c.dia_corte_inicio,

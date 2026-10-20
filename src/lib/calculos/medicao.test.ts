@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calcularDias,
   calcularDiasPeriodoLivre,
+  calcularDiasCorridos,
   proximoPeriodo,
   calcularValorMedicao,
   calcularVencimento,
@@ -182,5 +183,26 @@ describe("período livre (lançamento manual)", () => {
     expect(calcularDiasPeriodoLivre({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2026-02-01" })).toBe(14);
     expect(calcularDiasPeriodoLivre({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2025-01-01", dataFimEfetiva: "2026-01-24" })).toBe(10);
     expect(calcularDiasPeriodoLivre({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2026-03-01" })).toBe(0);
+  });
+});
+
+describe("contrato por diária", () => {
+  it("cobra diária × dias corridos do mês (28, 31…), sem base de 30", () => {
+    const fev = preverMedicao(contrato({ tipoCobranca: "diaria", valorMensal: 500 }), "2026-02")!;
+    expect(fev.dias).toBe(28);
+    expect(fev.valorFinal).toBe(14000);
+    const mar = preverMedicao(contrato({ tipoCobranca: "diaria", valorMensal: 500 }), "2026-03")!;
+    expect(mar.dias).toBe(31);
+    expect(mar.valorFinal).toBe(15500);
+  });
+  it("conta só os dias dentro da vigência; repasse também por dia", () => {
+    const m = preverMedicao(contrato({ tipoCobranca: "diaria", valorMensal: 500, valorRepasseMensal: 300, dataInicio: "2026-09-11", dataFim: "2026-09-20" }), "2026-09")!;
+    expect(m.dias).toBe(10);
+    expect(m.valorFinal).toBe(5000);
+    expect(m.valorRepasseBruto).toBe(3000);
+  });
+  it("dias corridos de um período livre", () => {
+    expect(calcularDiasCorridos({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2025-01-01" })).toBe(31);
+    expect(calcularDiasCorridos({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2026-03-01" })).toBe(0);
   });
 });

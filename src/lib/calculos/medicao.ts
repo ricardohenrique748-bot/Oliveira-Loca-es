@@ -82,6 +82,20 @@ export function calcularDiasPeriodoLivre({ periodo, dataInicioContrato, dataFimE
   return Math.min(diffDias(ini, fim) + 1, baseDias);
 }
 
+export type TipoCobranca = "mensal" | "diaria";
+
+/** Divisor do valor do contrato: diária = 1 (valor × dias), mensal = base de dias. */
+export function baseCobranca(tipo: TipoCobranca | null | undefined, baseDias = BASE_DIAS_PADRAO): number {
+  return tipo === "diaria" ? 1 : baseDias;
+}
+
+/** Dias corridos (inclusive) do período dentro da vigência — usado na diária. */
+export function calcularDiasCorridos({ periodo, dataInicioContrato, dataFimEfetiva }: EntradaDias): number {
+  const ini = maxData(periodo.inicio, dataInicioContrato)!;
+  const fim = minData(periodo.fim, dataFimEfetiva)!;
+  return fim < ini ? 0 : diffDias(ini, fim) + 1;
+}
+
 export interface EntradaValor {
   valorMensal: number;
   dias: number;
@@ -136,6 +150,7 @@ export interface ContratoParaMedir {
   dataFim: ISODate | null;
   dataDesmobilizacao: ISODate | null;
   prazoPagamentoDias: number;
+  tipoCobranca?: TipoCobranca;
 }
 
 export interface MedicaoPrevista {
@@ -150,14 +165,11 @@ export interface MedicaoPrevista {
 /** Prévia de medição de um contrato numa competência (null se o contrato não estava vigente). */
 export function preverMedicao(c: ContratoParaMedir, competencia: string, baseDias = BASE_DIAS_PADRAO): MedicaoPrevista | null {
   const periodo = periodoDaCompetencia(c.diaCorte, competencia);
-  const dias = calcularDias({
-    periodo,
-    dataInicioContrato: c.dataInicio,
-    dataFimEfetiva: minData(c.dataFim, c.dataDesmobilizacao),
-    baseDias,
-  });
+  const entrada = { periodo, dataInicioContrato: c.dataInicio, dataFimEfetiva: minData(c.dataFim, c.dataDesmobilizacao), baseDias };
+  const dias = c.tipoCobranca === "diaria" ? calcularDiasCorridos(entrada) : calcularDias(entrada);
   if (dias <= 0) return null;
-  const { valorBase, valorFinal } = calcularValorMedicao({ valorMensal: c.valorMensal, dias, baseDias });
-  const valorRepasseBruto = c.valorRepasseMensal == null ? null : calcularValorMedicao({ valorMensal: c.valorRepasseMensal, dias, baseDias }).valorBase;
+  const divisor = baseCobranca(c.tipoCobranca, baseDias);
+  const { valorBase, valorFinal } = calcularValorMedicao({ valorMensal: c.valorMensal, dias, baseDias: divisor });
+  const valorRepasseBruto = c.valorRepasseMensal == null ? null : calcularValorMedicao({ valorMensal: c.valorRepasseMensal, dias, baseDias: divisor }).valorBase;
   return { contratoId: c.id, periodo, dias, valorBase, valorFinal, valorRepasseBruto };
 }

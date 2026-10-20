@@ -61,7 +61,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
         </>} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard titulo="Valor mensal" valor={<Moeda valor={c.valor_mensal} />} sub={c.valor_repasse_mensal != null ? <>Repasse <Moeda valor={c.valor_repasse_mensal} /></> : "Frota própria"} />
+        <KpiCard titulo={c.tipo_cobranca === "diaria" ? "Valor da diária" : "Valor mensal"} valor={<Moeda valor={c.valor_mensal} />} sub={c.valor_repasse_mensal != null ? <>Repasse <Moeda valor={c.valor_repasse_mensal} /></> : "Frota própria"} />
         <KpiCard titulo="Total medido" valor={<Moeda valor={faturado} />} sub={`${medicoes.length} medições`} />
         <KpiCard titulo="Margem acumulada" valor={<Moeda valor={margem} sinal />} />
         <KpiCard titulo="A receber" valor={<Moeda valor={aReceber} />} tom={aReceber > 0 ? "alerta" : undefined} />
@@ -71,7 +71,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
         <CardHeader><CardTitle>Condições</CardTitle></CardHeader>
         <CardContent>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
-            <div><dt className="text-xs text-muted-foreground">Período de medição</dt><dd>{c.dia_corte_inicio === 1 ? "Dia 01 ao fim do mês" : "Dia 21 ao dia 20"}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Período de medição</dt><dd>{c.tipo_cobranca === "diaria" ? "Diária (valor × dias)" : c.dia_corte_inicio === 1 ? "Dia 01 ao fim do mês" : "Dia 21 ao dia 20"}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Prazo de pagamento</dt><dd>{c.prazo_pagamento_dias} dias</dd></div>
             <div><dt className="text-xs text-muted-foreground">Início</dt><dd>{formatData(c.data_inicio)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">{c.data_desmobilizacao ? "Desmobilização" : "Término previsto"}</dt><dd>{formatData(c.data_desmobilizacao ?? c.data_fim)}</dd></div>
