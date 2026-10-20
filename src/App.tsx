@@ -1,6 +1,7 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import AppLayout from "@/app/(app)/layout";
+import { INICIO, MODO_COMERCIAL } from "@/lib/plataforma";
 
 // Auth & Setup
 import LoginPage from "@/app/(auth)/login/page";
@@ -37,7 +38,28 @@ import RelatoriosPage from "@/app/(app)/relatorios/page";
 import ConfiguracoesPage from "@/app/(app)/configuracoes/page";
 import ImportacaoPage from "@/app/(app)/configuracoes/importacao/page";
 
+/** app Android do comercial: login, propostas, clientes e consulta da frota (e o contrato gerado da proposta) */
+function AppComercial() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/configurar" element={<ConfigurarPage />} />
+      <Route path="/offline" element={<OfflinePage />} />
+      <Route element={<AppLayout />}>
+        <Route path="/comercial/propostas" element={<PropostasPage />} />
+        <Route path="/cadastros/clientes" element={<ClientesPage />} />
+        <Route path="/cadastros/clientes/:id" element={<ClienteDetalhePage />} />
+        <Route path="/cadastros/veiculos" element={<VeiculosPage />} />
+        <Route path="/cadastros/veiculos/:id" element={<VeiculoDetalhePage />} />
+        <Route path="/contratos/:id" element={<ContratoDetalhePage />} />
+      </Route>
+      <Route path="*" element={<Navigate to={INICIO} replace />} />
+    </Routes>
+  );
+}
+
 export function App() {
+  if (MODO_COMERCIAL) return <AppComercial />;
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />

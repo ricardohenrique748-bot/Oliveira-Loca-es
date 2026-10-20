@@ -1,6 +1,7 @@
 import React from "react";
 import { useSearchParams } from "react-router-dom";
 import { LoginForm } from "./login-form";
+import { ServidorApp } from "./servidor";
 import { Item, Palco } from "./animacao";
 import { CenaLocacao } from "./cena-locacao";
 
@@ -28,6 +29,7 @@ export default function LoginPage() {
               </div>
             </Item>
             <LoginForm next={next} />
+            <ServidorApp />
           </Palco>
         </div>
 

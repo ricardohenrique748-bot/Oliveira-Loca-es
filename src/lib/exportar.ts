@@ -1,5 +1,6 @@
 "use client";
-/** Exportação de listagens: CSV, XLSX (SheetJS) e PDF (jsPDF + autotable). Roda no navegador. */
+/** Exportação de listagens: CSV, XLSX (SheetJS) e PDF (jsPDF + autotable). Roda no navegador (no app Android, compartilha). */
+import { entregarArquivo } from "@/lib/plataforma";
 
 export interface ColunaExport<T> {
   titulo: string;
@@ -15,12 +16,7 @@ function nomeArquivo(base: string, ext: string) {
 }
 
 function baixar(blob: Blob, nome: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nome;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return entregarArquivo(blob, nome);
 }
 
 /** "2026-10-16" → Date local (para célula de data no Excel) */
@@ -140,5 +136,5 @@ export async function exportarPDF<T>(nome: string, titulo: string, colunas: Colu
       fy += 5;
     }
   }
-  doc.save(nomeArquivo(nome, "pdf"));
+  await baixar(doc.output("blob"), nomeArquivo(nome, "pdf"));
 }

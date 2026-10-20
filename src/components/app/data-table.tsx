@@ -225,7 +225,8 @@ export function DataTable<T>({
 function CartaoPadrao<T>({ row }: { row: Row<T> }) {
   const celulas = row.getVisibleCells().filter((c) => !c.column.columnDef.meta?.ocultarMobile && c.column.id !== "_sel");
   const titulo = celulas.find((c) => c.column.columnDef.meta?.tituloMobile) ?? celulas[0];
-  const resto = celulas.filter((c) => c !== titulo);
+  const resto = celulas.filter((c) => c !== titulo && c.column.id !== "_acoes");
+  const acoes = celulas.find((c) => c.column.id === "_acoes");
   return (
     <div className="space-y-1.5">
       {titulo && <div className="font-semibold">{flexRender(titulo.column.columnDef.cell, titulo.getContext())}</div>}
@@ -242,6 +243,8 @@ function CartaoPadrao<T>({ row }: { row: Row<T> }) {
           );
         })}
       </dl>
+      {/* botões da linha ocupam a largura toda, sem rótulo */}
+      {acoes && <div className="flex flex-wrap items-center justify-end gap-2 pt-1">{flexRender(acoes.column.columnDef.cell, acoes.getContext())}</div>}
     </div>
   );
 }

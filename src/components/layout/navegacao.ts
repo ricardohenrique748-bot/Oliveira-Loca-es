@@ -4,6 +4,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Modulo } from "@/lib/permissoes";
+import { MODO_COMERCIAL } from "@/lib/plataforma";
 
 export interface ItemMenu {
   titulo: string;
@@ -21,7 +22,7 @@ export interface GrupoMenu {
   itens: ItemMenu[];
 }
 
-export const MENU: GrupoMenu[] = [
+const MENU_COMPLETO: GrupoMenu[] = [
   { itens: [{ titulo: "Dashboard", href: "/dashboard", icone: LayoutDashboard, modulo: "dashboard", descricao: "Visão geral do mês" }] },
   {
     titulo: "Comercial",
@@ -72,3 +73,10 @@ export const MENU: GrupoMenu[] = [
     ],
   },
 ];
+
+const item = (href: string) => MENU_COMPLETO.flatMap((g) => g.itens).find((i) => i.href === href)!;
+
+/** app Android do comercial: só propostas, clientes e a consulta da frota */
+export const MENU: GrupoMenu[] = MODO_COMERCIAL
+  ? [{ titulo: "Comercial", itens: [item("/comercial/propostas"), item("/cadastros/clientes"), item("/cadastros/veiculos")] }]
+  : MENU_COMPLETO;

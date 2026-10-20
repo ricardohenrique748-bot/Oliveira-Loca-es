@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/o
 import { Button } from "@/components/ui/button";
 import { sair } from "@/app/(auth)/login/actions";
 import { MENU } from "./navegacao";
+import { INICIO } from "@/lib/plataforma";
 
 export function ativo(pathname: string, href: string) {
   if (href === "/manutencao") return pathname === "/manutencao";
@@ -69,7 +70,7 @@ function Navegacao({ perfil, aoNavegar }: { perfil: Perfil; aoNavegar?: () => vo
 function Logo() {
   return (
     <div className="flex h-16 shrink-0 items-center border-b border-foreground/[0.06] px-3">
-      <Link href="/dashboard" className="flex w-full items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+      <Link href={INICIO} className="flex w-full items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
         <img src="/logo-oliveira.svg" alt="Oliveira Locações" className="logo-marca h-10 w-auto" />
       </Link>
     </div>

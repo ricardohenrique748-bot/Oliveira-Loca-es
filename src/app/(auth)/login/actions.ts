@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import { COOKIE_LEMBRAR } from "@/lib/supabase/lembrar";
+import { INICIO } from "@/lib/plataforma";
 
 export interface EstadoLogin {
   erro?: string;
@@ -31,7 +32,7 @@ export async function entrar(_: EstadoLogin, form: FormData): Promise<EstadoLogi
     return { erro: semConexao ? "Não foi possível conectar ao servidor. Tente novamente em instantes." : "E-mail ou senha incorretos.", email: dados.data.email };
   }
 
-  const next = dados.data.next && dados.data.next.startsWith("/") && !dados.data.next.startsWith("//") ? dados.data.next : "/dashboard";
+  const next = dados.data.next && dados.data.next.startsWith("/") && !dados.data.next.startsWith("//") ? dados.data.next : INICIO;
   return { sucesso: true, next };
 }
 

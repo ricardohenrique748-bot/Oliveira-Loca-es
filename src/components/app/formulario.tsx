@@ -222,9 +222,9 @@ export function Formulario<V extends FieldValues>({ campos, schema, valores, onS
       {avancados.length > 0 && (
         <div className="rounded-md border">
           <button type="button" onClick={() => setMostrarAvancado((v) => !v)} aria-expanded={mostrarAvancado}
-            className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium hover:bg-muted/50">
+            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium hover:bg-muted/50">
             {rotuloAvancado}
-            <ChevronDown className={cn("size-4 transition-transform", mostrarAvancado && "rotate-180")} />
+            <ChevronDown className={cn("size-4 shrink-0 transition-transform", mostrarAvancado && "rotate-180")} />
           </button>
           {mostrarAvancado && <div className="border-t p-3">{grade(avancados)}</div>}
         </div>

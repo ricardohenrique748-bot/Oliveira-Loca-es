@@ -1,5 +1,9 @@
-/** Variáveis públicas do Supabase; null quando o .env.local ainda não foi preenchido. */
+import { servidorSalvo } from "@/lib/plataforma";
+
+/** Variáveis públicas do Supabase; null quando o .env.local ainda não foi preenchido. No app comercial, o servidor escolhido no aparelho vem primeiro. */
 export function supabaseEnv(): { url: string; anonKey: string } | null {
+  const salvo = servidorSalvo();
+  if (salvo) return salvo;
   const metaEnv = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {} as Record<string, string>;
   const procEnv = typeof process !== "undefined" && process.env ? process.env : {} as Record<string, string>;
 

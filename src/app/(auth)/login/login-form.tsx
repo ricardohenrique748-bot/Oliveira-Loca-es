@@ -7,6 +7,7 @@ import { Checkbox, Label } from "@/components/ui/basicos";
 import { cn } from "@/lib/utils";
 import { entrar, type EstadoLogin } from "./actions";
 import { Item } from "./animacao";
+import { INICIO } from "@/lib/plataforma";
 
 const CHAVE_EMAIL = "login:email";
 const CAMPO = "login-campo h-12 bg-foreground/5 backdrop-blur-sm baixa:h-11 curta:h-10";
@@ -21,7 +22,7 @@ export function LoginForm({ next }: { next?: string }) {
 
   useEffect(() => {
     if (estado?.sucesso) {
-      navigate(estado.next || "/dashboard", { replace: true });
+      navigate(estado.next || INICIO, { replace: true });
     }
   }, [estado, navigate]);
 

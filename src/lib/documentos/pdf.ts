@@ -4,6 +4,7 @@
  * O conteúdo é montado por funções puras (proposta.ts, contrato.ts) e só aqui vira PDF (jsPDF + autotable), no navegador.
  */
 import type { jsPDF as JsPDF } from "jspdf";
+import { entregarArquivo } from "@/lib/plataforma";
 
 export type Bloco =
   | { t: "titulo"; texto: string; sub?: string }
@@ -67,7 +68,7 @@ function carregarLogo(): Promise<string | null> {
 
 export async function baixarDocumentoPDF(d: Documento) {
   const doc = await renderizarPDF(d, await carregarLogo());
-  doc.save(`${d.arquivo.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w-]+/g, "_")}.pdf`);
+  await entregarArquivo(doc.output("blob"), `${d.arquivo.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w-]+/g, "_")}.pdf`);
 }
 
 /** desenha o documento; `imgLogo` é um data URL JPEG (sem ele, sai o nome da marca em texto) */

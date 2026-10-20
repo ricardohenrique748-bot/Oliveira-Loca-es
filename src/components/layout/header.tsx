@@ -17,6 +17,7 @@ import { iniciais, SidebarMobile } from "./sidebar";
 import { MenuTopo } from "./menu-topo";
 import { definirEmpresa, marcarAlertasLidos } from "./actions";
 import { sair } from "@/app/(auth)/login/actions";
+import { INICIO } from "@/lib/plataforma";
 
 export interface AlertaHeader {
   id: string;
@@ -47,7 +48,7 @@ export function Header({
     <header className="sticky top-0 z-30 border-b border-foreground/[0.06] bg-background/80 backdrop-blur-xl">
      <div className="mx-auto flex h-16 w-full max-w-[1480px] items-center gap-3 px-4 sm:px-6 lg:px-10">
       <SidebarMobile perfil={perfil} nome={nome} />
-      <Link href="/dashboard" aria-label="Oliveira Locações — início"
+      <Link href={INICIO} aria-label="Oliveira Locações — início"
         className="flex shrink-0 items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
         <img src="/logo-oliveira.svg" alt="Oliveira Locações" className="logo-marca h-10 w-auto" />
       </Link>
@@ -96,7 +97,7 @@ export function Header({
             {alertas.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhum alerta pendente 🎉</li>}
             {alertas.map((a) => (
               <li key={a.id}>
-                <Link href={a.link ?? "/dashboard"} className="flex gap-3 px-4 py-2.5 hover:bg-muted">
+                <Link href={a.link ?? INICIO} className="flex gap-3 px-4 py-2.5 hover:bg-muted">
                   <Badge variant={a.severidade === "critico" ? "critico" : a.severidade === "alerta" ? "alerta" : "info"} className="mt-1.5 h-2 w-2 shrink-0 border-0 p-0" aria-hidden />
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{a.titulo}</span>
