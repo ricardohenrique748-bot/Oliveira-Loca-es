@@ -37,6 +37,10 @@ insert into public.empresas (id, apelido, razao_social, cnpj) values
   ('11111111-0000-0000-0000-000000000001', 'OLIVEIRA', 'Oliveira & Oliveira Locações Ltda', '12.345.678/0001-90'),
   ('11111111-0000-0000-0000-000000000002', 'TDTS', 'TDTS & Oliveira Locações Ltda', '23.456.789/0001-01');
 
+-- endereço e contato que saem na proposta e no contrato
+update public.empresas set endereco = 'Rua Primavera, Quadra D, Lote 22, Condomínio Areia Branca', cidade = 'São José do Rio Preto', uf = 'SP',
+  contato_nome = 'Thiago', telefone = '17991869942';
+
 insert into public.usuario_empresas (user_id, empresa_id) values
   ('aaaaaaaa-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001'),
   ('aaaaaaaa-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000002'),

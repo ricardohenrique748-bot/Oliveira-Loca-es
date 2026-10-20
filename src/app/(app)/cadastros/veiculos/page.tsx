@@ -20,7 +20,7 @@ export default function VeiculosPage() {
     const supabase = createClient();
     let q = supabase
       .from("veiculos")
-      .select("id, placa, renavam, tipo, marca, modelo, ano, proprietario, locador_id, empresa_id, km_atual, horimetro_atual, status, foto_url, observacoes, empresas(apelido)", { count: "exact" });
+      .select("id, placa, renavam, chassi, cor, tipo, marca, modelo, ano, proprietario, locador_id, empresa_id, km_atual, horimetro_atual, status, foto_url, observacoes, empresas(apelido)", { count: "exact" });
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     if (p.q) q = q.or(`placa.ilike.${termoBusca(p.q.replace(/-/g, ""))},modelo.ilike.${termoBusca(p.q)},marca.ilike.${termoBusca(p.q)}`);
     for (const f of ["status", "tipo", "proprietario"] as const) {

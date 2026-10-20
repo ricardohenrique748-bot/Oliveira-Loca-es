@@ -20,7 +20,7 @@ import { camposVeiculo } from "../campos";
 import { atualizarFotoVeiculo } from "./actions";
 
 type Veiculo = {
-  id: string; placa: string; renavam: string | null; tipo: VeiculoForm["tipo"]; marca: string | null; modelo: string | null; ano: number | null; proprietario: VeiculoForm["proprietario"];
+  id: string; placa: string; renavam: string | null; chassi: string | null; cor: string | null; tipo: VeiculoForm["tipo"]; marca: string | null; modelo: string | null; ano: number | null; proprietario: VeiculoForm["proprietario"];
   locador_id: string | null; locador: string | null; empresa_id: string; empresa: string; km_atual: number; horimetro_atual: number;
   status: VeiculoForm["status"]; foto_url: string | null; observacoes: string | null;
 };
@@ -139,7 +139,7 @@ export function FichaVeiculo({ veiculo: v, empresas, locadores, contratos, medic
         <TabsContent value="dados" className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2"><CardContent className="pt-5">
             <Formulario<VeiculoForm> campos={campos} schema={veiculoSchema as never}
-              valores={{ placa: v.placa, renavam: v.renavam, tipo: v.tipo, marca: v.marca, modelo: v.modelo, ano: v.ano, proprietario: v.proprietario, locador_id: v.locador_id, empresa_id: v.empresa_id, km_atual: v.km_atual, horimetro_atual: v.horimetro_atual, status: v.status, foto_url: v.foto_url, observacoes: v.observacoes }}
+              valores={{ placa: v.placa, renavam: v.renavam, chassi: v.chassi, cor: v.cor, tipo: v.tipo, marca: v.marca, modelo: v.modelo, ano: v.ano, proprietario: v.proprietario, locador_id: v.locador_id, empresa_id: v.empresa_id, km_atual: v.km_atual, horimetro_atual: v.horimetro_atual, status: v.status, foto_url: v.foto_url, observacoes: v.observacoes }}
               onSalvar={(d) => salvarVeiculo(v.id, d)} onSucesso={() => router.refresh()} />
           </CardContent></Card>
           <div className="space-y-4">

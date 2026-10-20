@@ -6,7 +6,7 @@ import { podeEscrever, podeLer } from "@/lib/permissoes";
 import { lerParams, termoBusca } from "@/lib/consulta";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
-import type { ModalidadeProposta, StatusProposta } from "@/lib/schemas/comercial";
+import type { ModalidadeProposta, ModeloProposta, StatusProposta } from "@/lib/schemas/comercial";
 import { opcoesContrato } from "../../contratos/dados";
 import { PropostasCliente } from "./client";
 
@@ -21,6 +21,7 @@ export default function PropostasPage() {
     let q = supabase.from("propostas")
       .select(`id, numero, empresa_id, cliente_id, obra_id, veiculo_id, equipamento, modalidade, tipo_cobranca, valor, dia_corte_inicio, prazo_pagamento_dias,
         data_inicio_prevista, periodo_minimo, validade, condicoes, observacoes, status, motivo_recusa, contrato_id, created_at,
+        modelo_documento, contato_cliente, local_operacao, quantidade, franquia, km_livre, jornada, valor_mobilizacao, valor_desmobilizacao, multa_rescisao_pct,
         empresas(apelido, razao_social, cnpj), clientes(razao_social, nome_fantasia, cnpj), obras(nome), veiculos(placa, modelo)`, { count: "exact" });
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     const status = p.get("status") ?? "abertas";
@@ -40,6 +41,9 @@ export default function PropostasPage() {
         equipamento: r.equipamento, modalidade: r.modalidade as ModalidadeProposta, tipo_cobranca: r.tipo_cobranca as "mensal" | "diaria", valor: Number(r.valor),
         dia_corte_inicio: r.dia_corte_inicio, prazo_pagamento_dias: r.prazo_pagamento_dias, data_inicio_prevista: r.data_inicio_prevista,
         periodo_minimo: r.periodo_minimo, validade: r.validade, condicoes: r.condicoes, observacoes: r.observacoes,
+        modelo_documento: r.modelo_documento as ModeloProposta, contato_cliente: r.contato_cliente, local_operacao: r.local_operacao, quantidade: r.quantidade,
+        franquia: r.franquia, km_livre: r.km_livre, jornada: r.jornada, multa_rescisao_pct: Number(r.multa_rescisao_pct),
+        valor_mobilizacao: r.valor_mobilizacao == null ? null : Number(r.valor_mobilizacao), valor_desmobilizacao: r.valor_desmobilizacao == null ? null : Number(r.valor_desmobilizacao),
         status: r.status as StatusProposta, motivo_recusa: r.motivo_recusa, contrato_id: r.contrato_id, created_at: r.created_at,
         empresa: r.empresas?.apelido ?? "", empresa_razao: r.empresas?.razao_social ?? "", empresa_cnpj: r.empresas?.cnpj ?? null,
         cliente: r.clientes?.nome_fantasia ?? r.clientes?.razao_social ?? "", cliente_razao: r.clientes?.razao_social ?? "",

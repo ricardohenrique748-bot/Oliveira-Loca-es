@@ -12,7 +12,7 @@ export default function EmpresasPage() {
   const { data, loading } = useAsyncPage(async () => {
     const s = await exigirSessao("configuracoes");
     const supabase = createClient();
-    const { data: linhas } = await supabase.from("empresas").select("id, apelido, razao_social, cnpj, ativo").order("apelido");
+    const { data: linhas } = await supabase.from("empresas").select("id, apelido, razao_social, cnpj, ativo, endereco, cidade, uf, contato_nome, telefone, email").order("apelido");
     return {
       linhas: linhas ?? [],
       podeEditar: podeEscrever(s.perfil, "configuracoes"),

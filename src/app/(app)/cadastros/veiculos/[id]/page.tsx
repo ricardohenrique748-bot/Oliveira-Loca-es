@@ -17,7 +17,7 @@ export default function VeiculoDetalhePage() {
     const supabase = createClient();
     const { data: v } = await supabase
       .from("veiculos")
-      .select("id, placa, renavam, tipo, marca, modelo, ano, proprietario, locador_id, empresa_id, km_atual, horimetro_atual, status, foto_url, observacoes, empresas(apelido)")
+      .select("id, placa, renavam, chassi, cor, tipo, marca, modelo, ano, proprietario, locador_id, empresa_id, km_atual, horimetro_atual, status, foto_url, observacoes, empresas(apelido)")
       .eq("id", id)
       .maybeSingle();
 

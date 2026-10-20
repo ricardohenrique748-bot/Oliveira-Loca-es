@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { LogOut, Pencil, Plus } from "lucide-react";
+import { FileDown, LogOut, Pencil, Plus } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import type { Opcao } from "@/components/ui/select";
@@ -13,6 +13,7 @@ import { DataTable } from "@/components/app/data-table";
 import { FormularioDialog } from "@/components/app/formulario";
 import { contratoSchema } from "@/lib/schemas/operacao";
 import { formatData, formatPeriodo, formatPlaca } from "@/lib/format";
+import { baixarContratoPDF } from "@/lib/documentos/baixar";
 import { salvarContrato } from "../actions";
 import { camposContrato, DialogoDesmobilizar, valoresContrato, type ContratoFormTela, type LinhaContrato } from "../client";
 import type { OpcoesContrato } from "../dados";
@@ -55,6 +56,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
         descricao={<span>{c.numero ? `Contrato ${c.numero} · ` : ""}{c.empresa}{c.obra ? ` · ${c.obra}` : ""}</span>}
         acoes={<>
           <StatusBadge status={c.status} className="text-sm" />
+          <Button variant="outline" size="sm" onClick={() => baixarContratoPDF(c.id)}><FileDown /> PDF do contrato</Button>
           {podeEditar && <Button variant="outline" size="sm" onClick={() => setEditando(true)}><Pencil /> Editar</Button>}
           {podeEditar && c.status === "ativo" && <Button variant="outline" size="sm" onClick={() => setDesmob(true)}><LogOut /> Desmobilizar</Button>}
           {podeLancar && c.status !== "suspenso" && <Button size="sm" onClick={() => setLancar(true)}><Plus /> Lançar medição</Button>}

@@ -314,6 +314,45 @@ describe("contratos", () => {
   });
 });
 
+describe("propostas", () => {
+  it("rascunho vira contrato direto; recusada e sem veículo são bloqueadas", async () => {
+    await q("begin");
+    try {
+      const [{ id: livre }] = await q<{ id: string }>(
+        `select v.id from public.veiculos v where v.empresa_id = $1
+          and not exists (select 1 from public.contratos c where c.veiculo_id = v.id and c.status = 'ativo') limit 1`, [OLIVEIRA]);
+      const nova = async (status: string, veiculo: string | null) => (await q<{ id: string }>(
+        `insert into public.propostas (empresa_id, cliente_id, veiculo_id, equipamento, valor, status, data_inicio_prevista)
+         values ($1, '44444444-0000-0000-0000-000000000001', $2, 'Caminhão', 199, $3, '2026-11-01') returning id`,
+        [OLIVEIRA, veiculo, status]))[0].id;
+      // savepoint: o erro esperado não pode abortar a transação do teste
+      const gerar = (id: string) => comoUsuario(db, U.admin, async () => {
+        await db.exec("savepoint gerar");
+        try {
+          return await db.query<{ id: string }>("select public.fn_proposta_gerar_contrato($1) as id", [id]);
+        } catch (e) {
+          await db.exec("rollback to savepoint gerar");
+          throw e;
+        }
+      });
+
+      await expect(gerar(await nova("recusada", livre))).rejects.toThrow(/recusada/);
+      await expect(gerar(await nova("rascunho", null))).rejects.toThrow(/Informe o veículo/);
+
+      const rascunho = await nova("rascunho", livre);
+      const contratoId = (await gerar(rascunho)).rows[0].id;
+      const [p] = await q<{ status: string; contrato_id: string }>("select status, contrato_id from public.propostas where id = $1", [rascunho]);
+      expect(p).toEqual({ status: "convertida", contrato_id: contratoId });
+      const [c] = await q<{ valor_mensal: string; data_inicio: string; status: string }>(
+        "select valor_mensal::text, data_inicio::text, status::text from public.contratos where id = $1", [contratoId]);
+      expect(c).toEqual({ valor_mensal: "199.00", data_inicio: "2026-11-01", status: "ativo" });
+      await expect(gerar(rascunho)).rejects.toThrow(/já virou contrato/);
+    } finally {
+      await q("rollback");
+    }
+  });
+});
+
 describe("multas", () => {
   it("liga ao contrato da data, marca vencida, paga com data e gera alerta", async () => {
     await q("begin");

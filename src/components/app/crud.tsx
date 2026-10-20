@@ -2,7 +2,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import type { DefaultValues, FieldValues } from "react-hook-form";
+import type { DefaultValues, FieldValues, Path } from "react-hook-form";
 import type { ZodType, ZodTypeDef } from "zod";
 import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,10 @@ export interface CrudProps<T extends { id: string }, V extends FieldValues> {
   semCabecalho?: boolean;
   /** abre o formulário de novo automaticamente quando ?novo=1 */
   abrirNovo?: boolean;
+  /** repassados ao formulário */
+  extraForm?: (valores: V) => React.ReactNode;
+  rotuloAvancado?: string;
+  aoAlterar?: (campo: string, valores: V) => Partial<Record<Path<V>, unknown>> | void;
 }
 
 export function CrudSimples<T extends { id: string }, V extends FieldValues>(p: CrudProps<T, V>) {
@@ -119,6 +123,7 @@ export function CrudSimples<T extends { id: string }, V extends FieldValues>(p: 
         valores={editando ? p.paraForm(editando) : p.novo}
         onSalvar={(v) => p.salvar(editando?.id ?? null, v) as Promise<{ ok: true; mensagem?: string } | { ok: false; erro: string }>}
         onSucesso={() => router.refresh()}
+        extra={p.extraForm} rotuloAvancado={p.rotuloAvancado} aoAlterar={p.aoAlterar}
       />
       <Confirmar aberto={!!excluindo} onOpenChange={(v) => !v && setExcluindo(null)} titulo={`Excluir ${p.entidade}?`}
         descricao="Esta ação não pode ser desfeita." rotulo="Excluir" destrutivo

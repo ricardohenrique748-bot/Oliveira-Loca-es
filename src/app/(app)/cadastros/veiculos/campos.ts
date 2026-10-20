@@ -16,6 +16,8 @@ export function camposVeiculo(empresas: Opcao[], locadores: Opcao[]): Campo<Veic
     { nome: "modelo", rotulo: "Modelo", col: 2, ajuda: "Planos por modelo usam este nome" },
     { nome: "ano", rotulo: "Ano", tipo: "numero", col: 2 },
     { nome: "renavam", rotulo: "RENAVAM", col: 2, ajuda: "Usado na consulta de multas" },
+    { nome: "chassi", rotulo: "Chassi", col: 2, ajuda: "Sai no contrato" },
+    { nome: "cor", rotulo: "Cor", col: 2 },
     { nome: "empresa_id", rotulo: "Empresa", tipo: "select", opcoes: empresas, obrigatorio: true, col: 2 },
     { nome: "proprietario", rotulo: "Propriedade", tipo: "select", opcoes: opcoesDe(ROTULOS.proprietario), col: 2 },
     { nome: "locador_id", rotulo: "Locador", tipo: "select", opcoes: locadores, vazio: "—", col: 2, visivel: (v) => v.proprietario === "locador", obrigatorio: true },

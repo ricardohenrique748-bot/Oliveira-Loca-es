@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { LogOut } from "lucide-react";
+import { FileDown, LogOut } from "lucide-react";
 import { CrudSimples } from "@/components/app/crud";
 import { Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { FiltroSelectUrl } from "@/components/app/url";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import type { Opcao } from "@/components/ui/select";
 import { contratoSchema, type ContratoForm } from "@/lib/schemas/operacao";
 import { formatData, formatPlaca, hojeSP } from "@/lib/format";
+import { baixarContratoPDF } from "@/lib/documentos/baixar";
 import { desmobilizarContrato, salvarContrato } from "./actions";
 import type { OpcoesContrato } from "./dados";
 
@@ -95,23 +96,28 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
 
   const colunas = React.useMemo<ColumnDef<LinhaContrato, unknown>[]>(() => [
     { accessorKey: "placa", header: "Placa", meta: { tituloMobile: true }, cell: ({ row: { original: c } }) => (
-      <div><span className="font-mono font-semibold tracking-wider">{formatPlaca(c.placa)}</span>
+      <div className="whitespace-nowrap"><span className="font-mono font-semibold tracking-wider">{formatPlaca(c.placa)}</span>
         {c.proprietario === "locador" && <Badge variant="info" className="ml-2">Sublocado</Badge>}
-        <p className="text-xs text-muted-foreground">{c.modelo}</p></div>
+        <p className="text-xs text-muted-foreground">{[c.modelo, c.empresa].filter(Boolean).join(" · ")}</p></div>
     ) },
     { id: "cliente", header: "Cliente / obra", cell: ({ row: { original: c } }) => <div><p>{c.cliente}</p>{c.obra && <p className="text-xs text-muted-foreground">{c.obra}</p>}</div> },
-    { accessorKey: "empresa", header: "Empresa" },
-    { accessorKey: "valor_mensal", header: "Valor", meta: { direita: true, ordem: "valor_mensal" }, cell: ({ row: { original: c } }) => (
-      <span><Moeda valor={c.valor_mensal} />{c.tipo_cobranca === "diaria" && <span className="text-xs text-muted-foreground">/dia</span>}</span>
-    ) },
-    { accessorKey: "valor_repasse_mensal", header: "Repasse", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number | null} /> },
-    { id: "margem", header: "Margem prevista", meta: { direita: true }, cell: ({ row: { original: c } }) => {
+    // repasse e margem só fazem sentido no sublocado (frota própria = 100%)
+    { accessorKey: "valor_mensal", header: "Valor", meta: { direita: true, ordem: "valor_mensal" }, cell: ({ row: { original: c } }) => {
       const m = c.valor_mensal - (c.valor_repasse_mensal ?? 0);
-      return <span><Moeda valor={m} sinal /> <span className="text-xs text-muted-foreground">{Math.round((m / c.valor_mensal) * 100)}%</span></span>;
+      return (
+        <div className="whitespace-nowrap">
+          <Moeda valor={c.valor_mensal} />{c.tipo_cobranca === "diaria" && <span className="text-xs text-muted-foreground">/dia</span>}
+          {c.valor_repasse_mensal != null && (
+            <p className="text-xs text-muted-foreground">repasse <Moeda valor={c.valor_repasse_mensal} /> · margem {Math.round((m / c.valor_mensal) * 100)}%</p>
+          )}
+        </div>
+      );
     } },
-    { id: "corte", header: "Período", cell: ({ row: { original: c } }) => (c.tipo_cobranca === "diaria" ? <Badge variant="info">Diária</Badge> : c.dia_corte_inicio === 1 ? "01 → fim" : "21 → 20") },
     { accessorKey: "data_inicio", header: "Início", meta: { ordem: "data_inicio" }, cell: ({ row: { original: c } }) => (
-      <span>{formatData(c.data_inicio)}{c.data_desmobilizacao && <span className="block text-xs text-muted-foreground">desmob. {formatData(c.data_desmobilizacao)}</span>}</span>
+      <div className="whitespace-nowrap">{formatData(c.data_inicio)}
+        <p className="text-xs text-muted-foreground">
+          {c.data_desmobilizacao ? `desmob. ${formatData(c.data_desmobilizacao)}` : c.tipo_cobranca === "diaria" ? "diária" : c.dia_corte_inicio === 1 ? "medição 01 → fim" : "medição 21 → 20"}
+        </p></div>
     ) },
     { accessorKey: "status", header: "Status", meta: { ordem: "status" }, cell: ({ getValue }) => <StatusBadge status={getValue() as string} /> },
   ], []);
@@ -132,9 +138,14 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
         novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null }}
         paraForm={(c) => ({ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never })}
         salvar={salvarContrato} podeEditar={podeEditar}
-        acoesLinha={(c) => podeEditar && c.status === "ativo" ? (
-          <Button variant="outline" size="xs" onClick={() => setDesmob(c)}><LogOut /> Desmobilizar</Button>
-        ) : null}
+        acoesLinha={(c) => (
+          <>
+            <Button variant="ghost" size="icon-sm" onClick={() => baixarContratoPDF(c.id)} title="PDF do contrato" aria-label={`PDF do contrato ${c.numero ?? formatPlaca(c.placa)}`}><FileDown /></Button>
+            {podeEditar && c.status === "ativo" && (
+              <Button variant="ghost" size="icon-sm" onClick={() => setDesmob(c)} title="Desmobilizar" aria-label={`Desmobilizar ${formatPlaca(c.placa)}`}><LogOut /></Button>
+            )}
+          </>
+        )}
         exportar={{ nome: "contratos", colunas: [
           { titulo: "Placa", valor: (c) => c.placa }, { titulo: "Contrato", valor: (c) => c.numero }, { titulo: "Empresa", valor: (c) => c.empresa },
           { titulo: "Cliente", valor: (c) => c.cliente, largura: 24 }, { titulo: "Obra", valor: (c) => c.obra, largura: 24 },

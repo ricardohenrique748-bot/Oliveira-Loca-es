@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dataOpc, moedaObr, textoOpc, uuidObr, uuidOpc } from "./cadastros";
+import { dataOpc, moedaObr, moedaOpc, textoOpc, uuidObr, uuidOpc } from "./cadastros";
 
 const textoLongo = z.string().trim().max(4000).nullish().transform((v) => (v ? v : null));
 
@@ -19,7 +19,15 @@ export const MODALIDADE_PROPOSTA = {
 } as const;
 export type ModalidadeProposta = keyof typeof MODALIDADE_PROPOSTA;
 
+/** layout do PDF: os dois modelos de proposta da Oliveira */
+export const MODELO_PROPOSTA = {
+  caminhao: "Caminhão — sem operador",
+  guindaste: "Guindaste / munck — com operador",
+} as const;
+export type ModeloProposta = keyof typeof MODELO_PROPOSTA;
+
 export const propostaSchema = z.object({
+  modelo_documento: z.enum(["caminhao", "guindaste"]).default("guindaste"),
   empresa_id: uuidObr("a empresa"),
   cliente_id: uuidObr("o cliente"),
   obra_id: uuidOpc,
@@ -35,6 +43,15 @@ export const propostaSchema = z.object({
   data_inicio_prevista: dataOpc,
   periodo_minimo: textoOpc,
   validade: dataOpc,
+  contato_cliente: textoOpc,
+  local_operacao: textoOpc,
+  quantidade: z.number().int().min(1, "Mínimo 1").max(999).nullish().transform((v) => v ?? 1),
+  franquia: textoOpc,
+  km_livre: textoOpc,
+  jornada: textoOpc,
+  valor_mobilizacao: moedaOpc,
+  valor_desmobilizacao: moedaOpc,
+  multa_rescisao_pct: z.number().min(0).max(100).nullish().transform((v) => v ?? 10),
   condicoes: textoLongo,
   observacoes: textoOpc,
   // "convertida" só pela geração do contrato

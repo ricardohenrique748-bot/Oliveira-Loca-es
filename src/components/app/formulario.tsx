@@ -3,7 +3,7 @@ import * as React from "react";
 import { useForm, Controller, type FieldValues, type DefaultValues, type Path, type Control, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ZodType, ZodTypeDef } from "zod";
-import { Loader2, Save } from "lucide-react";
+import { ChevronDown, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/overlays";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,8 @@ export interface Campo<V extends FieldValues> {
   pasta?: string;
   /** tipo "cpf_cnpj": ao completar um CNPJ válido, consulta a Receita e preenche os campos vazios com o retorno */
   autoCnpj?: (d: DadosCnpj) => Partial<Record<Path<V>, unknown>>;
+  /** fica na seção recolhida "Mais detalhes" (abre sozinha se tiver erro) */
+  avancado?: boolean;
 }
 
 const COL: Record<number, string> = {
@@ -164,12 +166,42 @@ export interface FormularioProps<V extends FieldValues> {
   /** conteúdo extra abaixo dos campos (ex.: resumo calculado) */
   extra?: (valores: V) => React.ReactNode;
   rodape?: React.ReactNode;
+  /** título da seção recolhida dos campos `avancado` */
+  rotuloAvancado?: string;
+  /** ao mudar um campo, devolve outros valores a ajustar (ex.: modalidade → modelo do PDF) */
+  aoAlterar?: (campo: string, valores: V) => Partial<Record<Path<V>, unknown>> | void;
 }
 
-export function Formulario<V extends FieldValues>({ campos, schema, valores, onSalvar, onSucesso, rotuloSalvar = "Salvar", extra, rodape }: FormularioProps<V>) {
+export function Formulario<V extends FieldValues>({ campos, schema, valores, onSalvar, onSucesso, rotuloSalvar = "Salvar", extra, rodape, rotuloAvancado = "Mais detalhes", aoAlterar }: FormularioProps<V>) {
   const form = useForm<V>({ resolver: zodResolver(schema as never), defaultValues: valores });
   const atuais = form.watch();
   const [salvando, setSalvando] = React.useState(false);
+  const [mostrarAvancado, setMostrarAvancado] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!aoAlterar) return;
+    const sub = form.watch((v, { name, type }) => {
+      if (!name || type !== "change") return;
+      for (const [k, val] of Object.entries(aoAlterar(name, v as V) ?? {}) as [Path<V>, unknown][]) {
+        if (form.getValues(k) !== val) form.setValue(k, val as never, { shouldDirty: true });
+      }
+    });
+    return () => sub.unsubscribe();
+  }, [form, aoAlterar]);
+
+  const erros = form.formState.errors as Record<string, { message?: string }>;
+  const visiveis = campos.filter((c) => !c.visivel || c.visivel(atuais));
+  const principais = visiveis.filter((c) => !c.avancado);
+  const avancados = visiveis.filter((c) => c.avancado);
+  const erroAvancado = avancados.some((c) => erros[String(c.nome)]);
+  React.useEffect(() => { if (erroAvancado) setMostrarAvancado(true); }, [erroAvancado]);
+  const grade = (cs: Campo<V>[]) => (
+    <div className="grid grid-cols-6 gap-3">
+      {cs.map((c) => (
+        <CampoControlado key={String(c.nome)} campo={c} control={form.control} valores={atuais} form={form} erro={erros[String(c.nome)]?.message} />
+      ))}
+    </div>
+  );
 
   const enviar = form.handleSubmit(async (v) => {
     setSalvando(true);
@@ -186,12 +218,17 @@ export function Formulario<V extends FieldValues>({ campos, schema, valores, onS
 
   return (
     <form onSubmit={enviar} className="space-y-4" noValidate>
-      <div className="grid grid-cols-6 gap-3">
-        {campos.filter((c) => !c.visivel || c.visivel(atuais)).map((c) => (
-          <CampoControlado key={String(c.nome)} campo={c} control={form.control} valores={atuais} form={form}
-            erro={(form.formState.errors as Record<string, { message?: string }>)[String(c.nome)]?.message} />
-        ))}
-      </div>
+      {grade(principais)}
+      {avancados.length > 0 && (
+        <div className="rounded-md border">
+          <button type="button" onClick={() => setMostrarAvancado((v) => !v)} aria-expanded={mostrarAvancado}
+            className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium hover:bg-muted/50">
+            {rotuloAvancado}
+            <ChevronDown className={cn("size-4 transition-transform", mostrarAvancado && "rotate-180")} />
+          </button>
+          {mostrarAvancado && <div className="border-t p-3">{grade(avancados)}</div>}
+        </div>
+      )}
       {extra?.(atuais)}
       <DialogFooter>
         {rodape}

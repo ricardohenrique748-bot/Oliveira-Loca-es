@@ -25,6 +25,13 @@ export const empresaSchema = z.object({
   apelido: textoObr("Apelido", 20).transform((v) => v.toUpperCase()),
   razao_social: textoObr("Razão social"),
   cnpj: cnpjOpc,
+  // cabeçalho/rodapé da proposta e do contrato
+  endereco: textoOpc,
+  cidade: textoOpc,
+  uf: z.string().trim().length(2, "UF com 2 letras").transform((v) => v.toUpperCase()).nullish().or(z.literal("")).transform((v) => (v ? v : null)),
+  contato_nome: textoOpc,
+  telefone: telefoneOpc,
+  email: emailOpc,
   ativo: z.boolean().default(true),
 });
 export type EmpresaForm = z.infer<typeof empresaSchema>;
@@ -114,6 +121,8 @@ export const veiculoSchema = z.object({
   marca: textoOpc,
   modelo: textoOpc,
   ano: z.number().int().min(1950, "Ano inválido").max(2100, "Ano inválido").nullish().transform((v) => v ?? null),
+  chassi: textoOpc.transform((v) => (v ? v.toUpperCase().replace(/\s+/g, "") : null)),
+  cor: textoOpc,
   proprietario: z.enum(["proprio", "locador"]),
   locador_id: uuidOpc,
   empresa_id: uuidObr("a empresa"),

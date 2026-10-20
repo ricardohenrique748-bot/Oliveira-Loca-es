@@ -68,7 +68,9 @@ export const cnpjParaCliente = (d: DadosCnpj) => ({
   cep: d.cep, endereco: d.logradouro, cidade: d.municipio, uf: d.uf,
 });
 export const cnpjParaFornecedor = (d: DadosCnpj) => ({ nome: d.nome_fantasia ?? d.razao_social, telefone: tel(d), email: d.email });
-export const cnpjParaEmpresa = (d: DadosCnpj) => ({ razao_social: d.razao_social });
+export const cnpjParaEmpresa = (d: DadosCnpj) => ({
+  razao_social: d.razao_social, endereco: d.logradouro, cidade: d.municipio, uf: d.uf, telefone: tel(d), email: d.email,
+});
 export const cnpjParaLocador = (d: DadosCnpj) => ({
   nome: d.razao_social, telefone: tel(d), nome_titular_pix: d.razao_social,
   tipo_chave_pix: "cnpj", chave_pix: maskCpfCnpj(d.cnpj),

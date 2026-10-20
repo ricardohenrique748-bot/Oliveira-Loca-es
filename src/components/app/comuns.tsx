@@ -96,10 +96,10 @@ export function StatusBadge({ status, className }: { status: string | null | und
 
 // ---------- Confirmação ----------
 export function Confirmar({
-  aberto, onOpenChange, titulo, descricao, rotulo = "Confirmar", destrutivo, onConfirmar, children,
+  aberto, onOpenChange, titulo, descricao, rotulo = "Confirmar", destrutivo, desabilitado, onConfirmar, children,
 }: {
   aberto: boolean; onOpenChange: (v: boolean) => void; titulo: string; descricao?: React.ReactNode; rotulo?: string;
-  destrutivo?: boolean; onConfirmar: () => Promise<void> | void; children?: React.ReactNode;
+  destrutivo?: boolean; desabilitado?: boolean; onConfirmar: () => Promise<void> | void; children?: React.ReactNode;
 }) {
   const [carregando, setCarregando] = React.useState(false);
   return (
@@ -112,7 +112,7 @@ export function Confirmar({
         {children}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={carregando}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction destrutivo={destrutivo} disabled={carregando}
+          <AlertDialogAction destrutivo={destrutivo} disabled={carregando || desabilitado}
             onClick={async (e) => {
               e.preventDefault();
               setCarregando(true);

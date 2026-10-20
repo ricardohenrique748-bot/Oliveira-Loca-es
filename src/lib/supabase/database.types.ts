@@ -693,31 +693,49 @@ export type Database = {
         Row: {
           apelido: string
           ativo: boolean
+          cidade: string | null
           cnpj: string | null
+          contato_nome: string | null
           created_at: string
           created_by: string | null
+          email: string | null
+          endereco: string | null
           id: string
           razao_social: string
+          telefone: string | null
+          uf: string | null
           updated_at: string
         }
         Insert: {
           apelido: string
           ativo?: boolean
+          cidade?: string | null
           cnpj?: string | null
+          contato_nome?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string | null
+          endereco?: string | null
           id?: string
           razao_social: string
+          telefone?: string | null
+          uf?: string | null
           updated_at?: string
         }
         Update: {
           apelido?: string
           ativo?: boolean
+          cidade?: string | null
           cnpj?: string | null
+          contato_nome?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string | null
+          endereco?: string | null
           id?: string
           razao_social?: string
+          telefone?: string | null
+          uf?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1417,6 +1435,7 @@ export type Database = {
         Row: {
           cliente_id: string
           condicoes: string | null
+          contato_cliente: string | null
           contrato_id: string | null
           created_at: string
           created_by: string | null
@@ -1424,24 +1443,34 @@ export type Database = {
           dia_corte_inicio: number
           empresa_id: string
           equipamento: string | null
+          franquia: string | null
           id: string
+          jornada: string | null
+          km_livre: string | null
+          local_operacao: string | null
           modalidade: string
+          modelo_documento: string
           motivo_recusa: string | null
+          multa_rescisao_pct: number
           numero: string | null
           obra_id: string | null
           observacoes: string | null
           periodo_minimo: string | null
           prazo_pagamento_dias: number
+          quantidade: number
           status: string
           tipo_cobranca: string
           updated_at: string
           validade: string | null
           valor: number
+          valor_desmobilizacao: number | null
+          valor_mobilizacao: number | null
           veiculo_id: string | null
         }
         Insert: {
           cliente_id: string
           condicoes?: string | null
+          contato_cliente?: string | null
           contrato_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1449,24 +1478,34 @@ export type Database = {
           dia_corte_inicio?: number
           empresa_id: string
           equipamento?: string | null
+          franquia?: string | null
           id?: string
+          jornada?: string | null
+          km_livre?: string | null
+          local_operacao?: string | null
           modalidade?: string
+          modelo_documento?: string
           motivo_recusa?: string | null
+          multa_rescisao_pct?: number
           numero?: string | null
           obra_id?: string | null
           observacoes?: string | null
           periodo_minimo?: string | null
           prazo_pagamento_dias?: number
+          quantidade?: number
           status?: string
           tipo_cobranca?: string
           updated_at?: string
           validade?: string | null
           valor: number
+          valor_desmobilizacao?: number | null
+          valor_mobilizacao?: number | null
           veiculo_id?: string | null
         }
         Update: {
           cliente_id?: string
           condicoes?: string | null
+          contato_cliente?: string | null
           contrato_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1474,19 +1513,28 @@ export type Database = {
           dia_corte_inicio?: number
           empresa_id?: string
           equipamento?: string | null
+          franquia?: string | null
           id?: string
+          jornada?: string | null
+          km_livre?: string | null
+          local_operacao?: string | null
           modalidade?: string
+          modelo_documento?: string
           motivo_recusa?: string | null
+          multa_rescisao_pct?: number
           numero?: string | null
           obra_id?: string | null
           observacoes?: string | null
           periodo_minimo?: string | null
           prazo_pagamento_dias?: number
+          quantidade?: number
           status?: string
           tipo_cobranca?: string
           updated_at?: string
           validade?: string | null
           valor?: number
+          valor_desmobilizacao?: number | null
+          valor_mobilizacao?: number | null
           veiculo_id?: string | null
         }
         Relationships: [
@@ -1799,6 +1847,8 @@ export type Database = {
       veiculos: {
         Row: {
           ano: number | null
+          chassi: string | null
+          cor: string | null
           created_at: string
           created_by: string | null
           empresa_id: string
@@ -1819,6 +1869,8 @@ export type Database = {
         }
         Insert: {
           ano?: number | null
+          chassi?: string | null
+          cor?: string | null
           created_at?: string
           created_by?: string | null
           empresa_id: string
@@ -1839,6 +1891,8 @@ export type Database = {
         }
         Update: {
           ano?: number | null
+          chassi?: string | null
+          cor?: string | null
           created_at?: string
           created_by?: string | null
           empresa_id?: string
