@@ -123,7 +123,8 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
             : <Button variant="ghost" size="icon-sm" disabled aria-label="Sem WhatsApp" title="Cliente sem contato de faturamento com WhatsApp"><IconeWhatsApp className="grayscale" /></Button>}
           {m.boleto?.status === "emitido"
             ? <Button variant="ghost" size="icon-sm" aria-label="Ver boleto" title={`Boleto ${m.boleto.nosso_numero} · venc. ${formatData(m.boleto.data_vencimento)}`} onClick={() => setBoletoDe(m)}><Barcode className="text-primary-ink" /></Button>
-            : podeEditar && m.saldo > 0 && empresasBoleto.has(m.empresa_id) && <Button variant="ghost" size="icon-sm" aria-label="Gerar boleto" title="Gerar boleto Sicredi" onClick={() => setBoletoDe(m)}><Barcode /></Button>}
+            : podeEditar && m.saldo > 0 && <Button variant="ghost" size="icon-sm" aria-label="Gerar boleto" onClick={() => setBoletoDe(m)}
+              title={empresasBoleto.has(m.empresa_id) ? "Gerar boleto Sicredi" : "Gerar boleto — falta configurar a conta Sicredi"}><Barcode className={empresasBoleto.has(m.empresa_id) ? undefined : "opacity-50"} /></Button>}
           {podeEditar && m.status !== "recebido" && <Button size="xs" onClick={() => setBaixando(m)}><HandCoins /> Baixar</Button>}
           {m.status === "recebido" && <Button size="xs" variant="outline" onClick={() => setBaixando(m)}>Ver</Button>}
         </div>
@@ -409,7 +410,14 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
         )}
         {m && !b && (
           contasEmpresa.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma conta Sicredi desta empresa com código do beneficiário. Cadastre em <Link href="/cadastros/contas-bancarias" className="underline">Contas bancárias</Link>.</p>
+            <div className="space-y-2 text-sm">
+              <p>Para gerar boleto, a conta Sicredi da <strong>{m.empresa_apelido}</strong> precisa estar configurada para cobrança.</p>
+              <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
+                <li>Em <Link href="/cadastros/contas-bancarias" className="text-foreground underline">Cadastros → Contas bancárias</Link>, edite a conta Sicredi desta empresa.</li>
+                <li>Preencha a <strong>agência (cooperativa)</strong>, o <strong>posto</strong> e o <strong>código do beneficiário</strong>, que vêm do contrato de cobrança com o Sicredi.</li>
+                <li>Volte aqui e clique de novo no ícone do boleto.</li>
+              </ol>
+            </div>
           ) : (
             <div className="space-y-4">
               <div className="rounded-md bg-muted p-3 text-sm"><p className="text-xs text-muted-foreground">Valor do boleto (saldo em aberto)</p><Moeda valor={m.saldo} className="text-lg font-bold" /></div>
