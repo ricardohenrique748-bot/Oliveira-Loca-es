@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chave, clienteObra, competenciaAba, contato, data, ehErroFormula, formaBanco, parcela, periodo, placa, simNao, statusMedicao, valor } from "./normalizar";
+import { chave, clienteObra, competenciaAba, contato, data, ehErroFormula, formaBanco, nfDasObservacoes, parcela, periodo, placa, simNao, statusMedicao, valor } from "./normalizar";
 
 describe("normalização da importação", () => {
   it("placas maiúsculas sem hífen", () => {
@@ -28,6 +28,14 @@ describe("normalização da importação", () => {
     expect(periodo("21/08/26 A 20/09/26")).toEqual({ inicio: "2026-08-21", fim: "2026-09-20" });
     expect(periodo("01/09/2026 a 30/09/2026")).toEqual({ inicio: "2026-09-01", fim: "2026-09-30" });
     expect(periodo("setembro")).toBeNull();
+    // sem ano: vem da competência da aba (planilha "Valor Repasse", aba "Sub-locado SET26")
+    expect(periodo("21/08 A 20/09", "2026-09")).toEqual({ inicio: "2026-08-21", fim: "2026-09-20" });
+    expect(periodo("01/08 a 31/08", "2026-09")).toEqual({ inicio: "2026-08-01", fim: "2026-08-31" });
+    expect(periodo("30/09 A 30/10", "2026-09")).toEqual({ inicio: "2026-09-30", fim: "2026-10-30" });
+    expect(periodo("21/12 a 20/01", "2027-01")).toEqual({ inicio: "2026-12-21", fim: "2027-01-20" });
+    expect(periodo("01/12 a 31/12", "2027-01")).toEqual({ inicio: "2026-12-01", fim: "2026-12-31" });
+    expect(periodo("21/08 A 20/09")).toBeNull();
+    expect(periodo("31/02 a 10/03", "2026-03")).toBeNull();
   });
 
   it("valores, fórmulas quebradas e flags", () => {
@@ -64,3 +72,16 @@ describe("normalização da importação", () => {
     expect(chave(" Período Medição ")).toBe("periodo medicao");
   });
 });
+
+describe("nfDasObservacoes", () => {
+  it.each([
+    ["2330", { nf: "2330", resto: null }],
+    ["NF 159", { nf: "159", resto: null }],
+    ["Fatura 2305", { nf: "2305", resto: null }],
+    ["Desmobilizado 20/08 - faturar mês de setembro até dia 20/09 2326", { nf: "2326", resto: "Desmobilizado 20/08 - faturar mês de setembro até dia 20/09" }],
+    ["faturar até 20/09", { nf: null, resto: "faturar até 20/09" }],
+    ["cliente pediu desconto", { nf: null, resto: "cliente pediu desconto" }],
+    ["", { nf: null, resto: null }],
+  ])("%s", (obs, esperado) => expect(nfDasObservacoes(obs)).toEqual(esperado));
+});
+

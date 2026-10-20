@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, ChevronDown, ChevronRight, FileText, Loader2, Plus, Search, Wallet } from "lucide-react";
-import { Badge, Card, CardContent, CardHeader, Checkbox, Label, Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
+import { Badge, Card, CardContent, Checkbox, Label, Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/overlays";
 import { BotaoCopiar, Cabecalho, Moeda, StatusBadge, Vazio } from "@/components/app/comuns";
 import { KpiCard } from "@/components/app/kpi";
-import { BarraFiltros, BuscaUrl, FiltroDataUrl, FiltroSelectUrl } from "@/components/app/url";
+import { BarraFiltros, FiltroDataUrl, FiltroSelectUrl } from "@/components/app/url";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { formatBRL, formatData, formatPeriodo, formatPlaca, hojeSP, maskTelefone } from "@/lib/format";
 import { somar } from "@/lib/calculos";
@@ -24,28 +24,32 @@ export type Repasse = {
   valor_repasse_mensal: number; valor_bruto: number; valor_abatimentos: number; valor_liquido: number; data_prevista: string | null; data_pagamento: string | null;
   adiantado: boolean; aprovado_por: string | null; comprovante_url: string | null; status: string; periodo_inicio: string; periodo_fim: string; dias: number;
   numero_nf: string | null; medicao_valor: number; medicao_status: string; medicao_vencimento: string | null; competencia: string; cliente_nome: string; seria_adiantado: boolean;
+  obra_nome: string | null; medicao_emissao: string | null; contrato_numero: string | null;
+  responsavel_nome: string | null; responsavel_whatsapp: string | null; responsavel_email: string | null;
 };
 export type Abatimento = { id: string; repasse_id: string; conta_pagar_id: string | null; ordem_servico_id: string | null; descricao: string; valor: number; vencimento: string | null; os_numero: number | null };
 export type Locador = { id: string; nome: string; cpf_cnpj: string | null; telefone: string | null; chave_pix: string | null; tipo_chave_pix: keyof typeof ROTULOS.tipoChavePix | null; banco: string | null; nome_titular_pix: string | null };
 
+/** "2026-08-21" → "21/08" (como na planilha; o ano está no filtro de competência) */
+const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+
+/** situação da medição em uma palavra, para a coluna Status da tabela */
+const SITUACAO_CLIENTE: Record<string, string> = { a_faturar: "a faturar", faturado: "aguard. cliente", recebido_parcial: "receb. parcial", recebido: "cliente pagou", cancelado: "cancelado" };
 const STATUS_MEDICAO: Record<string, string> = { a_faturar: "A faturar", faturado: "Faturado (aguardando cliente)", recebido_parcial: "Recebido parcial", recebido: "Cliente pagou", cancelado: "Cancelado" };
 
-export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }: { repasses: Repasse[]; abatimentos: Abatimento[]; locadores: Locador[]; podeEditar: boolean }) {
+export function RepassesCliente({ repasses, abatimentos, locadores, placas, podeEditar }: { repasses: Repasse[]; abatimentos: Abatimento[]; locadores: Locador[]; placas: string[]; podeEditar: boolean }) {
   const router = useRouter();
   const [pagando, setPagando] = React.useState<Repasse | null>(null);
   const [lancando, setLancando] = React.useState(false);
   const [abertos, setAbertos] = React.useState<Set<string>>(new Set());
 
-  const grupos = React.useMemo(() => {
-    const m = new Map<string, Repasse[]>();
-    for (const r of repasses) m.set(r.locador_id, [...(m.get(r.locador_id) ?? []), r]);
-    return [...m.entries()].map(([id, rs]) => ({ locador: locadores.find((l) => l.id === id) ?? ({ id, nome: rs[0].locador_nome } as Locador), repasses: rs }));
-  }, [repasses, locadores]);
+  const locadorDe = (id: string, nome: string) => locadores.find((l) => l.id === id) ?? ({ id, nome } as Locador);
   const abatDe = (id: string) => abatimentos.filter((a) => a.repasse_id === id);
 
   const pendentes = repasses.filter((r) => r.status === "previsto" || r.status === "liberado");
   const liberados = repasses.filter((r) => r.status === "liberado");
 
+  /** PDF enviado ao locador: só abatimentos e líquido (o bruto fica na tela, uso interno) */
   const extrato = async (loc: Locador, rs: Repasse[]) => {
     const linhas = rs.flatMap((r) => [
       { tipo: "repasse", r, a: null as Abatimento | null },
@@ -55,10 +59,9 @@ export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }
     const fim = rs.reduce((m, r) => (r.periodo_fim > m ? r.periodo_fim : m), rs[0].periodo_fim);
     await exportarPDF(`extrato_${loc.nome}`, `Extrato do locador — ${loc.nome}`, [
       { titulo: "Placa", valor: (l) => (l.tipo === "repasse" ? formatPlaca(l.r.placa) : "") },
-      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : `   (−) ${l.a!.descricao}`) },
+      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : `   (-) ${l.a!.descricao}`) },
       { titulo: "Período", valor: (l) => (l.tipo === "repasse" ? formatPeriodo(l.r.periodo_inicio, l.r.periodo_fim) : formatData(l.a!.vencimento)) },
       { titulo: "Dias", valor: (l) => (l.tipo === "repasse" ? l.r.dias : null), tipo: "numero" },
-      { titulo: "Bruto", valor: (l) => (l.tipo === "repasse" ? l.r.valor_bruto : null), tipo: "moeda" },
       { titulo: "Abatimento", valor: (l) => (l.tipo === "abat" ? l.a!.valor : null), tipo: "moeda" },
       { titulo: "Líquido", valor: (l) => (l.tipo === "repasse" ? l.r.valor_liquido : null), tipo: "moeda" },
       { titulo: "Situação", valor: (l) => (l.tipo === "repasse" ? (l.r.status === "pago" ? `Pago ${formatData(l.r.data_pagamento)}` : l.r.status) : "") },
@@ -67,11 +70,10 @@ export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }
       resumo: [
         ["Locador", `${loc.nome}${loc.cpf_cnpj ? ` — ${loc.cpf_cnpj}` : ""}`],
         ["PIX", loc.chave_pix ? `${loc.tipo_chave_pix ? ROTULOS.tipoChavePix[loc.tipo_chave_pix] + ": " : ""}${loc.chave_pix}${loc.nome_titular_pix ? ` (${loc.nome_titular_pix})` : ""}${loc.banco ? ` — ${loc.banco}` : ""}` : "—"],
-        ["Total bruto", formatBRL(somar(rs.map((r) => r.valor_bruto)))],
         ["Abatimentos", formatBRL(somar(rs.map((r) => r.valor_abatimentos)))],
         ["Total líquido", formatBRL(somar(rs.map((r) => r.valor_liquido)))],
       ],
-      totais: ["Total", "", "", "", somar(rs.map((r) => r.valor_bruto)), somar(rs.map((r) => r.valor_abatimentos)), somar(rs.map((r) => r.valor_liquido)), ""],
+      totais: ["Total", "", "", "", somar(rs.map((r) => r.valor_abatimentos)), somar(rs.map((r) => r.valor_liquido)), ""],
       rodape: ["Valores proporcionais aos dias medidos (base 30). Abatimentos referentes a despesas do veículo marcadas “descontar do locador”."],
     });
   };
@@ -90,80 +92,66 @@ export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }
       </div>
 
       <BarraFiltros>
-        <BuscaUrl placeholder="Placa…" className="sm:w-40" />
+        <FiltroSelectUrl param="placa" rotulo="Placa" opcoes={placas.map((p) => ({ value: p, label: formatPlaca(p) }))} />
         <FiltroSelectUrl param="status" rotulo="Situação" vazio="Pendentes" opcoes={[{ value: "liberado", label: "Liberados" }, { value: "previsto", label: "Previstos" }, { value: "pago", label: "Pagos" }, { value: "todos", label: "Todos" }]} />
         <FiltroDataUrl param="comp" rotulo="Competência" tipo="month" />
-        <FiltroSelectUrl param="locador" rotulo="Locador" opcoes={locadores.map((l) => ({ value: l.id, label: l.nome }))} />
+        <FiltroSelectUrl param="locador" rotulo="Parceiro" opcoes={locadores.map((l) => ({ value: l.id, label: l.nome }))} />
       </BarraFiltros>
 
-      {grupos.length === 0 && <Vazio icone={Wallet} titulo="Nenhum repasse" descricao="Repasses são criados automaticamente nas medições de veículos sublocados." />}
+      {repasses.length === 0 && <Vazio icone={Wallet} titulo="Nenhum repasse" descricao="Repasses são criados automaticamente nas medições de veículos sublocados." />}
 
-      {grupos.map(({ locador: l, repasses: rs }) => (
-        <Card key={l.id}>
-          <CardHeader className="flex flex-col gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="font-display text-xl font-semibold tracking-tight">{l.nome}</p>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                {l.chave_pix ? (
-                  <>
-                    <span>PIX {l.tipo_chave_pix ? ROTULOS.tipoChavePix[l.tipo_chave_pix] : ""}: <strong className="break-all text-foreground">{l.chave_pix}</strong></span>
-                    <BotaoCopiar texto={l.chave_pix} rotulo="Copiar chave" />
-                    {l.nome_titular_pix && <span>· {l.nome_titular_pix}</span>}
-                    {l.banco && <span>· {l.banco}</span>}
-                  </>
-                ) : <span>Sem chave PIX cadastrada — <Link className="underline" href="/cadastros/locadores">cadastrar</Link></span>}
-                {l.telefone && <span>· {maskTelefone(l.telefone)}</span>}
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right text-sm">
-                <p className="text-xs text-muted-foreground">Líquido</p>
-                <Moeda valor={somar(rs.map((r) => r.valor_liquido))} className="text-lg font-bold" />
-              </div>
-              <Button variant="outline" size="sm" onClick={() => extrato(l, rs)}><FileText /> Extrato PDF</Button>
-            </div>
-          </CardHeader>
+      {/* uma linha por caminhão, ordenada por parceiro, como na planilha "Valor Repasse" */}
+      {repasses.length > 0 && (
+        <Card>
           <CardContent className="p-0 sm:p-0">
-            <Table>
+            {/* células mais estreitas: 10 colunas precisam caber em 1280px */}
+            <Table className="text-sm [&_td]:px-2.5 [&_th]:px-2.5 [&_td:first-child]:pl-4 [&_th:first-child]:pl-4">
               <TableHeader><TableRow className="hover:bg-transparent">
-                <TableHead>Placa / cliente</TableHead><TableHead>Período</TableHead><TableHead className="text-right">Dias</TableHead>
-                <TableHead className="text-right">Bruto</TableHead><TableHead className="text-right">Abatimentos</TableHead><TableHead className="text-right">Líquido</TableHead>
-                <TableHead>Cliente pagou?</TableHead><TableHead>Status</TableHead><TableHead className="text-right"><span className="sr-only">Ações</span></TableHead>
+                <TableHead>Parceiro</TableHead><TableHead>Contrato</TableHead><TableHead>Placa</TableHead>
+                <TableHead>Período</TableHead><TableHead>Faturado / NF</TableHead>
+                <TableHead className="text-right">Valor</TableHead><TableHead className="text-right">Repasse</TableHead>
+                <TableHead>Responsável</TableHead><TableHead>Status</TableHead>
+                <TableHead className="text-right"><span className="sr-only">Ações</span></TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {rs.map((r) => {
+                {repasses.map((r) => {
                   const abs = abatDe(r.id);
                   const aberto = abertos.has(r.id);
+                  const alternar = () => setAbertos((x) => { const n = new Set(x); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; });
                   return (
                     <React.Fragment key={r.id}>
                       <TableRow className={cn(r.adiantado && "bg-red-50 dark:bg-red-950/40", r.status === "liberado" && "bg-green-50/60 dark:bg-green-950/20")}>
-                        <TableCell>
-                          <span className="font-mono font-semibold">{formatPlaca(r.placa)}</span> <span className="text-xs text-muted-foreground">{r.empresa_apelido}</span>
-                          <p className="text-xs text-muted-foreground">{r.cliente_nome}{r.numero_nf ? ` · NF ${r.numero_nf}` : ""}</p>
+                        <TableCell className="font-medium">{r.locador_nome}</TableCell>
+                        <TableCell><p>{r.cliente_nome}</p>{r.obra_nome && <p className="text-xs text-muted-foreground">{r.obra_nome}</p>}</TableCell>
+                        <TableCell className="whitespace-nowrap"><span className="font-mono font-semibold">{formatPlaca(r.placa)}</span><p className="text-xs text-muted-foreground">{r.empresa_apelido}</p></TableCell>
+                        <TableCell className="whitespace-nowrap text-xs" title={formatPeriodo(r.periodo_inicio, r.periodo_fim)}>{diaMes(r.periodo_inicio)} a {diaMes(r.periodo_fim)}<p className="text-muted-foreground">{r.dias} dias</p></TableCell>
+                        <TableCell className="whitespace-nowrap text-xs">
+                          {r.medicao_emissao ? diaMes(r.medicao_emissao) : <span className="text-muted-foreground">a faturar</span>}{r.numero_nf && <span className="font-medium"> · NF {r.numero_nf}</span>}
+                          {r.medicao_vencimento && <p className="text-muted-foreground">venc. {diaMes(r.medicao_vencimento)}</p>}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs">{formatPeriodo(r.periodo_inicio, r.periodo_fim)}</TableCell>
-                        <TableCell className="num text-right">{r.dias}</TableCell>
-                        <TableCell className="text-right"><Moeda valor={r.valor_bruto} /></TableCell>
+                        <TableCell className="text-right"><Moeda valor={r.medicao_valor} /></TableCell>
                         <TableCell className="text-right">
-                          {abs.length ? (
-                            <button type="button" className="inline-flex items-center gap-1 hover:underline" aria-expanded={aberto}
-                              onClick={() => setAbertos((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}>
-                              {aberto ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                              <Moeda valor={-r.valor_abatimentos} className="text-status-critico" />
+                          <Moeda valor={r.valor_liquido} className="font-semibold" />
+                          {abs.length > 0 && (
+                            <button type="button" onClick={alternar} aria-expanded={aberto} className="flex w-full items-center justify-end gap-0.5 whitespace-nowrap text-xs text-status-critico hover:underline">
+                              {aberto ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} −{formatBRL(r.valor_abatimentos)}
                             </button>
-                          ) : <Moeda valor={0} className="text-muted-foreground" />}
+                          )}
                         </TableCell>
-                        <TableCell className="text-right font-semibold"><Moeda valor={r.valor_liquido} /></TableCell>
-                        <TableCell>
-                          <Badge variant={r.medicao_status === "recebido" ? "ok" : r.medicao_status === "recebido_parcial" ? "alerta" : "neutro"}>{STATUS_MEDICAO[r.medicao_status] ?? r.medicao_status}</Badge>
-                          {r.medicao_vencimento && r.medicao_status !== "recebido" && <p className="text-xs text-muted-foreground">venc. {formatData(r.medicao_vencimento)}</p>}
+                        <TableCell className="max-w-44 text-xs">
+                          {r.responsavel_nome ? <p className="truncate" title={r.responsavel_nome}>{r.responsavel_nome}</p> : <span className="text-muted-foreground">—</span>}
+                          {(r.responsavel_whatsapp || (r.responsavel_email && r.responsavel_email !== r.responsavel_nome)) && (
+                            <p className="truncate text-muted-foreground" title={r.responsavel_email ?? undefined}>{r.responsavel_whatsapp ? maskTelefone(r.responsavel_whatsapp) : r.responsavel_email}</p>
+                          )}
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={r.status} />
                           {r.adiantado && <Badge variant="critico" className="ml-1"><AlertTriangle className="h-3 w-3" /> Adiantado</Badge>}
-                          {r.status === "pago" && <p className="text-xs text-muted-foreground">{formatData(r.data_pagamento)}</p>}
+                          <p className="whitespace-nowrap text-xs text-muted-foreground">{r.status === "pago" ? formatData(r.data_pagamento) : SITUACAO_CLIENTE[r.medicao_status] ?? r.medicao_status}</p>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="whitespace-nowrap text-right">
+                          <Button variant="ghost" size="icon-sm" title={`Extrato de ${r.locador_nome}`} aria-label={`Extrato PDF de ${r.locador_nome}`}
+                            onClick={() => extrato(locadorDe(r.locador_id, r.locador_nome), repasses.filter((x) => x.locador_id === r.locador_id))}><FileText /></Button>
                           {r.comprovante_url && <LinkAnexo referencia={r.comprovante_url} rotulo="Comprovante" />}
                           {podeEditar && (r.status === "previsto" || r.status === "liberado") && (
                             <Button size="xs" variant={r.seria_adiantado ? "outline" : "default"} className={cn(r.seria_adiantado && "border-status-critico text-status-critico")} onClick={() => setPagando(r)}>
@@ -173,15 +161,14 @@ export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }
                         </TableCell>
                       </TableRow>
                       {aberto && abs.map((a) => (
-                        <TableRow key={a.id} className="bg-muted/30 text-sm hover:bg-muted/30">
-                          <TableCell colSpan={4} className="pl-8 text-muted-foreground">
-                            (−) {a.descricao} {a.vencimento && <span className="text-xs">· {formatData(a.vencimento)}</span>}
+                        <TableRow key={a.id} className="bg-muted/30 text-xs hover:bg-muted/30">
+                          <TableCell colSpan={6} className="pl-8 text-muted-foreground">
+                            (−) {a.descricao}{a.vencimento && ` · ${formatData(a.vencimento)}`}
+                            {a.os_numero && <Link className="ml-3 underline" href={`/manutencao/ordens/${a.ordem_servico_id}`}>OS #{a.os_numero}</Link>}
+                            {a.conta_pagar_id && <Link className="ml-3 underline" href={`/pagar?id=${a.conta_pagar_id}`}>Conta a pagar</Link>}
                           </TableCell>
                           <TableCell className="text-right"><Moeda valor={-a.valor} className="text-status-critico" /></TableCell>
-                          <TableCell colSpan={4} className="text-xs">
-                            {a.os_numero && <Link className="mr-3 underline" href={`/manutencao/ordens/${a.ordem_servico_id}`}>OS #{a.os_numero}</Link>}
-                            {a.conta_pagar_id && <Link className="underline" href={`/pagar?id=${a.conta_pagar_id}`}>Conta a pagar</Link>}
-                          </TableCell>
+                          <TableCell colSpan={3} />
                         </TableRow>
                       ))}
                     </React.Fragment>
@@ -189,19 +176,21 @@ export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }
                 })}
               </TableBody>
               <TableFooter><TableRow>
-                <TableCell colSpan={3}>{rs.length} repasse(s)</TableCell>
-                <TableCell className="text-right"><Moeda valor={somar(rs.map((r) => r.valor_bruto))} /></TableCell>
-                <TableCell className="text-right"><Moeda valor={-somar(rs.map((r) => r.valor_abatimentos))} /></TableCell>
-                <TableCell className="text-right"><Moeda valor={somar(rs.map((r) => r.valor_liquido))} /></TableCell>
-                <TableCell colSpan={3} />
+                <TableCell colSpan={5}>{repasses.length} {repasses.length === 1 ? "repasse" : "repasses"} · {new Set(repasses.map((r) => r.locador_id)).size} parceiro(s)</TableCell>
+                <TableCell className="text-right"><Moeda valor={somar(repasses.map((r) => r.medicao_valor))} /></TableCell>
+                <TableCell className="text-right"><Moeda valor={somar(repasses.map((r) => r.valor_liquido))} /></TableCell>
+                <TableCell colSpan={3}>
+                  <span className="text-xs text-muted-foreground">Margem </span>
+                  <Moeda valor={somar(repasses.map((r) => r.medicao_valor)) - somar(repasses.map((r) => r.valor_bruto))} sinal />
+                </TableCell>
               </TableRow></TableFooter>
             </Table>
           </CardContent>
         </Card>
-      ))}
+      )}
 
       <DialogoLancar aberto={lancando} onOpenChange={setLancando} onEscolher={(r) => { setLancando(false); setPagando(r); }} />
-      <DialogoPagar repasse={pagando} onOpenChange={(v) => !v && setPagando(null)} onFeito={() => router.refresh()} />
+      <DialogoPagar repasse={pagando} locador={pagando ? locadorDe(pagando.locador_id, pagando.locador_nome) : null} onOpenChange={(v) => !v && setPagando(null)} onFeito={() => router.refresh()} />
     </div>
   );
 }
@@ -270,7 +259,7 @@ function DialogoLancar({ aberto, onOpenChange, onEscolher }: { aberto: boolean; 
   );
 }
 
-function DialogoPagar({ repasse: r, onOpenChange, onFeito }: { repasse: Repasse | null; onOpenChange: (v: boolean) => void; onFeito: () => void }) {
+function DialogoPagar({ repasse: r, locador: l, onOpenChange, onFeito }: { repasse: Repasse | null; locador: Locador | null; onOpenChange: (v: boolean) => void; onFeito: () => void }) {
   const [data, setData] = React.useState(hojeSP());
   const [comprovante, setComprovante] = React.useState<string | null>(null);
   const [confirmo, setConfirmo] = React.useState(false);
@@ -304,6 +293,15 @@ function DialogoPagar({ repasse: r, onOpenChange, onFeito }: { repasse: Repasse 
               <div><p className="text-xs text-muted-foreground">Bruto</p><Moeda valor={r.valor_bruto} /></div>
               <div><p className="text-xs text-muted-foreground">Abatimentos</p><Moeda valor={-r.valor_abatimentos} /></div>
               <div><p className="text-xs text-muted-foreground">Líquido a pagar</p><Moeda valor={r.valor_liquido} className="font-bold" /></div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 text-sm">
+              {l?.chave_pix ? (
+                <>
+                  <span>PIX {l.tipo_chave_pix ? ROTULOS.tipoChavePix[l.tipo_chave_pix] : ""}: <strong className="break-all">{l.chave_pix}</strong></span>
+                  <BotaoCopiar texto={l.chave_pix} rotulo="Copiar chave" />
+                  {(l.nome_titular_pix || l.banco) && <span className="w-full text-xs text-muted-foreground">{[l.nome_titular_pix, l.banco].filter(Boolean).join(" · ")}</span>}
+                </>
+              ) : <span className="text-muted-foreground">Sem chave PIX cadastrada — <Link className="underline" href="/cadastros/locadores">cadastrar</Link></span>}
             </div>
             {r.seria_adiantado && (
               <div role="alert" className="space-y-2 rounded-md border-2 border-status-critico bg-red-50 p-3 text-sm text-red-900 dark:bg-red-950/40 dark:text-red-200">

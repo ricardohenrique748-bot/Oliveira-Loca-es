@@ -81,13 +81,28 @@ function valida(iso: string) {
 }
 
 /** "21/08/26 A 20/09/26" → período */
-export function periodo(v: unknown): { inicio: string; fim: string } | null {
+/**
+ * "21/08/26 A 20/09/26" ou, sem ano, "21/08 A 20/09" — nesse caso o ano vem da competência da aba ("2026-09"):
+ * o fim fica no ano da competência (ou no anterior, se o mês do fim for bem depois dela) e o início vira o ano quando o mês volta.
+ */
+export function periodo(v: unknown, competencia?: string | null): { inicio: string; fim: string } | null {
   const s = texto(v);
   if (!s) return null;
   const m = /(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})\s*(?:a|à|ate|até|-|–)\s*(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i.exec(s);
-  if (!m) return null;
-  const inicio = data(m[1]);
-  const fim = data(m[2]);
+  if (m) {
+    const inicio = data(m[1]);
+    const fim = data(m[2]);
+    return inicio && fim && fim >= inicio ? { inicio, fim } : null;
+  }
+  const sem = /(\d{1,2})[/.-](\d{1,2})\s*(?:a|à|ate|até|-|–)\s*(\d{1,2})[/.-](\d{1,2})/i.exec(s);
+  if (!sem || !competencia) return null;
+  const [anoC, mesC] = competencia.split("-").map(Number);
+  const [d1, m1, d2, m2] = sem.slice(1).map(Number);
+  const anoFim = m2 > mesC + 6 ? anoC - 1 : anoC;
+  const anoIni = m1 > m2 ? anoFim - 1 : anoFim;
+  const iso = (a: number, me: number, d: number) => `${a}-${String(me).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const inicio = data(iso(anoIni, m1, d1).split("-").reverse().join("/"));
+  const fim = data(iso(anoFim, m2, d2).split("-").reverse().join("/"));
   return inicio && fim && fim >= inicio ? { inicio, fim } : null;
 }
 
@@ -152,6 +167,19 @@ export function competenciaAba(nome: string): string | null {
   if (!m) return null;
   const ano = m[2].length === 2 ? 2000 + Number(m[2]) : Number(m[2]);
   return `${ano}-${String(MESES[m[1]]).padStart(2, "0")}`;
+}
+
+/**
+ * Observações da planilha → { nf, resto }: "2330", "NF 159", "Fatura 2305" ou texto terminado no número
+ * ("Desmobilizado 20/08 - faturar setembro até 20/09 2326"). Datas (20/09) não contam como NF.
+ */
+export function nfDasObservacoes(v: unknown): { nf: string | null; resto: string | null } {
+  const s = texto(v);
+  if (!s) return { nf: null, resto: null };
+  const m = /(?:^|\s)(?:nf|nfs-?e|fatura|nota)?\s*[:nº#]*\s*(\d{2,9})\s*$/i.exec(s);
+  if (!m || /\d[/.-]\d{1,2}$/.test(s)) return { nf: null, resto: s };
+  const resto = s.slice(0, m.index).replace(/[\s,;:-]+$/, "").trim();
+  return { nf: m[1], resto: resto || null };
 }
 
 /** Corte de importação: só jan/2026 em diante */

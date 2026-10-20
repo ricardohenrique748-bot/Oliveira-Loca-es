@@ -11,6 +11,7 @@ import "dotenv/config";
 import { config as carregarEnv } from "dotenv";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/lib/supabase/database.types";
@@ -20,6 +21,9 @@ import { lerPlanilha, type Aba, type LinhaPlanilha } from "./leitor";
 import * as N from "./normalizar";
 
 carregarEnv({ path: ".env.local" });
+
+// o projeto é ESM ("type": "module"): não existe __dirname
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------- CLI
 const args = process.argv.slice(2);
@@ -105,9 +109,9 @@ class Repo {
 
   empresa(v: unknown): string {
     const k = N.chave(v);
-    const ap = /tdts/.test(k) ? "TDTS" : "OLIVEIRA";
+    const ap = /tdts/.test(k) ? "TDTS" : !k || /oliveira/.test(k) ? "OLIVEIRA" : k.toUpperCase();
     const id = this.empresas.get(ap);
-    if (!id) throw new Error(`Empresa ${ap} não cadastrada — rode as migrations/seed de empresas antes`);
+    if (!id) throw new Error(`Empresa "${ap}" não cadastrada — cadastre em Cadastros → Empresas e importe de novo`);
     return id;
   }
 
@@ -234,11 +238,14 @@ async function importarLembrete(repo: Repo, abas: Aba[], base: Map<string, Base>
         const locadorId = locadorNome ? await repo.locador(locadorNome) : null;
         const veiculo = await repo.veiculo(placa, empresaId, locadorId, l);
 
-        const per = N.periodo(l.get("periodo"));
+        const per = N.periodo(l.get("periodo"), comp);
         if (!per) { registrar(l, "erro", `Período inválido: ${l.get("periodo")}`); continue; }
         if (per.fim < N.DATA_CORTE) continue;
         const diaCorte: 1 | 21 = Number(per.inicio.slice(8)) >= 15 ? 21 : 1;
         const valorPlanilha = N.valor(l.get("valor"));
+        // planilha "Valor Repasse": coluna Repasse ao lado do Valor
+        const repassePlanilha = sublocado ? N.valor(l.get("repasse")) : null;
+        const repasseMensal = b?.repasse ?? repassePlanilha;
 
         let contrato = repo.contratos.get(veiculo.id);
         if (!contrato) {
@@ -247,13 +254,13 @@ async function importarLembrete(repo: Repo, abas: Aba[], base: Map<string, Base>
           const numero = sublocado ? null : N.texto(l.get("contrato"));
           const id = await repo.inserir("contratos", {
             empresa_id: empresaId, cliente_id: clienteId, obra_id: obraId, veiculo_id: veiculo.id, numero,
-            valor_mensal: valorMensal, valor_repasse_mensal: veiculo.proprietario === "locador" ? (b?.repasse ?? null) : null,
+            valor_mensal: valorMensal, valor_repasse_mensal: veiculo.proprietario === "locador" ? repasseMensal : null,
             dia_corte_inicio: diaCorte, prazo_pagamento_dias: 30, data_inicio: per.inicio, status: "ativo",
             observacoes: "Importado — confirme prazo de pagamento e data de mobilização",
           });
           contrato = { id, valor_mensal: valorMensal, dia_corte: diaCorte, data_inicio: per.inicio, prazo: 30 };
           repo.contratos.set(veiculo.id, contrato);
-          if (veiculo.proprietario === "locador" && !b?.repasse) registrar(l, "aviso", `${placa}: sublocado sem valor de repasse na BASE`);
+          if (veiculo.proprietario === "locador" && !repasseMensal) registrar(l, "aviso", `${placa}: sublocado sem valor de repasse (BASE nem coluna Repasse)`);
         }
 
         // contato de faturamento
@@ -277,8 +284,9 @@ async function importarLembrete(repo: Repo, abas: Aba[], base: Map<string, Base>
           else descontos = Math.round((valorFinal - valorPlanilha) * 100) / 100;
           if (Math.abs(valorPlanilha - valorFinal) > 1) registrar(l, "aviso", `${placa} ${per.inicio}: valor da planilha ${valorPlanilha} ≠ calculado ${valorFinal} (ajustado em ${acrescimos ? "acréscimos" : "descontos"})`);
         }
-        const obs = N.texto(l.get("observacoes", "obs"));
-        const nf = obs && /^\d{2,9}$/.test(obs) ? obs : N.texto(l.get("nf", "nota"));
+        const obsNF = N.nfDasObservacoes(l.get("observacoes", "obs"));
+        const obs = obsNF.resto;
+        const nf = obsNF.nf ?? N.texto(l.get("nf", "nota"));
         let status = N.statusMedicao(l.get("status"));
         let emissao = N.data(l.get("faturado", "faturar", "emissao"));
         const vencimento = N.data(l.get("vencimento"));
@@ -287,10 +295,15 @@ async function importarLembrete(repo: Repo, abas: Aba[], base: Map<string, Base>
         const id = await repo.inserir("medicoes", {
           contrato_id: contrato.id, empresa_id: empresaId, periodo_inicio: per.inicio, periodo_fim: per.fim, dias, valor_mensal: contrato.valor_mensal,
           acrescimos, descontos, numero_nf: nf, data_emissao: emissao ?? (vencimento && status !== "a_faturar" ? per.fim : null), data_vencimento: vencimento,
-          status: status === "recebido" || status === "recebido_parcial" ? "faturado" : status, observacoes: obs && obs !== nf ? obs : null,
+          status: status === "recebido" || status === "recebido_parcial" ? "faturado" : status, observacoes: obs,
         });
         repo.medicoes.set(chaveMed, id);
         if (nf) repo.medicoesPorNF.set(nf, id);
+        // o repasse é gerado pelo banco (repasse mensal × dias ÷ 30): avisa quando não bate com a planilha (período parcial)
+        if (repassePlanilha !== null && repasseMensal !== null) {
+          const calc = calcularValorMedicao({ valorMensal: repasseMensal, dias }).valorBase;
+          if (Math.abs(calc - repassePlanilha) > 1) registrar(l, "aviso", `${placa} ${per.inicio}: repasse da planilha ${repassePlanilha} ≠ calculado ${calc} (${dias} dias) — ajuste em Repasses`);
+        }
         if (status === "recebido" && valorPlanilha) {
           await repo.inserir("recebimentos", { medicao_id: id, data: vencimento ?? per.fim, valor: valorPlanilha, observacoes: "Importado (data estimada = vencimento)" });
         }
@@ -422,7 +435,7 @@ async function main() {
   await repo.carregar();
 
   const arqFat = acharArquivo(/faturamento/i);
-  const arqLembrete = acharArquivo(/lembrete/i);
+  const arqLembrete = acharArquivo(/lembrete|valor\s*repasse/i);
   const arqCaixa = acharArquivo(/pagamentos?.*fornecedor|caixa/i);
   const arqPagar = acharArquivo(/contas\s*a\s*pagar/i);
 
@@ -436,8 +449,8 @@ async function main() {
 
   if (arqLembrete) {
     arquivoAtual = path.basename(arqLembrete);
-    await importarLembrete(repo, lerPlanilha(arqLembrete, ["empresa", "contrato", "placa", "cliente", "periodo", "faturar", "vencimento", "valor", "responsavel", "status", "observacoes"]), base);
-  } else registrar(null, "aviso", "Planilha de lembrete de faturamento não encontrada");
+    await importarLembrete(repo, lerPlanilha(arqLembrete, ["empresa", "contrato", "placa", "cliente", "periodo", "faturar", "faturado", "vencimento", "valor", "repasse", "responsavel", "status", "observacoes"]), base);
+  } else registrar(null, "aviso", "Planilha de lembrete de faturamento (ou Valor Repasse) não encontrada");
 
   if (arqFat) { arquivoAtual = path.basename(arqFat); await importarHistorico(repo, sb, abasFat); }
 

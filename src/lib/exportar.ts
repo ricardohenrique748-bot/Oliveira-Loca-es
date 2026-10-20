@@ -113,7 +113,8 @@ export async function exportarPDF<T>(nome: string, titulo: string, colunas: Colu
     if (c.tipo === "moeda" && typeof v === "number") return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     if (c.tipo === "numero" && typeof v === "number") return v.toLocaleString("pt-BR");
     if (c.tipo === "data" && typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10).split("-").reverse().join("/");
-    return String(v);
+    // fontes padrão do PDF não têm o sinal de menos matemático
+    return String(v).replace(/−/g, "-");
   };
   autoTable(doc, {
     startY: y,

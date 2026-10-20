@@ -2057,6 +2057,7 @@ export type Database = {
           cliente_nome: string | null
           competencia: string | null
           comprovante_url: string | null
+          contrato_numero: string | null
           created_at: string | null
           created_by: string | null
           data_pagamento: string | null
@@ -2067,15 +2068,20 @@ export type Database = {
           id: string | null
           locador_id: string | null
           locador_nome: string | null
+          medicao_emissao: string | null
           medicao_id: string | null
           medicao_status: Database["public"]["Enums"]["status_medicao"] | null
           medicao_valor: number | null
           medicao_vencimento: string | null
           numero_nf: string | null
+          obra_nome: string | null
           observacoes: string | null
           periodo_fim: string | null
           periodo_inicio: string | null
           placa: string | null
+          responsavel_email: string | null
+          responsavel_nome: string | null
+          responsavel_whatsapp: string | null
           seria_adiantado: boolean | null
           status: Database["public"]["Enums"]["status_repasse"] | null
           updated_at: string | null

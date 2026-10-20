@@ -19,24 +19,26 @@ export default function RepassesPage() {
 
     let q = supabase.from("repasses_v").select(`id, medicao_id, locador_id, locador_nome, empresa_id, empresa_apelido, veiculo_id, placa, valor_repasse_mensal,
       valor_bruto, valor_abatimentos, valor_liquido, data_prevista, data_pagamento, adiantado, aprovado_por, comprovante_url, status,
-      periodo_inicio, periodo_fim, dias, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado`);
+      periodo_inicio, periodo_fim, dias, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado,
+      obra_nome, medicao_emissao, contrato_numero, responsavel_nome, responsavel_whatsapp, responsavel_email`);
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     const status = p.get("status") ?? "pendentes";
     if (status === "pendentes") q = q.in("status", ["previsto", "liberado"]);
     else if (status !== "todos") q = q.eq("status", status as "pago");
     if (p.get("comp")) q = q.eq("competencia", `${p.get("comp")}-01`);
     if (p.get("locador")) q = q.eq("locador_id", p.get("locador")!);
-    const placa = p.q.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (placa) q = q.ilike("placa", `%${placa}%`);
+    if (p.get("placa")) q = q.eq("placa", p.get("placa")!);
     const { data: repassesData } = await q.order("locador_nome").order("periodo_inicio").limit(1000);
     const repasses = (repassesData ?? []) as Repasse[];
 
     const ids = repasses.map((r) => r.id);
-    const [{ data: abat }, { data: locadores }] = await Promise.all([
+    const [{ data: abat }, { data: locadores }, { data: placas }] = await Promise.all([
       ids.length
         ? supabase.from("repasse_abatimentos").select("id, repasse_id, conta_pagar_id, ordem_servico_id, descricao, valor, contas_pagar(vencimento), ordens_servico(numero)").in("repasse_id", ids)
         : Promise.resolve({ data: [] }),
       supabase.from("locadores").select("id, nome, cpf_cnpj, telefone, chave_pix, tipo_chave_pix, banco, nome_titular_pix").order("nome"),
+      // lista do filtro: só sublocados (os que têm repasse)
+      supabase.from("veiculos").select("placa").eq("proprietario", "locador").order("placa"),
     ]);
 
     return {
@@ -52,6 +54,7 @@ export default function RepassesPage() {
         os_numero: a.ordens_servico?.numero ?? null,
       })) as Abatimento[],
       locadores: (locadores ?? []) as Locador[],
+      placas: (placas ?? []).map((v) => v.placa),
       podeEditar: podeEscrever(s.perfil, "repasses"),
     };
   }, [searchParams, sessao?.empresaId]);

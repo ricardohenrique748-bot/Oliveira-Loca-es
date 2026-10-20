@@ -40,7 +40,7 @@ const ENTRELINHA = 4.4;
 
 /** fontes padrão do PDF só têm o alfabeto latino: troca símbolos que sairiam como lixo (o espaço não separável fica: segura "nº" junto do número) */
 export function limparTexto(s: string): string {
-  return s.replace(/[⬤●◆■▪]/g, "•").replace(/[≤]/g, "<=").replace(/[≥]/g, ">=");
+  return s.replace(/[⬤●◆■▪]/g, "•").replace(/[≤]/g, "<=").replace(/[≥]/g, ">=").replace(/−/g, "-");
 }
 
 let logo: Promise<string | null> | null = null;
