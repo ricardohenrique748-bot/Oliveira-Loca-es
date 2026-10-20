@@ -43,6 +43,8 @@ export const clienteSchema = z.object({
   razao_social: textoObr("Razão social"),
   nome_fantasia: textoOpc,
   cnpj: cnpjOpc,
+  email: emailOpc,
+  whatsapp: telefoneOpc,
   observacoes: textoOpc,
   ativo: z.boolean().default(true),
 });

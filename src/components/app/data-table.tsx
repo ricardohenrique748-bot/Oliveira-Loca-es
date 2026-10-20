@@ -55,11 +55,13 @@ export interface DataTableProps<T> {
   rodape?: boolean;
   /** barra extra à direita do topo (filtros, botões) */
   topo?: React.ReactNode;
+  /** células com menos espaçamento, para tabelas com muitas colunas caberem sem rolagem horizontal */
+  compacta?: boolean;
 }
 
 export function DataTable<T>({
   colunas, dados, getId, total, pagina = 1, tamanho = 50, selecionavel, acoesLote, cartaoMobile, vazio = "Nenhum registro encontrado.",
-  exportar, classeLinha, aoClicarLinha, rodape, topo,
+  exportar, classeLinha, aoClicarLinha, rodape, topo, compacta,
 }: DataTableProps<T>) {
   const url = useUrlParams();
   const [selecao, setSelecao] = React.useState<RowSelectionState>({});
@@ -124,7 +126,7 @@ export function DataTable<T>({
 
       {/* desktop */}
       <Card className={cn("hidden overflow-hidden md:block", url.pendente && "opacity-60 transition-opacity")}>
-        <Table>
+        <Table className={cn(compacta && "text-[13px] [&_td]:px-2 [&_td]:py-2.5 [&_th]:px-2 [&_th]:text-xs")}>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id} className="hover:bg-transparent">

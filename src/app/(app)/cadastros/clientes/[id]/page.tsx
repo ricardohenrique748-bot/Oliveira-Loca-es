@@ -17,7 +17,7 @@ export default function ClienteDetalhePage() {
     const supabase = createClient();
     const { data: cliente } = await supabase
       .from("clientes")
-      .select("id, razao_social, nome_fantasia, cnpj, observacoes, ativo")
+      .select("id, razao_social, nome_fantasia, cnpj, email, whatsapp, observacoes, ativo")
       .eq("id", id)
       .maybeSingle();
 

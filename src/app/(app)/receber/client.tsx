@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { HandCoins, Loader2, Mail, MessageCircle, Plus, Search, Trash2 } from "lucide-react";
+import { HandCoins, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { IconeEmail, IconeWhatsApp } from "@/components/app/icones";
 import { Badge, Label, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
@@ -56,19 +57,33 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
 
   const colunas = React.useMemo<ColumnDef<LinhaReceber, unknown>[]>(() => [
     { id: "placa", header: "Placa / cliente", meta: { tituloMobile: true }, cell: ({ row: { original: m } }) => (
-      <div><span className="font-mono font-semibold">{formatPlaca(m.placa)}</span> <span className="text-xs text-muted-foreground">{m.empresa_apelido}</span>
-        <p className="text-xs text-muted-foreground">{m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""}</p></div>
+      <div className="max-w-[13rem]" title={`${m.cliente_fantasia}${m.obra_nome ? ` · ${m.obra_nome}` : ""}`}>
+        <span className="font-mono font-semibold">{formatPlaca(m.placa)}</span> <span className="text-xs text-muted-foreground">{m.empresa_apelido}</span>
+        <p className="truncate text-xs text-muted-foreground">{m.cliente_fantasia}</p>
+        {m.obra_nome && <p className="truncate text-xs text-muted-foreground">{m.obra_nome}</p>}
+      </div>
     ) },
     { accessorKey: "numero_nf", header: "NF", cell: ({ getValue }) => <span className="num">{(getValue() as string) ?? "—"}</span> },
-    { id: "periodo", header: "Período", cell: ({ row }) => <span className="text-xs">{formatPeriodo(row.original.periodo_inicio, row.original.periodo_fim)}</span> },
-    { accessorKey: "data_emissao", header: "Emissão", meta: { ordem: "data_emissao" }, cell: ({ getValue }) => formatData(getValue() as string | null) },
-    { accessorKey: "data_vencimento", header: "Vencimento", meta: { ordem: "data_vencimento" }, cell: ({ row: { original: m } }) => (
-      <span>{formatData(m.data_vencimento)}{m.status_exibicao === "vencido" && m.dias_atraso ? <Badge variant="critico" className="ml-1">{m.dias_atraso} d</Badge> : null}</span>
+    { id: "periodo", header: "Período", cell: ({ row: { original: m } }) => (
+      <span className="whitespace-nowrap text-xs leading-tight">{formatData(m.periodo_inicio)}<br /><span className="text-muted-foreground">a {formatData(m.periodo_fim)}</span></span>
     ) },
-    { accessorKey: "valor_final", header: "Valor", meta: { direita: true, ordem: "valor_final" }, cell: ({ getValue }) => <Moeda valor={getValue() as number} />, footer: () => <Moeda valor={somar(linhas.map((l) => l.valor_final))} /> },
-    { accessorKey: "valor_recebido", header: "Recebido", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number} />, footer: () => <Moeda valor={somar(linhas.map((l) => l.valor_recebido))} /> },
-    { accessorKey: "saldo", header: "Saldo", meta: { direita: true, ordem: "saldo" }, cell: ({ getValue }) => <Moeda valor={getValue() as number} className="font-semibold" />, footer: () => <Moeda valor={somar(linhas.map((l) => l.saldo))} /> },
-    { accessorKey: "status_exibicao", header: "Status", cell: ({ getValue }) => <StatusBadge status={getValue() as string} /> },
+    { accessorKey: "data_vencimento", header: "Vencimento", meta: { ordem: "data_vencimento" }, cell: ({ row: { original: m } }) => (
+      <div className="whitespace-nowrap leading-tight">
+        {formatData(m.data_vencimento)}{m.status_exibicao === "vencido" && m.dias_atraso ? <Badge variant="critico" className="ml-1 px-1.5 py-0 text-[11px]">{m.dias_atraso} d</Badge> : null}
+        <p className="text-[11px] text-muted-foreground">emissão {formatData(m.data_emissao)}</p>
+      </div>
+    ) },
+    { accessorKey: "valor_final", header: "Valor", meta: { direita: true, ordem: "valor_final" }, cell: ({ row: { original: m } }) => (
+      <div className="whitespace-nowrap leading-tight">
+        <Moeda valor={m.valor_final} />
+        {m.valor_recebido > 0 && <p className="text-[11px] text-status-ok">recebido <Moeda valor={m.valor_recebido} /></p>}
+      </div>
+    ), footer: () => (
+      <div className="leading-tight"><Moeda valor={somar(linhas.map((l) => l.valor_final))} />
+        <p className="text-[11px] font-normal text-muted-foreground">recebido <Moeda valor={somar(linhas.map((l) => l.valor_recebido))} /></p></div>
+    ) },
+    { accessorKey: "saldo", header: "Saldo", meta: { direita: true, ordem: "saldo" }, cell: ({ getValue }) => <Moeda valor={getValue() as number} className="whitespace-nowrap font-semibold" />, footer: () => <Moeda valor={somar(linhas.map((l) => l.saldo))} /> },
+    { accessorKey: "status_exibicao", header: "Status", cell: ({ getValue }) => <StatusBadge status={getValue() as string} className="whitespace-nowrap" /> },
     { id: "acoes", header: () => <span className="sr-only">Ações</span>, meta: { classe: "text-right" }, cell: ({ row: { original: m } }) => {
       const cs = contatosDe(m);
       const comEmail = cs.find((c) => c.email);
@@ -76,11 +91,11 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
       const mail = comEmail && linkEmail(cs.filter((c) => c.email).map((c) => c.email).join(","), `Fatura ${m.numero_nf ?? ""} — ${formatPlaca(m.placa)}`, mensagem(m, templates.email, comEmail.nome));
       const zap = comZap && linkWhatsApp(comZap.whatsapp, mensagem(m, templates.whatsapp, comZap.nome));
       return (
-        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          {mail ? <Button asChild variant="ghost" size="icon-sm" aria-label="Enviar cobrança por e-mail" title={`E-mail para ${comEmail!.nome}`}><a href={mail}><Mail /></a></Button>
-            : <Button variant="ghost" size="icon-sm" disabled aria-label="Sem e-mail de faturamento" title="Cliente sem contato de faturamento com e-mail"><Mail /></Button>}
-          {zap ? <Button asChild variant="ghost" size="icon-sm" aria-label="Enviar cobrança por WhatsApp" title={`WhatsApp ${comZap!.nome}`}><a href={zap} target="_blank" rel="noopener"><MessageCircle /></a></Button>
-            : <Button variant="ghost" size="icon-sm" disabled aria-label="Sem WhatsApp"><MessageCircle /></Button>}
+        <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+          {mail ? <Button asChild variant="ghost" size="icon-sm" aria-label="Enviar cobrança por e-mail" title={`E-mail para ${comEmail!.nome}`}><a href={mail}><IconeEmail /></a></Button>
+            : <Button variant="ghost" size="icon-sm" disabled aria-label="Sem e-mail de faturamento" title="Cliente sem contato de faturamento com e-mail"><IconeEmail className="grayscale" /></Button>}
+          {zap ? <Button asChild variant="ghost" size="icon-sm" aria-label="Enviar cobrança por WhatsApp" title={`WhatsApp ${comZap!.nome}`}><a href={zap} target="_blank" rel="noopener"><IconeWhatsApp /></a></Button>
+            : <Button variant="ghost" size="icon-sm" disabled aria-label="Sem WhatsApp" title="Cliente sem contato de faturamento com WhatsApp"><IconeWhatsApp className="grayscale" /></Button>}
           {podeEditar && m.status !== "recebido" && <Button size="xs" onClick={() => setBaixando(m)}><HandCoins /> Baixar</Button>}
           {m.status === "recebido" && <Button size="xs" variant="outline" onClick={() => setBaixando(m)}>Ver</Button>}
         </div>
@@ -114,7 +129,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
         <BuscaUrl placeholder="Placa ou NF…" />
       </BarraFiltros>
 
-      <DataTable colunas={colunas} dados={linhas} getId={(m) => m.id} total={total} pagina={pagina} tamanho={tamanho} rodape
+      <DataTable colunas={colunas} dados={linhas} getId={(m) => m.id} total={total} pagina={pagina} tamanho={tamanho} rodape compacta
         selecionavel={podeEditar}
         classeLinha={(m) => (m.status_exibicao === "vencido" ? "border-l-2 border-l-status-critico" : undefined)}
         acoesLote={(sel) => <Button size="xs" onClick={() => setLote(sel)}><HandCoins /> Baixa total em lote</Button>}

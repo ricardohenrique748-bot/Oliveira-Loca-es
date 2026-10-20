@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/basicos";
 import type { Campo } from "@/components/app/formulario";
 import { locadorSchema, opcoesDe, ROTULOS, type LocadorForm } from "@/lib/schemas/cadastros";
 import { formatPlaca, maskTelefone } from "@/lib/format";
+import { cnpjParaLocador } from "@/lib/cnpj";
 import { salvarLocador, excluirLocador } from "../actions";
 
 type Linha = {
@@ -36,7 +37,7 @@ const colunas: ColumnDef<Linha, unknown>[] = [
 
 const campos: Campo<LocadorForm>[] = [
   { nome: "nome", rotulo: "Nome", obrigatorio: true, col: 4 },
-  { nome: "cpf_cnpj", rotulo: "CPF/CNPJ", tipo: "cpf_cnpj", col: 2 },
+  { nome: "cpf_cnpj", rotulo: "CPF/CNPJ", tipo: "cpf_cnpj", col: 2, autoCnpj: cnpjParaLocador, ajuda: "Com CNPJ, busca os dados na Receita" },
   { nome: "telefone", rotulo: "Telefone / WhatsApp", tipo: "telefone", col: 2 },
   { nome: "tipo_chave_pix", rotulo: "Tipo da chave PIX", tipo: "select", opcoes: opcoesDe(ROTULOS.tipoChavePix), vazio: "—", col: 2 },
   { nome: "chave_pix", rotulo: "Chave PIX", col: 2 },

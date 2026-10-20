@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Building2, FileText, HardHat, Mail, MessageCircle, Users } from "lucide-react";
+import { Building2, FileText, HardHat, Users } from "lucide-react";
+import { IconeEmail, IconeWhatsApp } from "@/components/app/icones";
 import { Card, CardContent, Badge } from "@/components/ui/basicos";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/overlays";
 import { Cabecalho, Moeda, StatusBadge } from "@/components/app/comuns";
@@ -11,9 +12,10 @@ import { DataTable } from "@/components/app/data-table";
 import { Formulario, type Campo } from "@/components/app/formulario";
 import { clienteSchema, contatoSchema, obraSchema, type ClienteForm, type ContatoForm, type ObraForm } from "@/lib/schemas/cadastros";
 import { formatData, formatPlaca, maskTelefone } from "@/lib/format";
+import { cnpjParaCliente } from "@/lib/cnpj";
 import { salvarCliente, salvarContato, excluirContato, salvarObra, excluirObra } from "../../actions";
 
-type Cliente = { id: string; razao_social: string; nome_fantasia: string | null; cnpj: string | null; observacoes: string | null; ativo: boolean };
+type Cliente = { id: string; razao_social: string; nome_fantasia: string | null; cnpj: string | null; email: string | null; whatsapp: string | null; observacoes: string | null; ativo: boolean };
 type Obra = { id: string; cliente_id: string; nome: string; codigo: string | null; cidade: string | null; uf: string | null; ativo: boolean };
 type Contato = { id: string; cliente_id: string; obra_id: string | null; obra: string | null; nome: string; email: string | null; whatsapp: string | null; recebe_fatura: boolean };
 type Contrato = { id: string; numero: string | null; status: string; valor_mensal: number; data_inicio: string; data_desmobilizacao: string | null; obra: string | null; placa: string; empresa: string };
@@ -28,8 +30,8 @@ const colObras: ColumnDef<Obra, unknown>[] = [
 const colContatos: ColumnDef<Contato, unknown>[] = [
   { accessorKey: "nome", header: "Nome", meta: { tituloMobile: true } },
   { accessorKey: "obra", header: "Obra", cell: ({ getValue }) => (getValue() as string) ?? <span className="text-muted-foreground">Todas</span> },
-  { accessorKey: "email", header: "E-mail", cell: ({ getValue }) => getValue() ? <a className="inline-flex items-center gap-1 hover:underline" href={`mailto:${getValue()}`} onClick={(e) => e.stopPropagation()}><Mail className="h-3.5 w-3.5" />{getValue() as string}</a> : "—" },
-  { accessorKey: "whatsapp", header: "WhatsApp", cell: ({ getValue }) => getValue() ? <a className="inline-flex items-center gap-1 hover:underline" target="_blank" rel="noopener" href={`https://wa.me/${(getValue() as string).startsWith("55") ? "" : "55"}${getValue()}`} onClick={(e) => e.stopPropagation()}><MessageCircle className="h-3.5 w-3.5" />{maskTelefone(getValue() as string)}</a> : "—" },
+  { accessorKey: "email", header: "E-mail", cell: ({ getValue }) => getValue() ? <a className="inline-flex items-center gap-1 hover:underline" href={`mailto:${getValue()}`} onClick={(e) => e.stopPropagation()}><IconeEmail className="h-3.5 w-3.5" />{getValue() as string}</a> : "—" },
+  { accessorKey: "whatsapp", header: "WhatsApp", cell: ({ getValue }) => getValue() ? <a className="inline-flex items-center gap-1 hover:underline" target="_blank" rel="noopener" href={`https://wa.me/${(getValue() as string).startsWith("55") ? "" : "55"}${getValue()}`} onClick={(e) => e.stopPropagation()}><IconeWhatsApp className="h-3.5 w-3.5" />{maskTelefone(getValue() as string)}</a> : "—" },
   { accessorKey: "recebe_fatura", header: "Fatura", cell: ({ getValue }) => getValue() ? <Badge variant="ok">Recebe</Badge> : <Badge variant="neutro">Não</Badge> },
 ];
 
@@ -50,8 +52,10 @@ export function FichaCliente({ cliente, obras, contatos, contratos, podeEditar, 
   const camposCliente: Campo<ClienteForm>[] = [
     { nome: "nome_fantasia", rotulo: "Nome fantasia", col: 3 },
     { nome: "razao_social", rotulo: "Razão social", obrigatorio: true, col: 3 },
-    { nome: "cnpj", rotulo: "CNPJ", tipo: "cpf_cnpj", col: 3 },
+    { nome: "cnpj", rotulo: "CNPJ", tipo: "cpf_cnpj", col: 3, autoCnpj: cnpjParaCliente, ajuda: "Ao digitar, busca os dados na Receita" },
     { nome: "ativo", rotulo: "Ativo", tipo: "checkbox", col: 3 },
+    { nome: "email", rotulo: "E-mail", tipo: "email", col: 3 },
+    { nome: "whatsapp", rotulo: "WhatsApp", tipo: "telefone", col: 3 },
     { nome: "observacoes", rotulo: "Observações", tipo: "textarea", col: 6 },
   ].map((c) => ({ ...c, desabilitado: !podeEditar })) as Campo<ClienteForm>[];
   const camposObra: Campo<ObraForm>[] = [
@@ -84,7 +88,7 @@ export function FichaCliente({ cliente, obras, contatos, contratos, podeEditar, 
         <TabsContent value="dados">
           <Card><CardContent className="pt-5">
             <Formulario<ClienteForm> campos={camposCliente} schema={clienteSchema}
-              valores={{ razao_social: cliente.razao_social, nome_fantasia: cliente.nome_fantasia, cnpj: cliente.cnpj, observacoes: cliente.observacoes, ativo: cliente.ativo }}
+              valores={{ razao_social: cliente.razao_social, nome_fantasia: cliente.nome_fantasia, cnpj: cliente.cnpj, email: cliente.email, whatsapp: cliente.whatsapp, observacoes: cliente.observacoes, ativo: cliente.ativo }}
               onSalvar={(v) => salvarCliente(cliente.id, v)} onSucesso={() => router.refresh()} />
           </CardContent></Card>
         </TabsContent>

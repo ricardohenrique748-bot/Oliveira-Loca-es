@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { useForm, Controller, type FieldValues, type DefaultValues, type Path, type Control } from "react-hook-form";
+import { useForm, Controller, type FieldValues, type DefaultValues, type Path, type Control, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ZodType, ZodTypeDef } from "zod";
 import { Loader2, Save } from "lucide-react";
@@ -11,6 +11,8 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Checkbox, Label } from "@/components/ui/basicos";
 import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { consultarCnpj, type DadosCnpj } from "@/lib/cnpj";
+import { validarCNPJ } from "@/lib/format";
 import { InputCpfCnpj, InputMoeda, InputNumero, InputPlaca, InputTelefone } from "./campos";
 import { CampoAnexo, type Bucket } from "./anexo";
 
@@ -35,14 +37,62 @@ export interface Campo<V extends FieldValues> {
   /** tipo "anexo": bucket e pasta no Storage */
   bucket?: Bucket;
   pasta?: string;
+  /** tipo "cpf_cnpj": ao completar um CNPJ válido, consulta a Receita e preenche os campos vazios com o retorno */
+  autoCnpj?: (d: DadosCnpj) => Partial<Record<Path<V>, unknown>>;
 }
 
 const COL: Record<number, string> = {
   1: "sm:col-span-1", 2: "sm:col-span-2", 3: "sm:col-span-3", 4: "sm:col-span-4", 5: "sm:col-span-5", 6: "sm:col-span-6",
 };
 
-export function CampoControlado<V extends FieldValues>({ campo, control, valores, erro }: {
-  campo: Campo<V>; control: Control<V>; valores: V; erro?: string;
+/** CNPJ com consulta automática: dispara uma vez por CNPJ completo e válido. */
+function CampoCnpj<V extends FieldValues>({ campo, comum, value, onChange, form }: {
+  campo: Campo<V>; comum: Record<string, unknown>; value: string | null; onChange: (v: string | null) => void; form?: UseFormReturn<V>;
+}) {
+  const [consultando, setConsultando] = React.useState(false);
+  const ultimo = React.useRef<string | null>(null);
+  const abort = React.useRef<AbortController | null>(null);
+  React.useEffect(() => () => abort.current?.abort(), []);
+
+  const consultar = async (cnpj: string) => {
+    if (!campo.autoCnpj || !form) return;
+    abort.current?.abort();
+    const ctl = new AbortController();
+    abort.current = ctl;
+    setConsultando(true);
+    try {
+      const d = await consultarCnpj(cnpj, ctl.signal);
+      if (!d) return void toast.info("CNPJ não encontrado na Receita Federal");
+      let n = 0;
+      for (const [k, v] of Object.entries(campo.autoCnpj(d)) as [Path<V>, unknown][]) {
+        const atual = form.getValues(k);
+        if (v == null || v === "" || (atual != null && atual !== "")) continue;
+        form.setValue(k, v as never, { shouldDirty: true, shouldValidate: true });
+        n++;
+      }
+      if (d.situacao && d.situacao.toUpperCase() !== "ATIVA") toast.warning(`Situação na Receita: ${d.situacao}`);
+      toast.success(n ? `${d.razao_social}: ${n} campo(s) preenchido(s) pela Receita` : `${d.razao_social} — campos já preenchidos foram mantidos`);
+    } catch (e) {
+      if (!ctl.signal.aborted) toast.error("Não foi possível consultar o CNPJ agora. Preencha manualmente.");
+    } finally {
+      if (abort.current === ctl) setConsultando(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <InputCpfCnpj {...comum} value={value} onChange={(v) => {
+        onChange(v);
+        const dig = (v ?? "").replace(/\D/g, "");
+        if (dig.length === 14 && validarCNPJ(dig) && dig !== ultimo.current) { ultimo.current = dig; consultar(dig); }
+      }} />
+      {consultando && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-label="Consultando CNPJ" />}
+    </div>
+  );
+}
+
+export function CampoControlado<V extends FieldValues>({ campo, control, valores, erro, form }: {
+  campo: Campo<V>; control: Control<V>; valores: V; erro?: string; form?: UseFormReturn<V>;
 }) {
   const id = `campo-${String(campo.nome)}`;
   const desabilitado = typeof campo.desabilitado === "function" ? campo.desabilitado(valores) : campo.desabilitado;
@@ -81,7 +131,9 @@ export function CampoControlado<V extends FieldValues>({ campo, control, valores
                 </>
               );
             case "cpf_cnpj":
-              return <InputCpfCnpj {...comum} value={field.value} onChange={field.onChange} />;
+              return campo.autoCnpj
+                ? <CampoCnpj campo={campo} comum={comum} value={field.value} onChange={field.onChange} form={form} />
+                : <InputCpfCnpj {...comum} value={field.value} onChange={field.onChange} />;
             case "telefone":
               return <InputTelefone {...comum} value={field.value} onChange={field.onChange} />;
             case "anexo":
@@ -136,7 +188,7 @@ export function Formulario<V extends FieldValues>({ campos, schema, valores, onS
     <form onSubmit={enviar} className="space-y-4" noValidate>
       <div className="grid grid-cols-6 gap-3">
         {campos.filter((c) => !c.visivel || c.visivel(atuais)).map((c) => (
-          <CampoControlado key={String(c.nome)} campo={c} control={form.control} valores={atuais}
+          <CampoControlado key={String(c.nome)} campo={c} control={form.control} valores={atuais} form={form}
             erro={(form.formState.errors as Record<string, { message?: string }>)[String(c.nome)]?.message} />
         ))}
       </div>

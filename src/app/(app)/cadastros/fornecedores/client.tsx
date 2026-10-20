@@ -6,6 +6,7 @@ import { FiltroSelectUrl } from "@/components/app/url";
 import type { Campo } from "@/components/app/formulario";
 import { fornecedorSchema, type FornecedorForm } from "@/lib/schemas/cadastros";
 import { maskTelefone } from "@/lib/format";
+import { cnpjParaFornecedor } from "@/lib/cnpj";
 import { salvarFornecedor, excluirFornecedor } from "../actions";
 
 type Linha = { id: string; nome: string; cpf_cnpj: string | null; telefone: string | null; email: string | null; categoria: string | null; ativo: boolean };
@@ -25,7 +26,7 @@ export function FornecedoresCliente({ linhas, total, pagina, tamanho, categorias
   const campos: Campo<FornecedorForm>[] = [
     { nome: "nome", rotulo: "Nome", obrigatorio: true, col: 4 },
     { nome: "categoria", rotulo: "Categoria", col: 2, placeholder: "Pneus, Peças, Oficina…" },
-    { nome: "cpf_cnpj", rotulo: "CPF/CNPJ", tipo: "cpf_cnpj", col: 3 },
+    { nome: "cpf_cnpj", rotulo: "CPF/CNPJ", tipo: "cpf_cnpj", col: 3, autoCnpj: cnpjParaFornecedor },
     { nome: "telefone", rotulo: "Telefone", tipo: "telefone", col: 3 },
     { nome: "email", rotulo: "E-mail", tipo: "email", col: 4 },
     { nome: "ativo", rotulo: "Ativo", tipo: "checkbox", col: 2 },

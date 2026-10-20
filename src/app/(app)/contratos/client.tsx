@@ -39,7 +39,7 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
     { nome: "status", rotulo: "Status", tipo: "select", visivel: mensal, opcoes: [{ value: "ativo", label: "Ativo" }, { value: "suspenso", label: "Suspenso" }, { value: "encerrado", label: "Encerrado" }], col: 2 },
     { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: opcoes.clientes, obrigatorio: true, col: 3 },
     { nome: "obra_id", rotulo: "Obra", tipo: "select", visivel: mensal, vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3 },
-    { nome: "sublocado", rotulo: "Sublocado?", tipo: "select", col: 2, opcoes: [{ value: "nao", label: "Não — frota própria" }, { value: "sim", label: "Sim — veículo de locador" }] },
+    { nome: "sublocado", rotulo: "Sublocado?", tipo: "select", col: 2, opcoes: [{ value: "nao", label: "Não — frota própria (com motorista)" }, { value: "sim", label: "Sim — locador (sem motorista)" }] },
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", obrigatorio: true, col: 4, opcoes: (v) => opcoes.veiculos.filter((x) =>
       (!v.empresa_id || x.empresa_id === v.empresa_id) && (!v.sublocado || (x.proprietario === "locador") === (v.sublocado === "sim"))) },
     { nome: "valor_mensal", rotulo: "Valor mensal (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: mensal },

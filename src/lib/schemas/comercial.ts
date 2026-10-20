@@ -12,12 +12,21 @@ export const STATUS_PROPOSTA = {
 } as const;
 export type StatusProposta = keyof typeof STATUS_PROPOSTA;
 
+/** frota própria = com motorista; sublocado = sem motorista */
+export const MODALIDADE_PROPOSTA = {
+  com_motorista: "Com motorista",
+  sem_motorista: "Sem motorista",
+} as const;
+export type ModalidadeProposta = keyof typeof MODALIDADE_PROPOSTA;
+
 export const propostaSchema = z.object({
   empresa_id: uuidObr("a empresa"),
   cliente_id: uuidObr("o cliente"),
   obra_id: uuidOpc,
   veiculo_id: uuidOpc,
   equipamento: textoOpc,
+  // com veículo escolhido o banco ajusta pelo dono do veículo
+  modalidade: z.enum(["com_motorista", "sem_motorista"]).default("com_motorista"),
   /** diária: valor POR DIA (mesma regra do contrato) */
   tipo_cobranca: z.enum(["mensal", "diaria"]).default("mensal"),
   valor: moedaObr("o valor").refine((v) => v > 0, "Informe o valor"),

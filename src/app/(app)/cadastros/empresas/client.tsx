@@ -4,6 +4,7 @@ import { CrudSimples } from "@/components/app/crud";
 import { StatusBadge } from "@/components/app/comuns";
 import type { Campo } from "@/components/app/formulario";
 import { empresaSchema, type EmpresaForm } from "@/lib/schemas/cadastros";
+import { cnpjParaEmpresa } from "@/lib/cnpj";
 import { salvarEmpresa, excluirEmpresa } from "../actions";
 
 type Linha = { id: string; apelido: string; razao_social: string; cnpj: string | null; ativo: boolean };
@@ -18,7 +19,7 @@ const colunas: ColumnDef<Linha, unknown>[] = [
 const campos: Campo<EmpresaForm>[] = [
   { nome: "apelido", rotulo: "Apelido", obrigatorio: true, col: 2, ajuda: "Ex.: OLIVEIRA, TDTS" },
   { nome: "razao_social", rotulo: "Razão social", obrigatorio: true, col: 4 },
-  { nome: "cnpj", rotulo: "CNPJ", tipo: "cpf_cnpj", col: 3 },
+  { nome: "cnpj", rotulo: "CNPJ", tipo: "cpf_cnpj", col: 3, autoCnpj: cnpjParaEmpresa },
   { nome: "ativo", rotulo: "Ativa", tipo: "checkbox", col: 3 },
 ];
 

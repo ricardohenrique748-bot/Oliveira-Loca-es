@@ -133,33 +133,39 @@ export type Database = {
           cnpj: string | null
           created_at: string
           created_by: string | null
+          email: string | null
           id: string
           nome_fantasia: string | null
           observacoes: string | null
           razao_social: string
           updated_at: string
+          whatsapp: string | null
         }
         Insert: {
           ativo?: boolean
           cnpj?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string | null
           id?: string
           nome_fantasia?: string | null
           observacoes?: string | null
           razao_social: string
           updated_at?: string
+          whatsapp?: string | null
         }
         Update: {
           ativo?: boolean
           cnpj?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string | null
           id?: string
           nome_fantasia?: string | null
           observacoes?: string | null
           razao_social?: string
           updated_at?: string
+          whatsapp?: string | null
         }
         Relationships: []
       }
@@ -1303,6 +1309,7 @@ export type Database = {
           empresa_id: string
           equipamento: string | null
           id: string
+          modalidade: string
           motivo_recusa: string | null
           numero: string | null
           obra_id: string | null
@@ -1327,6 +1334,7 @@ export type Database = {
           empresa_id: string
           equipamento?: string | null
           id?: string
+          modalidade?: string
           motivo_recusa?: string | null
           numero?: string | null
           obra_id?: string | null
@@ -1351,6 +1359,7 @@ export type Database = {
           empresa_id?: string
           equipamento?: string | null
           id?: string
+          modalidade?: string
           motivo_recusa?: string | null
           numero?: string | null
           obra_id?: string | null

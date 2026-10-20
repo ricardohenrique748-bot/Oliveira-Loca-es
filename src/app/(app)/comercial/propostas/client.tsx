@@ -11,7 +11,7 @@ import type { Campo } from "@/components/app/formulario";
 import { Badge } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import type { Opcao } from "@/components/ui/select";
-import { propostaSchema, STATUS_PROPOSTA, type PropostaForm, type StatusProposta } from "@/lib/schemas/comercial";
+import { MODALIDADE_PROPOSTA, propostaSchema, STATUS_PROPOSTA, type ModalidadeProposta, type PropostaForm, type StatusProposta } from "@/lib/schemas/comercial";
 import { formatBRL, formatData, formatPlaca, hojeSP } from "@/lib/format";
 import { exportarPDF } from "@/lib/exportar";
 import type { OpcoesContrato } from "../../contratos/dados";
@@ -19,7 +19,7 @@ import { excluirProposta, gerarContratoDaProposta, salvarProposta } from "./acti
 
 export type LinhaProposta = {
   id: string; numero: string | null; empresa_id: string; cliente_id: string; obra_id: string | null; veiculo_id: string | null;
-  equipamento: string | null; tipo_cobranca: "mensal" | "diaria"; valor: number; dia_corte_inicio: number; prazo_pagamento_dias: number;
+  equipamento: string | null; modalidade: ModalidadeProposta; tipo_cobranca: "mensal" | "diaria"; valor: number; dia_corte_inicio: number; prazo_pagamento_dias: number;
   data_inicio_prevista: string | null; periodo_minimo: string | null; validade: string | null; condicoes: string | null; observacoes: string | null;
   status: StatusProposta; motivo_recusa: string | null; contrato_id: string | null; created_at: string;
   empresa: string; empresa_razao: string; empresa_cnpj: string | null;
@@ -36,8 +36,9 @@ const vencida = (r: LinhaProposta) => !!r.validade && r.validade < hojeSP() && (
 
 function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<PropostaForm>[] {
   const diaria = (v: PropostaForm) => v.tipo_cobranca === "diaria";
+  // com motorista = frota própria; sem motorista = sublocado
   const veiculos = (v: PropostaForm) => opcoes.veiculos
-    .filter((x) => !v.empresa_id || x.empresa_id === v.empresa_id)
+    .filter((x) => (!v.empresa_id || x.empresa_id === v.empresa_id) && (x.proprietario === "locador") === (v.modalidade === "sem_motorista"))
     .map((x) => ({ ...x, label: x.label + (ROTULO_STATUS_VEICULO[x.status] ? ` — ${ROTULO_STATUS_VEICULO[x.status]}` : "") }));
   return [
     { nome: "tipo_cobranca", rotulo: "Tipo de cobrança", tipo: "select", col: 2, opcoes: [{ value: "mensal", label: "Mensal" }, { value: "diaria", label: "Diária" }] },
@@ -45,8 +46,10 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
     { nome: "status", rotulo: "Situação", tipo: "select", col: 2, opcoes: (["rascunho", "enviada", "aprovada", "recusada"] as const).map((s) => ({ value: s, label: STATUS_PROPOSTA[s] })) },
     { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: opcoes.clientes, obrigatorio: true, col: 3 },
     { nome: "obra_id", rotulo: "Obra", tipo: "select", vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3 },
-    { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", vazio: "— definir depois", opcoes: veiculos, col: 3, ajuda: "Obrigatório só para gerar o contrato" },
-    { nome: "equipamento", rotulo: "Equipamento / descrição", col: 3, placeholder: "Ex.: Caminhão munck 15t com operador" },
+    { nome: "modalidade", rotulo: "Modalidade", tipo: "select", col: 2, opcoes: [
+      { value: "com_motorista", label: "Com motorista — frota própria" }, { value: "sem_motorista", label: "Sem motorista — sublocado" }] },
+    { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", vazio: "— definir depois", opcoes: veiculos, col: 4, ajuda: "Obrigatório só para gerar o contrato" },
+    { nome: "equipamento", rotulo: "Equipamento / descrição", col: 6, placeholder: "Ex.: Caminhão munck 15t" },
     { nome: "valor", rotulo: "Valor mensal", tipo: "moeda", obrigatorio: true, col: 2, visivel: (v) => !diaria(v) },
     { nome: "valor", rotulo: "Valor da diária", tipo: "moeda", obrigatorio: true, col: 2, visivel: diaria },
     { nome: "data_inicio_prevista", rotulo: "Início previsto", tipo: "data", col: 2 },
@@ -62,8 +65,9 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
 
 async function pdfProposta(r: LinhaProposta) {
   const diaria = r.tipo_cobranca === "diaria";
-  await exportarPDF(`proposta_${(r.numero ?? "").replace(/\W+/g, "-")}`, `Proposta comercial ${r.numero ?? ""}`, [
+  await exportarPDF(`proposta_${(r.numero ?? "").replace(/\W+/g, "-")}`, `Proposta comercial ${r.numero ?? ""} — locação ${r.modalidade === "com_motorista" ? "com" : "sem"} motorista`, [
     { titulo: "Descrição", valor: (l: LinhaProposta) => descricaoItem(l), largura: 40 },
+    { titulo: "Modalidade", valor: (l: LinhaProposta) => MODALIDADE_PROPOSTA[l.modalidade] },
     { titulo: "Cobrança", valor: () => (diaria ? "Diária" : "Mensal") },
     { titulo: diaria ? "Valor por dia" : "Valor mensal", valor: (l: LinhaProposta) => l.valor, tipo: "moeda" },
     { titulo: "Período mínimo", valor: (l: LinhaProposta) => l.periodo_minimo ?? "—" },
@@ -78,6 +82,9 @@ async function pdfProposta(r: LinhaProposta) {
       ["Validade", r.validade ? formatData(r.validade) : "—"],
     ],
     rodape: [
+      r.modalidade === "com_motorista"
+        ? "Locação com motorista: condutor fornecido pela locadora, incluso no valor."
+        : "Locação sem motorista: condução e operação do veículo por conta do cliente.",
       diaria
         ? `Cobrança por diária: ${formatBRL(r.valor)} × dias trabalhados, medidos mensalmente.`
         : `Cobrança mensal de ${formatBRL(r.valor)}, medição ${r.dia_corte_inicio === 1 ? "do dia 01 ao fim do mês" : "do dia 21 ao dia 20"}, proporcional aos dias no primeiro e no último mês.`,
@@ -99,7 +106,10 @@ export function PropostasCliente({ linhas, total, pagina, tamanho, opcoes, empre
       <div><span className="font-mono font-semibold">{r.numero}</span><p className="text-xs text-muted-foreground">{formatData(r.created_at.slice(0, 10))} · {r.empresa}</p></div>
     ) },
     { id: "cliente", header: "Cliente / obra", cell: ({ row: { original: r } }) => <div><p>{r.cliente}</p>{r.obra && <p className="text-xs text-muted-foreground">{r.obra}</p>}</div> },
-    { id: "item", header: "Veículo / equipamento", cell: ({ row: { original: r } }) => <span className="text-sm">{descricaoItem(r) || "—"}</span> },
+    { id: "item", header: "Veículo / equipamento", cell: ({ row: { original: r } }) => (
+      <div><span className="text-sm">{descricaoItem(r) || "—"}</span>
+        <p><Badge variant={r.modalidade === "com_motorista" ? "info" : "neutro"}>{MODALIDADE_PROPOSTA[r.modalidade]}</Badge></p></div>
+    ) },
     { accessorKey: "valor", header: "Valor", meta: { direita: true, ordem: "valor" }, cell: ({ row: { original: r } }) => (
       <span><Moeda valor={r.valor} />{r.tipo_cobranca === "diaria" && <span className="text-xs text-muted-foreground">/dia</span>}</span>
     ) },
@@ -126,11 +136,11 @@ export function PropostasCliente({ linhas, total, pagina, tamanho, opcoes, empre
           ]} />
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
         </>}
-        novo={{ tipo_cobranca: "mensal", empresa_id: empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, obra_id: null, veiculo_id: null, equipamento: null,
+        novo={{ tipo_cobranca: "mensal", modalidade: "com_motorista", empresa_id: empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, obra_id: null, veiculo_id: null, equipamento: null,
           valor: undefined, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio_prevista: null, periodo_minimo: null,
           validade: null, condicoes: null, observacoes: null, status: "rascunho", motivo_recusa: null }}
         paraForm={(r) => ({
-          tipo_cobranca: r.tipo_cobranca, empresa_id: r.empresa_id, cliente_id: r.cliente_id, obra_id: r.obra_id, veiculo_id: r.veiculo_id, equipamento: r.equipamento,
+          tipo_cobranca: r.tipo_cobranca, modalidade: r.modalidade, empresa_id: r.empresa_id, cliente_id: r.cliente_id, obra_id: r.obra_id, veiculo_id: r.veiculo_id, equipamento: r.equipamento,
           valor: r.valor, dia_corte_inicio: String(r.dia_corte_inicio) as never, prazo_pagamento_dias: r.prazo_pagamento_dias,
           data_inicio_prevista: r.data_inicio_prevista, periodo_minimo: r.periodo_minimo, validade: r.validade, condicoes: r.condicoes,
           observacoes: r.observacoes, status: r.status as PropostaForm["status"], motivo_recusa: r.motivo_recusa,
@@ -149,6 +159,7 @@ export function PropostasCliente({ linhas, total, pagina, tamanho, opcoes, empre
           { titulo: "Proposta", valor: (r) => r.numero }, { titulo: "Data", valor: (r) => r.created_at.slice(0, 10), tipo: "data" },
           { titulo: "Empresa", valor: (r) => r.empresa }, { titulo: "Cliente", valor: (r) => r.cliente, largura: 24 }, { titulo: "Obra", valor: (r) => r.obra, largura: 20 },
           { titulo: "Veículo / equipamento", valor: (r) => descricaoItem(r), largura: 30 },
+          { titulo: "Modalidade", valor: (r) => MODALIDADE_PROPOSTA[r.modalidade] },
           { titulo: "Cobrança", valor: (r) => (r.tipo_cobranca === "diaria" ? "Diária" : "Mensal") }, { titulo: "Valor", valor: (r) => r.valor, tipo: "moeda" },
           { titulo: "Validade", valor: (r) => r.validade, tipo: "data" }, { titulo: "Situação", valor: (r) => STATUS_PROPOSTA[r.status] },
           { titulo: "Motivo recusa", valor: (r) => r.motivo_recusa, largura: 24 },
