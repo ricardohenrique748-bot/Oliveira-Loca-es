@@ -26,6 +26,8 @@ export default function RepassesPage() {
     else if (status !== "todos") q = q.eq("status", status as "pago");
     if (p.get("comp")) q = q.eq("competencia", `${p.get("comp")}-01`);
     if (p.get("locador")) q = q.eq("locador_id", p.get("locador")!);
+    const placa = p.q.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (placa) q = q.ilike("placa", `%${placa}%`);
     const { data: repassesData } = await q.order("locador_nome").order("periodo_inicio").limit(1000);
     const repasses = (repassesData ?? []) as Repasse[];
 

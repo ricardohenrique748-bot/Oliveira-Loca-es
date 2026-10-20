@@ -59,6 +59,29 @@ export function calcularDias({ periodo, dataInicioContrato, dataFimEfetiva, base
   return Math.min(diffDias(ini, fim) + 1, baseDias);
 }
 
+/** Período mensal que começa na data informada (15/01 → 15/01 a 14/02). */
+export function periodoMensalDesde(inicio: ISODate): Periodo {
+  return { inicio, fim: addDias(addMesesClamp(inicio, 1), -1) };
+}
+
+/** Próximo período mensal após uma medição que terminou em `fimAnterior`. */
+export function proximoPeriodo(fimAnterior: ISODate): Periodo {
+  return periodoMensalDesde(addDias(fimAnterior, 1));
+}
+
+/**
+ * Dias de um período informado livremente (lançamento manual):
+ *  - período de um mês cheio (ex.: 15/01 a 14/02) dentro do contrato conta BASE_DIAS;
+ *  - senão, os dias efetivos (inclusive) dentro da vigência, limitado a BASE_DIAS.
+ */
+export function calcularDiasPeriodoLivre({ periodo, dataInicioContrato, dataFimEfetiva, baseDias = BASE_DIAS_PADRAO }: EntradaDias): number {
+  const ini = maxData(periodo.inicio, dataInicioContrato)!;
+  const fim = minData(periodo.fim, dataFimEfetiva)!;
+  if (fim < ini) return 0;
+  if (ini === periodo.inicio && fim === periodo.fim && periodoMensalDesde(ini).fim === fim) return baseDias;
+  return Math.min(diffDias(ini, fim) + 1, baseDias);
+}
+
 export interface EntradaValor {
   valorMensal: number;
   dias: number;

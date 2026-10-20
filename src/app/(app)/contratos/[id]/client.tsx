@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { LogOut, Pencil } from "lucide-react";
+import { LogOut, Pencil, Plus } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import type { Opcao } from "@/components/ui/select";
@@ -11,11 +11,12 @@ import { Cabecalho, Moeda, StatusBadge } from "@/components/app/comuns";
 import { KpiCard } from "@/components/app/kpi";
 import { DataTable } from "@/components/app/data-table";
 import { FormularioDialog } from "@/components/app/formulario";
-import { contratoSchema, type ContratoForm } from "@/lib/schemas/operacao";
+import { contratoSchema } from "@/lib/schemas/operacao";
 import { formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { salvarContrato } from "../actions";
-import { camposContrato, DialogoDesmobilizar, valoresContrato, type LinhaContrato } from "../client";
+import { camposContrato, DialogoDesmobilizar, valoresContrato, type ContratoFormTela, type LinhaContrato } from "../client";
 import type { OpcoesContrato } from "../dados";
+import { DialogoLancarMedicao } from "../../medicoes/lancar";
 
 type Medicao = {
   id: string; periodo_inicio: string; periodo_fim: string; dias: number; valor_final: number; acrescimos: number; descontos: number;
@@ -36,11 +37,12 @@ const colunas: ColumnDef<Medicao, unknown>[] = [
   { accessorKey: "status_exibicao", header: "Status", cell: ({ getValue }) => <StatusBadge status={getValue() as string} /> },
 ];
 
-export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeEditar }: {
-  contrato: LinhaContrato; medicoes: Medicao[]; opcoes: OpcoesContrato; empresas: Opcao[]; podeEditar: boolean;
+export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeEditar, podeLancar, baseDias }: {
+  contrato: LinhaContrato; medicoes: Medicao[]; opcoes: OpcoesContrato; empresas: Opcao[]; podeEditar: boolean; podeLancar: boolean; baseDias: number;
 }) {
   const router = useRouter();
   const [editando, setEditando] = React.useState(false);
+  const [lancar, setLancar] = React.useState(false);
   const [desmob, setDesmob] = React.useState(false);
   const faturado = medicoes.filter((m) => m.status_exibicao !== "cancelado").reduce((s, m) => s + m.valor_final, 0);
   const margem = medicoes.filter((m) => m.status_exibicao !== "cancelado").reduce((s, m) => s + m.margem, 0);
@@ -55,6 +57,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
           <StatusBadge status={c.status} className="text-sm" />
           {podeEditar && <Button variant="outline" size="sm" onClick={() => setEditando(true)}><Pencil /> Editar</Button>}
           {podeEditar && c.status === "ativo" && <Button variant="outline" size="sm" onClick={() => setDesmob(true)}><LogOut /> Desmobilizar</Button>}
+          {podeLancar && c.status !== "suspenso" && <Button size="sm" onClick={() => setLancar(true)}><Plus /> Lançar medição</Button>}
         </>} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -92,11 +95,12 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
           ] }} />
       </div>
 
-      <FormularioDialog<ContratoForm> aberto={editando} onOpenChange={setEditando} titulo="Editar contrato" tamanho="lg"
+      <FormularioDialog<ContratoFormTela> aberto={editando} onOpenChange={setEditando} titulo="Editar contrato" tamanho="lg"
         campos={camposContrato(opcoes, empresas)} schema={contratoSchema as never}
         valores={{ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never }}
         onSalvar={(v) => salvarContrato(c.id, v)} onSucesso={() => router.refresh()} />
       <DialogoDesmobilizar contrato={c} aberto={desmob} onOpenChange={setDesmob} />
+      <DialogoLancarMedicao aberto={lancar} onOpenChange={setLancar} contratoId={c.id} baseDias={baseDias} onLancado={() => router.refresh()} />
     </div>
   );
 }

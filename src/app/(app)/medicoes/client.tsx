@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Ban, CalendarPlus, CheckCheck, Eye, FileDown, FileSpreadsheet, FileText, Loader2, Save, Undo2, Wand2 } from "lucide-react";
+import { Ban, CalendarPlus, CheckCheck, Eye, FileDown, FileSpreadsheet, FileText, History, Loader2, Plus, Save, Undo2, Wand2 } from "lucide-react";
 import { Badge, Card, Checkbox, Label, Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,15 +11,16 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import type { Opcao } from "@/components/ui/select";
 import { Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
-import { BarraFiltros, BuscaUrl, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
+import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
 import { calcularValorMedicao, calcularVencimento, hojeSP, somar } from "@/lib/calculos";
 import { formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
 import { cn } from "@/lib/utils";
 import {
-  cancelarMedicoes, dadosLembrete, faturarMedicoes, gerarMedicoes, previaMedicoes, salvarMedicoes, voltarParaAFaturar,
-  type LinhaLembrete, type LinhaPrevia,
+  cancelarMedicoes, dadosLembrete, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarMedicoes, voltarParaAFaturar,
+  type EventoHistorico, type LinhaLembrete, type LinhaPrevia,
 } from "./actions";
+import { DialogoLancarMedicao } from "./lancar";
 
 export type LinhaMedicao = {
   id: string; contrato_id: string; empresa_id: string; empresa_apelido: string; periodo_inicio: string; periodo_fim: string; competencia: string;
@@ -47,9 +48,9 @@ const COLUNAS_LEMBRETE: ColunaExport<LinhaLembrete>[] = [
   { titulo: "Responsável (faturamento)", valor: (l) => l.contatos, largura: 50 }, { titulo: "Observações", valor: (l) => l.observacoes, largura: 30 },
 ];
 
-export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, competenciaPadrao, clientes, baseDias, podeEditar }: {
+export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, competenciaPadrao, clientes, contratos, placas, baseDias, podeEditar }: {
   linhas: LinhaMedicao[]; total: number; pagina: number; tamanho: number; competencia: string; competenciaPadrao: string;
-  clientes: Opcao[]; baseDias: number; podeEditar: boolean;
+  clientes: Opcao[]; contratos: Opcao[]; placas: Opcao[]; baseDias: number; podeEditar: boolean;
 }) {
   const router = useRouter();
   const url = useUrlParams();
@@ -60,6 +61,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
   const [faturarAberto, setFaturarAberto] = React.useState(false);
   const [cancelarAberto, setCancelarAberto] = React.useState(false);
   const [detalhe, setDetalhe] = React.useState<LinhaMedicao | null>(null);
+  const [lancarAberto, setLancarAberto] = React.useState(false);
   const tabela = React.useRef<HTMLTableElement>(null);
 
   React.useEffect(() => { setEdicoes({}); setSelecao(new Set()); }, [linhas]);
@@ -131,7 +133,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
     if (!ids.length) return toast.info("Nada para exportar");
     const r = await dadosLembrete(ids);
     if (!r.ok) return toast.error(r.erro);
-    const titulo = `Lembrete de faturamento — ${competencia === "todas" ? "pendentes" : formatCompetencia(competencia, true)}`;
+    const titulo = `Lembrete de faturamento — ${competencia === "todas" ? "pendentes" : competencia === "historico" ? "histórico" : formatCompetencia(competencia, true)}`;
     if (tipo === "xlsx") {
       const porCliente = Object.entries(r.dados.reduce<Record<string, LinhaLembrete[]>>((acc, l) => ((acc[l.cliente] ??= []).push(l), acc), {}));
       await exportarXLSX("lembrete_faturamento", COLUNAS_LEMBRETE, r.dados, [{ nome: "Todos", linhas: r.dados }, ...porCliente.map(([nome, ls]) => ({ nome, linhas: ls }))]);
@@ -149,22 +151,28 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
     <div className="space-y-4">
       <Cabecalho titulo="Medições e faturamento"
         descricao={<>Valor = (mensal ÷ {baseDias}) × dias + acréscimos − descontos. Vencimento = emissão + prazo do contrato. <kbd className="rounded border px-1 text-xs">Ctrl+S</kbd> salva · <kbd className="rounded border px-1 text-xs">Enter</kbd> desce na coluna.</>}
-        acoes={podeEditar && <Button onClick={() => setGerarAberto(true)}><Wand2 /> Gerar medições do período</Button>} />
+        acoes={podeEditar && <>
+          <Button variant="outline" onClick={() => setLancarAberto(true)}><Plus /> Lançar medição</Button>
+          <Button onClick={() => setGerarAberto(true)}><Wand2 /> Gerar medições do período</Button>
+        </>} />
 
       <BarraFiltros>
         <div className="flex flex-col gap-1">
           <Label htmlFor="comp" className="text-xs text-muted-foreground">Competência (mês de fim do período)</Label>
           <div className="flex gap-1">
-            <Input id="comp" type="month" className="h-9 w-40" value={competencia === "todas" ? "" : competencia}
+            <Input id="comp" type="month" className="h-9 w-40" value={competencia === "todas" || competencia === "historico" ? "" : competencia}
               onChange={(e) => url.set({ comp: e.target.value || "todas" })} />
-            <Button variant={competencia === "todas" ? "default" : "outline"} size="sm" onClick={() => url.set({ comp: competencia === "todas" ? competenciaPadrao : "todas" })}>
+            <Button variant={competencia === "todas" ? "default" : "outline"} size="sm" onClick={() => url.set({ comp: competencia === "todas" ? competenciaPadrao : "todas", pagina: null })}>
               Todas pendentes
+            </Button>
+            <Button variant={competencia === "historico" ? "default" : "outline"} size="sm" onClick={() => url.set({ comp: competencia === "historico" ? competenciaPadrao : "historico", pagina: null })}>
+              <History /> Histórico completo
             </Button>
           </div>
         </div>
         <FiltroSelectUrl param="status" rotulo="Status" opcoes={STATUS_OPCOES} />
         <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={clientes} />
-        <BuscaUrl placeholder="Placa…" className="sm:w-40" />
+        <FiltroSelectUrl param="placa" rotulo="Placa" opcoes={placas} vazio="Todas" />
       </BarraFiltros>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -212,7 +220,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
           <TableBody>
             {linhas.length === 0 && (
               <TableRow><TableCell colSpan={14}className="h-24 text-center text-muted-foreground">
-                Nenhuma medição {competencia === "todas" ? "pendente" : `em ${formatCompetencia(competencia)}`}. {podeEditar && "Use “Gerar medições do período”."}
+                Nenhuma medição {competencia === "todas" ? "pendente" : competencia === "historico" ? "encontrada" : `em ${formatCompetencia(competencia)}`}. {podeEditar && "Use “Gerar medições do período”."}
               </TableCell></TableRow>
             )}
             {linhas.map((m, i) => {
@@ -298,8 +306,10 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
         </div>
       )}
 
+      <DialogoLancarMedicao aberto={lancarAberto} onOpenChange={setLancarAberto} contratos={contratos} baseDias={baseDias}
+        onLancado={(comp) => { url.set({ comp, status: null }); router.refresh(); }} />
       <DialogoDetalhe medicao={detalhe} baseDias={baseDias} onOpenChange={(v) => !v && setDetalhe(null)} />
-      <DialogoGerar aberto={gerarAberto} onOpenChange={setGerarAberto} competenciaInicial={competencia === "todas" ? competenciaPadrao : competencia}
+      <DialogoGerar aberto={gerarAberto} onOpenChange={setGerarAberto} competenciaInicial={competencia === "todas" || competencia === "historico" ? competenciaPadrao : competencia}
         onGerado={(comp) => { url.set({ comp, status: null }); router.refresh(); }} />
       <DialogoFaturar aberto={faturarAberto} onOpenChange={setFaturarAberto} selecionados={selecionados}
         alteracoesPendentes={alterados.length > 0} onFeito={() => router.refresh()} />
@@ -349,6 +359,59 @@ async function pdfMedicao(m: LinhaMedicao, baseDias: number) {
   });
 }
 
+const ROTULOS_HISTORICO: Record<string, string> = {
+  status: "Status", periodo_inicio: "Início", periodo_fim: "Fim", dias: "Dias", valor_mensal: "Mensal", acrescimos: "Acréscimos",
+  descontos: "Descontos", valor_final: "Valor", numero_nf: "NF", data_emissao: "Emissão", data_vencimento: "Vencimento",
+  observacoes: "Observações", final: "Medição final",
+};
+const MOEDA_HISTORICO = new Set(["valor_mensal", "acrescimos", "descontos", "valor_final"]);
+const DATA_HISTORICO = new Set(["periodo_inicio", "periodo_fim", "data_emissao", "data_vencimento"]);
+const STATUS_ROTULO = Object.fromEntries(STATUS_OPCOES.map((o) => [o.value, o.label]));
+
+function valorHistorico(campo: string, v: unknown) {
+  if (v === null || v === undefined || v === "") return "—";
+  if (MOEDA_HISTORICO.has(campo)) return brl(Number(v));
+  if (DATA_HISTORICO.has(campo)) return formatData(String(v));
+  if (campo === "status") return STATUS_ROTULO[String(v)] ?? String(v);
+  if (typeof v === "boolean") return v ? "Sim" : "Não";
+  return String(v);
+}
+
+/** Linha do tempo da medição (quem mudou o quê e quando). */
+function HistoricoMedicao({ id }: { id: string }) {
+  const [eventos, setEventos] = React.useState<EventoHistorico[] | null>(null);
+  React.useEffect(() => {
+    let vivo = true;
+    setEventos(null);
+    historicoMedicao(id).then((r) => { if (vivo) setEventos(r.ok ? r.dados : []); });
+    return () => { vivo = false; };
+  }, [id]);
+  return (
+    <div className="space-y-2">
+      <p className="flex items-center gap-1.5 text-sm font-semibold"><History className="h-4 w-4" /> Histórico de alterações</p>
+      {eventos === null ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Carregando…</p>
+        : eventos.length === 0 ? <p className="text-xs text-muted-foreground">Nenhum registro de alteração disponível (o histórico é visível apenas para administradores).</p>
+        : (
+          <ol className="max-h-60 space-y-2 overflow-y-auto border-l pl-4">
+            {[...eventos].reverse().map((e, i) => (
+              <li key={i} className="text-xs">
+                <p className="font-medium">
+                  {new Date(e.quando).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} · {e.acao === "INSERT" ? "Criada" : e.acao === "DELETE" ? "Excluída" : "Alterada"}
+                  {e.usuario && <span className="font-normal text-muted-foreground"> por {e.usuario}</span>}
+                </p>
+                {e.acao === "UPDATE" && (
+                  <ul className="text-muted-foreground">
+                    {e.mudancas.map(([k, a, d]) => <li key={k}>{ROTULOS_HISTORICO[k] ?? k}: {valorHistorico(k, a)} → <span className="text-foreground">{valorHistorico(k, d)}</span></li>)}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+    </div>
+  );
+}
+
 function DialogoDetalhe({ medicao: m, baseDias, onOpenChange }: { medicao: LinhaMedicao | null; baseDias: number; onOpenChange: (v: boolean) => void }) {
   const [gerando, setGerando] = React.useState(false);
   const item = (rotulo: string, valor: React.ReactNode) => (
@@ -393,6 +456,7 @@ function DialogoDetalhe({ medicao: m, baseDias, onOpenChange }: { medicao: Linha
             {m.repasse_liquido != null && item("Repasse líquido / margem", <><Moeda valor={m.repasse_liquido} /> / <Moeda valor={m.margem} /></>)}
           </div>
           {m.observacoes && <div className="rounded-md bg-muted p-3 text-sm"><p className="text-xs text-muted-foreground">Observações</p>{m.observacoes}</div>}
+          <HistoricoMedicao id={m.id} />
           <p className="text-xs text-muted-foreground">Valores salvos. Edições não salvas na grade não aparecem aqui nem no PDF.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>

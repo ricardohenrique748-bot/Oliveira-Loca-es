@@ -3,7 +3,8 @@ import { z } from "zod";
 import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
-import { edicaoMedicaoSchema } from "@/lib/schemas/operacao";
+import { edicaoMedicaoSchema, lancamentoMedicaoSchema } from "@/lib/schemas/operacao";
+import { diffDias, minData, periodoContendo, proximoPeriodo, type DiaCorte, type Periodo } from "@/lib/calculos";
 
 const REVALIDAR = ["/medicoes", "/receber", "/repasses", "/dashboard"];
 const competencia = z.string().regex(/^\d{4}-\d{2}$/, "Competência inválida");
@@ -55,6 +56,64 @@ export async function gerarMedicoes(comp: string, contratos?: string[]) {
     const r = checar(await supabase.rpc("fn_gerar_medicoes", { p_competencia: `${c}-01`, ...(ids ? { p_contratos: ids } : {}) })) ?? [];
     return { geradas: r.length };
   }, REVALIDAR);
+}
+
+export interface ContratoLancamento {
+  id: string;
+  placa: string;
+  cliente: string;
+  obra: string | null;
+  valor_mensal: number;
+  data_inicio: string;
+  /** menor entre término previsto e desmobilização */
+  data_fim_efetiva: string | null;
+  ultimo_periodo: Periodo | null;
+  sugestao: Periodo;
+}
+
+/** Dados do contrato para o lançamento manual, com o próximo período sugerido (mês seguinte à última medição). */
+export async function dadosLancamento(contratoId: string) {
+  return executar(async () => {
+    const id = z.string().uuid().parse(contratoId);
+    const supabase = await createClient();
+    const { data: c } = await supabase.from("contratos")
+      .select("id, valor_mensal, dia_corte_inicio, data_inicio, data_fim, data_desmobilizacao, clientes(razao_social, nome_fantasia), obras(nome), veiculos(placa)")
+      .eq("id", id).maybeSingle();
+    if (!c) throw new Error("Contrato não encontrado");
+    const { data: ultima } = await supabase.from("medicoes").select("periodo_inicio, periodo_fim")
+      .eq("contrato_id", id).neq("status", "cancelado").order("periodo_fim", { ascending: false }).limit(1).maybeSingle();
+    const ultimo = ultima ? { inicio: ultima.periodo_inicio, fim: ultima.periodo_fim } : null;
+    return {
+      id: c.id, placa: c.veiculos?.placa ?? "", cliente: c.clientes?.nome_fantasia ?? c.clientes?.razao_social ?? "", obra: c.obras?.nome ?? null,
+      valor_mensal: Number(c.valor_mensal), data_inicio: c.data_inicio, data_fim_efetiva: minData(c.data_fim, c.data_desmobilizacao),
+      ultimo_periodo: ultimo,
+      sugestao: ultimo ? proximoPeriodo(ultimo.fim) : periodoContendo(c.dia_corte_inicio as DiaCorte, c.data_inicio),
+    } satisfies ContratoLancamento;
+  });
+}
+
+/** Lança uma medição manual de um contrato para o período informado. */
+export async function lancarMedicao(dados: unknown) {
+  return executar(async () => {
+    await exigirEscrita("medicoes");
+    const d = lancamentoMedicaoSchema.parse(dados);
+    if (diffDias(d.periodo_inicio, d.periodo_fim) > 31) throw new Error("O período pode ter no máximo um mês");
+    const supabase = await createClient();
+    const { data: c } = await supabase.from("contratos").select("id, empresa_id, valor_mensal, data_inicio, data_fim, data_desmobilizacao")
+      .eq("id", d.contrato_id).maybeSingle();
+    if (!c) throw new Error("Contrato não encontrado");
+    const fimEfetivo = minData(c.data_fim, c.data_desmobilizacao);
+    if (d.periodo_fim < c.data_inicio || (fimEfetivo && d.periodo_inicio > fimEfetivo)) throw new Error("O período está fora da vigência do contrato");
+    const { data: conflito } = await supabase.from("medicoes").select("periodo_inicio, periodo_fim").eq("contrato_id", c.id).neq("status", "cancelado")
+      .lte("periodo_inicio", d.periodo_fim).gte("periodo_fim", d.periodo_inicio).limit(1).maybeSingle();
+    if (conflito) throw new Error(`Já existe medição deste contrato que cobre parte desse período (${conflito.periodo_inicio.split("-").reverse().join("/")} a ${conflito.periodo_fim.split("-").reverse().join("/")})`);
+    const nova = checar(await supabase.from("medicoes").insert({
+      contrato_id: c.id, empresa_id: c.empresa_id, periodo_inicio: d.periodo_inicio, periodo_fim: d.periodo_fim, dias: d.dias,
+      valor_mensal: c.valor_mensal, acrescimos: d.acrescimos, descontos: d.descontos, observacoes: d.observacoes ?? null,
+      final: !!c.data_desmobilizacao && c.data_desmobilizacao >= d.periodo_inicio && c.data_desmobilizacao <= d.periodo_fim,
+    }).select("id").single());
+    return { id: nova!.id, competencia: d.periodo_fim.slice(0, 7) };
+  }, REVALIDAR, "Medição lançada");
 }
 
 /** Salva as edições da grade (dias, acréscimos, descontos, NF, emissão, vencimento, observações). */
@@ -112,6 +171,38 @@ export async function cancelarMedicoes(ids: unknown) {
     checar(await supabase.from("medicoes").update({ status: "cancelado" }).in("id", lista).in("status", ["a_faturar", "faturado"]));
     return null;
   }, REVALIDAR, "Medições canceladas");
+}
+
+export interface EventoHistorico {
+  quando: string;
+  usuario: string | null;
+  acao: "INSERT" | "UPDATE" | "DELETE";
+  /** campo → [antes, depois] */
+  mudancas: [string, unknown, unknown][];
+}
+
+const CAMPOS_HISTORICO = ["status", "periodo_inicio", "periodo_fim", "dias", "valor_mensal", "acrescimos", "descontos", "valor_final",
+  "numero_nf", "data_emissao", "data_vencimento", "observacoes", "final"] as const;
+
+/** Linha do tempo da medição, a partir da auditoria (gravada por trigger; leitura restrita a admin pelo RLS). */
+export async function historicoMedicao(id: string) {
+  return executar(async () => {
+    const mid = z.string().uuid().parse(id);
+    const supabase = await createClient();
+    const { data: eventos } = await supabase.from("auditoria").select("criado_em, user_id, acao, antes, depois")
+      .eq("tabela", "medicoes").eq("registro_id", mid).order("criado_em", { ascending: true });
+    const ids = [...new Set((eventos ?? []).map((e) => e.user_id).filter((u): u is string => !!u))];
+    const { data: usuarios } = ids.length ? await supabase.from("usuarios_perfil").select("user_id, nome").in("user_id", ids) : { data: [] };
+    const nomes = new Map((usuarios ?? []).map((u) => [u.user_id, u.nome]));
+    return (eventos ?? []).map((e): EventoHistorico => {
+      const antes = (e.antes ?? {}) as Record<string, unknown>;
+      const depois = (e.depois ?? {}) as Record<string, unknown>;
+      const mudancas = CAMPOS_HISTORICO
+        .filter((k) => e.acao === "INSERT" ? depois[k] != null && depois[k] !== "" : JSON.stringify(antes[k]) !== JSON.stringify(depois[k]))
+        .map((k): [string, unknown, unknown] => [k, antes[k], depois[k]]);
+      return { quando: e.criado_em, usuario: e.user_id ? nomes.get(e.user_id) ?? null : "Sistema", acao: e.acao as EventoHistorico["acao"], mudancas };
+    }).filter((e) => e.acao !== "UPDATE" || e.mudancas.length > 0);
+  });
 }
 
 export interface LinhaLembrete {

@@ -38,6 +38,17 @@ export const edicaoMedicaoSchema = z.object({
 });
 export type EdicaoMedicao = z.infer<typeof edicaoMedicaoSchema>;
 
+export const lancamentoMedicaoSchema = z.object({
+  contrato_id: uuidObr("o contrato"),
+  periodo_inicio: dataObr("o início do período"),
+  periodo_fim: dataObr("o fim do período"),
+  dias: z.number().int().min(1, "Dias deve ser ao menos 1").max(31, "Dias deve ser no máximo 31"),
+  acrescimos: z.number().min(0).default(0),
+  descontos: z.number().min(0).default(0),
+  observacoes: z.string().trim().max(1000).nullable().optional(),
+}).refine((d) => d.periodo_fim >= d.periodo_inicio, { message: "O fim do período deve ser depois do início", path: ["periodo_fim"] });
+export type LancamentoMedicao = z.input<typeof lancamentoMedicaoSchema>;
+
 export const recebimentoSchema = z.object({
   medicao_id: z.string().uuid(),
   data: dataObr("a data do recebimento"),

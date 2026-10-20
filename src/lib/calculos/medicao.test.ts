@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   calcularDias,
+  calcularDiasPeriodoLivre,
+  proximoPeriodo,
   calcularValorMedicao,
   calcularVencimento,
   derivarStatusMedicao,
@@ -161,5 +163,24 @@ describe("status da medição", () => {
     expect(statusExibicaoMedicao("recebido_parcial", "2026-10-15", "2026-10-16")).toBe("vencido");
     expect(statusExibicaoMedicao("faturado", "2026-10-16", "2026-10-16")).toBe("faturado");
     expect(statusExibicaoMedicao("recebido", "2026-10-01", "2026-10-16")).toBe("recebido");
+  });
+});
+
+describe("período livre (lançamento manual)", () => {
+  it("sugere o mês seguinte à última medição", () => {
+    expect(proximoPeriodo("2026-02-14")).toEqual({ inicio: "2026-02-15", fim: "2026-03-14" });
+    expect(proximoPeriodo("2026-01-31")).toEqual({ inicio: "2026-02-01", fim: "2026-02-28" });
+  });
+  it("mês cheio conta 30 dias, mesmo com 28 ou 31 dias corridos", () => {
+    expect(calcularDiasPeriodoLivre({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2025-01-15" })).toBe(30);
+    expect(calcularDiasPeriodoLivre({ periodo: { inicio: "2026-02-01", fim: "2026-02-28" }, dataInicioContrato: "2025-01-15" })).toBe(30);
+  });
+  it("período parcial conta os dias corridos", () => {
+    expect(calcularDiasPeriodoLivre({ periodo: { inicio: "2026-03-01", fim: "2026-03-10" }, dataInicioContrato: "2025-01-15" })).toBe(10);
+  });
+  it("respeita início e fim do contrato", () => {
+    expect(calcularDiasPeriodoLivre({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2026-02-01" })).toBe(14);
+    expect(calcularDiasPeriodoLivre({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2025-01-01", dataFimEfetiva: "2026-01-24" })).toBe(10);
+    expect(calcularDiasPeriodoLivre({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2026-03-01" })).toBe(0);
   });
 });

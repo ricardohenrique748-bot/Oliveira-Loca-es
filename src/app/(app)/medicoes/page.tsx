@@ -6,6 +6,7 @@ import { podeEscrever } from "@/lib/permissoes";
 import { lerParams } from "@/lib/consulta";
 import { getConfig } from "@/lib/config";
 import { addCompetencia, competenciaDe, hojeSP } from "@/lib/calculos";
+import { formatPlaca } from "@/lib/format";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { MedicoesCliente, type LinhaMedicao } from "./client";
@@ -27,18 +28,27 @@ export default function MedicoesPage() {
       cliente_id, cliente_fantasia, obra_nome, placa, proprietario, prazo_pagamento_dias, dia_corte_inicio, valor_recebido, repasse_liquido, margem,
       contrato_numero, cliente_nome, veiculo_tipo, saldo`, { count: "exact" });
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
-    if (comp !== "todas") q = q.eq("competencia", `${comp}-01`);
+    // "todas" = pendentes de qualquer mês; "historico" = tudo, de todos os meses e status (inclusive canceladas)
+    const historico = comp === "historico";
+    if (comp !== "todas" && !historico) q = q.eq("competencia", `${comp}-01`);
     const status = p.get("status");
     if (status) q = q.eq("status_exibicao", status);
     else if (comp === "todas") q = q.in("status", ["a_faturar"]);
-    else q = q.neq("status", "cancelado");
+    else if (!historico) q = q.neq("status", "cancelado");
     if (p.get("cliente")) q = q.eq("cliente_id", p.get("cliente")!);
     const placa = (p.get("placa") ?? p.q).toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (placa) q = q.ilike("placa", `%${placa}%`);
 
-    const [{ data: linhas, count }, { data: clientes }] = await Promise.all([
-      q.order("empresa_apelido").order("cliente_fantasia").order("placa").order("periodo_inicio").range(p.de, p.ate),
+    let qc = supabase.from("contratos").select("id, numero, clientes(razao_social, nome_fantasia), veiculos(placa)").in("status", ["ativo", "encerrado"]);
+    if (s.empresaId) qc = qc.eq("empresa_id", s.empresaId);
+    // placas de todos os contratos (inclusive antigos), para o filtro do histórico
+    let qp = supabase.from("contratos").select("veiculos(placa)");
+    if (s.empresaId) qp = qp.eq("empresa_id", s.empresaId);
+    const [{ data: linhas, count }, { data: clientes }, { data: contratos }, { data: placas }] = await Promise.all([
+      (historico ? q.order("periodo_inicio", { ascending: false }).order("placa") : q.order("empresa_apelido").order("cliente_fantasia").order("placa").order("periodo_inicio")).range(p.de, p.ate),
       supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("ativo", true).order("nome_fantasia"),
+      qc,
+      qp,
     ]);
 
     return {
@@ -49,6 +59,12 @@ export default function MedicoesPage() {
       competencia: comp,
       competenciaPadrao: padrao,
       clientes: (clientes ?? []).map((c) => ({ value: c.id, label: c.nome_fantasia ?? c.razao_social })),
+      contratos: (contratos ?? []).map((c) => ({
+        value: c.id,
+        label: `${formatPlaca(c.veiculos?.placa ?? "")} · ${c.clientes?.nome_fantasia ?? c.clientes?.razao_social ?? ""}${c.numero ? ` · ${c.numero}` : ""}`,
+      })).sort((a, b) => a.label.localeCompare(b.label)),
+      placas: [...new Set((placas ?? []).map((c) => c.veiculos?.placa).filter((x): x is string => !!x))].sort()
+        .map((pl) => ({ value: pl, label: formatPlaca(pl) })),
       baseDias: Number(cfg.base_dias_mes) || 30,
       podeEditar: podeEscrever(s.perfil, "medicoes"),
     };

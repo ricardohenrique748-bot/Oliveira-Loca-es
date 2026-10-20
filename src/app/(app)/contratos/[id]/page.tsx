@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useAuth, exigirSessao } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { podeEscrever } from "@/lib/permissoes";
+import { getConfig } from "@/lib/config";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { opcoesContrato } from "../dados";
@@ -25,10 +26,11 @@ export default function ContratoDetalhePage() {
 
     if (!c) return { naoEncontrado: true } as const;
 
-    const [{ data: medicoes }, opcoes] = await Promise.all([
+    const [{ data: medicoes }, opcoes, cfg] = await Promise.all([
       supabase.from("medicoes_v").select("id, periodo_inicio, periodo_fim, dias, valor_final, acrescimos, descontos, numero_nf, data_emissao, data_vencimento, status_exibicao, valor_recebido, repasse_liquido, margem, final")
         .eq("contrato_id", id).order("periodo_inicio", { ascending: false }),
       opcoesContrato(supabase, null),
+      getConfig(),
     ]);
 
     return {
@@ -60,6 +62,8 @@ export default function ContratoDetalhePage() {
       opcoes,
       empresas: s.empresas.map((e) => ({ value: e.id, label: e.apelido })),
       podeEditar: podeEscrever(s.perfil, "contratos"),
+      podeLancar: podeEscrever(s.perfil, "medicoes"),
+      baseDias: Number(cfg.base_dias_mes) || 30,
     };
   }, [id, sessao?.empresaId]);
 

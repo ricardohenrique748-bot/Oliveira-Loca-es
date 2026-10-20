@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/overlays";
 import { BotaoCopiar, Cabecalho, Moeda, StatusBadge, Vazio } from "@/components/app/comuns";
 import { KpiCard } from "@/components/app/kpi";
-import { BarraFiltros, FiltroDataUrl, FiltroSelectUrl } from "@/components/app/url";
+import { BarraFiltros, BuscaUrl, FiltroDataUrl, FiltroSelectUrl } from "@/components/app/url";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { formatBRL, formatData, formatPeriodo, formatPlaca, hojeSP, maskTelefone } from "@/lib/format";
 import { somar } from "@/lib/calculos";
@@ -90,6 +90,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, podeEditar }
       </div>
 
       <BarraFiltros>
+        <BuscaUrl placeholder="Placa…" className="sm:w-40" />
         <FiltroSelectUrl param="status" rotulo="Situação" vazio="Pendentes" opcoes={[{ value: "liberado", label: "Liberados" }, { value: "previsto", label: "Previstos" }, { value: "pago", label: "Pagos" }, { value: "todos", label: "Todos" }]} />
         <FiltroDataUrl param="comp" rotulo="Competência" tipo="month" />
         <FiltroSelectUrl param="locador" rotulo="Locador" opcoes={locadores.map((l) => ({ value: l.id, label: l.nome }))} />

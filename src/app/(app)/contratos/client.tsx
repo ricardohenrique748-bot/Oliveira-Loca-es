@@ -24,15 +24,20 @@ export type LinhaContrato = {
   empresa: string; cliente: string; obra: string | null; placa: string; modelo: string | null; proprietario: "proprio" | "locador";
 };
 
-export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<ContratoForm>[] {
-  const locador = (v: ContratoForm) => opcoes.veiculos.find((x) => x.value === v.veiculo_id)?.proprietario === "locador";
+/** Campo "sublocado" só existe na tela (filtra os veículos); o schema o descarta ao salvar. */
+export type ContratoFormTela = ContratoForm & { sublocado?: "sim" | "nao" };
+
+export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<ContratoFormTela>[] {
+  const locador = (v: ContratoFormTela) => v.sublocado === "sim" || opcoes.veiculos.find((x) => x.value === v.veiculo_id)?.proprietario === "locador";
   return [
     { nome: "empresa_id", rotulo: "Empresa emissora", tipo: "select", opcoes: empresas, obrigatorio: true, col: 2 },
     { nome: "numero", rotulo: "Nº do contrato", col: 2 },
     { nome: "status", rotulo: "Status", tipo: "select", opcoes: [{ value: "ativo", label: "Ativo" }, { value: "suspenso", label: "Suspenso" }, { value: "encerrado", label: "Encerrado" }], col: 2 },
     { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: opcoes.clientes, obrigatorio: true, col: 3 },
     { nome: "obra_id", rotulo: "Obra", tipo: "select", vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3 },
-    { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", opcoes: (v) => opcoes.veiculos.filter((x) => !v.empresa_id || x.empresa_id === v.empresa_id), obrigatorio: true, col: 6 },
+    { nome: "sublocado", rotulo: "Sublocado?", tipo: "select", col: 2, opcoes: [{ value: "nao", label: "Não — frota própria" }, { value: "sim", label: "Sim — veículo de locador" }] },
+    { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", obrigatorio: true, col: 4, opcoes: (v) => opcoes.veiculos.filter((x) =>
+      (!v.empresa_id || x.empresa_id === v.empresa_id) && (!v.sublocado || (x.proprietario === "locador") === (v.sublocado === "sim"))) },
     { nome: "valor_mensal", rotulo: "Valor mensal (cliente)", tipo: "moeda", obrigatorio: true, col: 3 },
     { nome: "valor_repasse_mensal", rotulo: "Repasse mensal (locador)", tipo: "moeda", col: 3, visivel: locador, ajuda: "Valor fixo mensal pago ao dono do veículo" },
     { nome: "dia_corte_inicio", rotulo: "Período de medição", tipo: "select", col: 2, opcoes: [{ value: "1", label: "Dia 01 ao fim do mês" }, { value: "21", label: "Dia 21 ao dia 20" }] },
@@ -43,9 +48,9 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
   ];
 }
 
-export function valoresContrato(c: LinhaContrato): ContratoForm {
+export function valoresContrato(c: LinhaContrato): ContratoFormTela {
   return {
-    empresa_id: c.empresa_id, cliente_id: c.cliente_id, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
+    sublocado: c.proprietario === "locador" ? "sim" : "nao", empresa_id: c.empresa_id, cliente_id: c.cliente_id, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
     valor_mensal: c.valor_mensal, valor_repasse_mensal: c.valor_repasse_mensal, dia_corte_inicio: c.dia_corte_inicio as never,
     prazo_pagamento_dias: c.prazo_pagamento_dias, data_inicio: c.data_inicio, data_fim: c.data_fim, status: c.status, observacoes: c.observacoes,
   };
@@ -104,7 +109,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
 
   return (
     <>
-      <CrudSimples<LinhaContrato, ContratoForm>
+      <CrudSimples<LinhaContrato, ContratoFormTela>
         titulo="Contratos" entidade="contrato" tamanhoForm="lg" abrirNovo={novo}
         descricao="Locação de cada placa para um cliente/obra. A margem prevista é o valor mensal menos o repasse ao locador."
         linhas={linhas} total={total} pagina={pagina} tamanho={tamanho} colunas={colunas}
@@ -115,7 +120,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
           <FiltroSelectUrl param="corte" rotulo="Período" opcoes={[{ value: "1", label: "01 → fim" }, { value: "21", label: "21 → 20" }]} />
         </>}
-        novo={{ empresa_id: empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null }}
+        novo={{ sublocado: "nao", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null }}
         paraForm={(c) => ({ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never })}
         salvar={salvarContrato} podeEditar={podeEditar}
         acoesLinha={(c) => podeEditar && c.status === "ativo" ? (
