@@ -5,9 +5,12 @@
  */
 import { writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const AQUI = path.dirname(fileURLToPath(import.meta.url));
 import { criarBanco } from "./pglite";
 
-const SAIDA = path.resolve(__dirname, "..", "..", "src", "lib", "supabase", "database.types.ts");
+const SAIDA = path.resolve(AQUI, "..", "..", "src", "lib", "supabase", "database.types.ts");
 
 type Col = {
   tabela: string; coluna: string; tipo: string; udt: string; nulo: boolean; tem_default: boolean;

@@ -818,6 +818,97 @@ export type Database = {
           },
         ]
       }
+      multas: {
+        Row: {
+          anexo_url: string | null
+          auto_infracao: string | null
+          codigo: string | null
+          contrato_id: string | null
+          created_at: string
+          created_by: string | null
+          data_infracao: string
+          descricao: string | null
+          empresa_id: string
+          id: string
+          observacoes: string | null
+          orgao: string | null
+          pago_em: string | null
+          pontos: number | null
+          responsavel: string
+          status: string
+          updated_at: string
+          valor: number
+          veiculo_id: string
+          vencimento: string | null
+        }
+        Insert: {
+          anexo_url?: string | null
+          auto_infracao?: string | null
+          codigo?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_infracao: string
+          descricao?: string | null
+          empresa_id: string
+          id?: string
+          observacoes?: string | null
+          orgao?: string | null
+          pago_em?: string | null
+          pontos?: number | null
+          responsavel?: string
+          status?: string
+          updated_at?: string
+          valor?: number
+          veiculo_id: string
+          vencimento?: string | null
+        }
+        Update: {
+          anexo_url?: string | null
+          auto_infracao?: string | null
+          codigo?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_infracao?: string
+          descricao?: string | null
+          empresa_id?: string
+          id?: string
+          observacoes?: string | null
+          orgao?: string | null
+          pago_em?: string | null
+          pontos?: number | null
+          responsavel?: string
+          status?: string
+          updated_at?: string
+          valor?: number
+          veiculo_id?: string
+          vencimento?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "multas_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "multas_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "multas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       obras: {
         Row: {
           ativo: boolean
@@ -1200,6 +1291,117 @@ export type Database = {
           },
         ]
       }
+      propostas: {
+        Row: {
+          cliente_id: string
+          condicoes: string | null
+          contrato_id: string | null
+          created_at: string
+          created_by: string | null
+          data_inicio_prevista: string | null
+          dia_corte_inicio: number
+          empresa_id: string
+          equipamento: string | null
+          id: string
+          motivo_recusa: string | null
+          numero: string | null
+          obra_id: string | null
+          observacoes: string | null
+          periodo_minimo: string | null
+          prazo_pagamento_dias: number
+          status: string
+          tipo_cobranca: string
+          updated_at: string
+          validade: string | null
+          valor: number
+          veiculo_id: string | null
+        }
+        Insert: {
+          cliente_id: string
+          condicoes?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_inicio_prevista?: string | null
+          dia_corte_inicio?: number
+          empresa_id: string
+          equipamento?: string | null
+          id?: string
+          motivo_recusa?: string | null
+          numero?: string | null
+          obra_id?: string | null
+          observacoes?: string | null
+          periodo_minimo?: string | null
+          prazo_pagamento_dias?: number
+          status?: string
+          tipo_cobranca?: string
+          updated_at?: string
+          validade?: string | null
+          valor: number
+          veiculo_id?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          condicoes?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_inicio_prevista?: string | null
+          dia_corte_inicio?: number
+          empresa_id?: string
+          equipamento?: string | null
+          id?: string
+          motivo_recusa?: string | null
+          numero?: string | null
+          obra_id?: string | null
+          observacoes?: string | null
+          periodo_minimo?: string | null
+          prazo_pagamento_dias?: number
+          status?: string
+          tipo_cobranca?: string
+          updated_at?: string
+          validade?: string | null
+          valor?: number
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "propostas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propostas_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propostas_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propostas_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propostas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recebimentos: {
         Row: {
           comprovante_url: string | null
@@ -1485,6 +1687,7 @@ export type Database = {
           observacoes: string | null
           placa: string
           proprietario: Database["public"]["Enums"]["proprietario_veiculo"]
+          renavam: string | null
           status: Database["public"]["Enums"]["status_veiculo"]
           tipo: Database["public"]["Enums"]["tipo_veiculo"]
           updated_at: string
@@ -1504,6 +1707,7 @@ export type Database = {
           observacoes?: string | null
           placa: string
           proprietario?: Database["public"]["Enums"]["proprietario_veiculo"]
+          renavam?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"]
           tipo?: Database["public"]["Enums"]["tipo_veiculo"]
           updated_at?: string
@@ -1523,6 +1727,7 @@ export type Database = {
           observacoes?: string | null
           placa?: string
           proprietario?: Database["public"]["Enums"]["proprietario_veiculo"]
+          renavam?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"]
           tipo?: Database["public"]["Enums"]["tipo_veiculo"]
           updated_at?: string
@@ -1632,6 +1837,37 @@ export type Database = {
           valor_recebido: number | null
           veiculo_id: string | null
           veiculo_tipo: Database["public"]["Enums"]["tipo_veiculo"] | null
+        }
+        Relationships: []
+      }
+      multas_v: {
+        Row: {
+          anexo_url: string | null
+          auto_infracao: string | null
+          cliente_nome: string | null
+          codigo: string | null
+          contrato_id: string | null
+          contrato_numero: string | null
+          created_at: string | null
+          created_by: string | null
+          data_infracao: string | null
+          descricao: string | null
+          empresa_apelido: string | null
+          empresa_id: string | null
+          id: string | null
+          observacoes: string | null
+          orgao: string | null
+          pago_em: string | null
+          placa: string | null
+          pontos: number | null
+          renavam: string | null
+          responsavel: string | null
+          status: string | null
+          status_exibicao: string | null
+          updated_at: string | null
+          valor: number | null
+          veiculo_id: string | null
+          vencimento: string | null
         }
         Relationships: []
       }
@@ -1898,6 +2134,12 @@ export type Database = {
         }
         Returns: { adiantado: boolean; aprovado_por: string | null; comprovante_url: string | null; created_at: string; created_by: string | null; data_pagamento: string | null; data_prevista: string | null; empresa_id: string; id: string; locador_id: string; medicao_id: string; observacoes: string | null; status: Database["public"]["Enums"]["status_repasse"]; updated_at: string; valor_abatimentos: number; valor_bruto: number; valor_liquido: number; valor_repasse_mensal: number; veiculo_id: string }
       }
+      fn_proposta_gerar_contrato: {
+        Args: {
+          p_proposta: string
+        }
+        Returns: string
+      }
       fn_rodar_jobs: {
         Args: {
         }
@@ -1909,7 +2151,7 @@ export type Database = {
       banco: "Bradesco" | "Sicredi" | "Inter" | "Outro"
       forma_pagamento: "boleto" | "debito_automatico" | "cartao" | "pix" | "transferencia"
       origem_leitura: "manual" | "os" | "importacao"
-      perfil_usuario: "admin" | "financeiro" | "faturamento" | "manutencao" | "consulta"
+      perfil_usuario: "admin" | "financeiro" | "faturamento" | "manutencao" | "consulta" | "comercial"
       proprietario_veiculo: "proprio" | "locador"
       severidade_alerta: "info" | "alerta" | "critico"
       status_contrato: "ativo" | "encerrado" | "suspenso"
@@ -1945,7 +2187,7 @@ export const Constants = {
       banco: ["Bradesco", "Sicredi", "Inter", "Outro"],
       forma_pagamento: ["boleto", "debito_automatico", "cartao", "pix", "transferencia"],
       origem_leitura: ["manual", "os", "importacao"],
-      perfil_usuario: ["admin", "financeiro", "faturamento", "manutencao", "consulta"],
+      perfil_usuario: ["admin", "financeiro", "faturamento", "manutencao", "consulta", "comercial"],
       proprietario_veiculo: ["proprio", "locador"],
       severidade_alerta: ["info", "alerta", "critico"],
       status_contrato: ["ativo", "encerrado", "suspenso"],

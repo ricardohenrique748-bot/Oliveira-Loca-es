@@ -11,7 +11,7 @@ import { salvarVeiculo, excluirVeiculo } from "../actions";
 import { camposVeiculo, STATUS_VEICULO } from "./campos";
 
 export type LinhaVeiculo = {
-  id: string; placa: string; tipo: VeiculoForm["tipo"]; marca: string | null; modelo: string | null; ano: number | null;
+  id: string; placa: string; renavam: string | null; tipo: VeiculoForm["tipo"]; marca: string | null; modelo: string | null; ano: number | null;
   proprietario: VeiculoForm["proprietario"]; locador_id: string | null; locador: string | null; empresa_id: string; empresa: string;
   km_atual: number; horimetro_atual: number; status: VeiculoForm["status"]; foto_url: string | null; observacoes: string | null;
 };
@@ -41,8 +41,8 @@ export function VeiculosCliente({ linhas, total, pagina, tamanho, empresas, empr
         <FiltroSelectUrl param="tipo" rotulo="Tipo" opcoes={opcoesDe(ROTULOS.tipoVeiculo)} />
         <FiltroSelectUrl param="proprietario" rotulo="Propriedade" vazio="Todas" opcoes={opcoesDe(ROTULOS.proprietario)} />
       </>}
-      novo={{ placa: "", tipo: "caminhao", marca: null, modelo: null, ano: null, proprietario: "proprio", locador_id: null, empresa_id: empresaPadrao ?? empresas[0]?.value, km_atual: 0, horimetro_atual: 0, status: "disponivel", foto_url: null, observacoes: null }}
-      paraForm={(v) => ({ placa: v.placa, tipo: v.tipo, marca: v.marca, modelo: v.modelo, ano: v.ano, proprietario: v.proprietario, locador_id: v.locador_id, empresa_id: v.empresa_id, km_atual: v.km_atual, horimetro_atual: v.horimetro_atual, status: v.status, foto_url: v.foto_url, observacoes: v.observacoes })}
+      novo={{ placa: "", renavam: null, tipo: "caminhao", marca: null, modelo: null, ano: null, proprietario: "proprio", locador_id: null, empresa_id: empresaPadrao ?? empresas[0]?.value, km_atual: 0, horimetro_atual: 0, status: "disponivel", foto_url: null, observacoes: null }}
+      paraForm={(v) => ({ placa: v.placa, renavam: v.renavam, tipo: v.tipo, marca: v.marca, modelo: v.modelo, ano: v.ano, proprietario: v.proprietario, locador_id: v.locador_id, empresa_id: v.empresa_id, km_atual: v.km_atual, horimetro_atual: v.horimetro_atual, status: v.status, foto_url: v.foto_url, observacoes: v.observacoes })}
       salvar={salvarVeiculo} excluir={excluirVeiculo} podeEditar={podeEditar}
       exportar={{ nome: "veiculos", colunas: [
         { titulo: "Placa", valor: (v) => v.placa }, { titulo: "Tipo", valor: (v) => ROTULOS.tipoVeiculo[v.tipo] }, { titulo: "Marca", valor: (v) => v.marca },

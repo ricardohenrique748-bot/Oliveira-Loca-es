@@ -15,11 +15,12 @@ export function camposVeiculo(empresas: Opcao[], locadores: Opcao[]): Campo<Veic
     { nome: "marca", rotulo: "Marca", col: 2 },
     { nome: "modelo", rotulo: "Modelo", col: 2, ajuda: "Planos por modelo usam este nome" },
     { nome: "ano", rotulo: "Ano", tipo: "numero", col: 2 },
+    { nome: "renavam", rotulo: "RENAVAM", col: 2, ajuda: "Usado na consulta de multas" },
     { nome: "empresa_id", rotulo: "Empresa", tipo: "select", opcoes: empresas, obrigatorio: true, col: 2 },
     { nome: "proprietario", rotulo: "Propriedade", tipo: "select", opcoes: opcoesDe(ROTULOS.proprietario), col: 2 },
     { nome: "locador_id", rotulo: "Locador", tipo: "select", opcoes: locadores, vazio: "—", col: 2, visivel: (v) => v.proprietario === "locador", obrigatorio: true },
-    { nome: "km_atual", rotulo: "Km atual", tipo: "numero", col: 3 },
-    { nome: "horimetro_atual", rotulo: "Horímetro atual", tipo: "decimal", col: 3 },
+    { nome: "km_atual", rotulo: "Km atual", tipo: "numero", col: 2 },
+    { nome: "horimetro_atual", rotulo: "Horímetro atual", tipo: "decimal", col: 2 },
     { nome: "observacoes", rotulo: "Observações", tipo: "textarea", col: 6 },
   ];
 }

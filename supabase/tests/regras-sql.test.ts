@@ -314,6 +314,33 @@ describe("contratos", () => {
   });
 });
 
+describe("multas", () => {
+  it("liga ao contrato da data, marca vencida, paga com data e gera alerta", async () => {
+    await q("begin");
+    try {
+      const inserir = async (dados: { data: string; venc: string | null; pago?: string }) => (await q<{ id: string }>(
+        `insert into public.multas (veiculo_id, data_infracao, valor, vencimento, pago_em, descricao)
+         values ('88888888-0000-0000-0000-000000000001', $1, 195.23, $2, $3, 'Excesso de velocidade') returning id`,
+        [dados.data, dados.venc, dados.pago ?? null]))[0].id;
+      const vencida = await inserir({ data: "2026-08-10", venc: "2026-10-01" });
+      const antes = await inserir({ data: "2025-01-10", venc: "2026-10-20" });
+      const paga = await inserir({ data: "2026-09-01", venc: "2026-10-30", pago: "2026-10-05" });
+      const [mv] = await q<{ empresa_id: string; contrato_id: string; status_exibicao: string; cliente_nome: string }>(
+        "select empresa_id, contrato_id, status_exibicao, cliente_nome from public.multas_v where id = $1", [vencida]);
+      expect(mv).toMatchObject({ empresa_id: OLIVEIRA, contrato_id: "99999999-0000-0000-0000-000000000001", status_exibicao: "vencida" });
+      // infração antes do início do contrato (01/03/2025): sem contrato
+      expect((await q<{ contrato_id: string | null }>("select contrato_id from public.multas where id = $1", [antes]))[0].contrato_id).toBeNull();
+      expect((await q<{ status: string }>("select status from public.multas where id = $1", [paga]))[0].status).toBe("paga");
+      await q("select app.job_gerar_alertas()");
+      const alertas = await q<{ tipo: string; referencia_id: string }>("select tipo, referencia_id from public.alertas where referencia_tabela = 'multas'");
+      expect(alertas).toEqual(expect.arrayContaining([{ tipo: "multa_vencida", referencia_id: vencida }, { tipo: "multa_vencendo", referencia_id: antes }]));
+      expect(alertas.some((a) => a.referencia_id === paga)).toBe(false);
+    } finally {
+      await q("rollback");
+    }
+  });
+});
+
 describe("contas a pagar", () => {
   it("recorrentes mantêm 12 meses à frente (out/26–set/27) sem duplicar", async () => {
     const [r] = await q<{ n: number; min: string; max: string }>(

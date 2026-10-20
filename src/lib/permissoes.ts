@@ -8,17 +8,19 @@ export const PERFIS: { valor: Perfil; rotulo: string; descricao: string }[] = [
   { valor: "faturamento", rotulo: "Faturamento", descricao: "Contratos, medições e contas a receber" },
   { valor: "manutencao", rotulo: "Manutenção", descricao: "Veículos, planos, OS, documentos e leituras" },
   { valor: "consulta", rotulo: "Consulta", descricao: "Somente leitura do dashboard e relatórios" },
+  { valor: "comercial", rotulo: "Comercial", descricao: "Propostas, clientes e consulta da frota (sem financeiro)" },
 ];
 
 /** Módulos do sistema × perfis (espelha a matriz de RLS em 0005_rls.sql). */
 export const MODULOS = {
   dashboard: { ler: ["admin", "financeiro", "faturamento", "manutencao", "consulta"], escrever: [] },
-  cadastros: { ler: ["admin", "financeiro", "faturamento", "manutencao", "consulta"], escrever: ["admin", "financeiro", "faturamento"] },
+  cadastros: { ler: ["admin", "financeiro", "faturamento", "manutencao", "consulta", "comercial"], escrever: ["admin", "financeiro", "faturamento", "comercial"] },
   locadores: { ler: ["admin", "financeiro"], escrever: ["admin", "financeiro"] },
-  veiculos: { ler: ["admin", "financeiro", "faturamento", "manutencao", "consulta"], escrever: ["admin", "financeiro", "manutencao"] },
+  veiculos: { ler: ["admin", "financeiro", "faturamento", "manutencao", "consulta", "comercial"], escrever: ["admin", "financeiro", "manutencao"] },
   fornecedores: { ler: ["admin", "financeiro", "faturamento", "manutencao", "consulta"], escrever: ["admin", "financeiro", "manutencao"] },
   contasBancarias: { ler: ["admin", "financeiro", "faturamento", "consulta"], escrever: ["admin", "financeiro"] },
   categorias: { ler: ["admin", "financeiro", "faturamento", "manutencao", "consulta"], escrever: ["admin", "financeiro"] },
+  comercial: { ler: ["admin", "financeiro", "faturamento", "consulta", "comercial"], escrever: ["admin", "faturamento", "comercial"] },
   contratos: { ler: ["admin", "financeiro", "faturamento", "consulta"], escrever: ["admin", "financeiro", "faturamento"] },
   medicoes: { ler: ["admin", "financeiro", "faturamento", "consulta"], escrever: ["admin", "financeiro", "faturamento"] },
   receber: { ler: ["admin", "financeiro", "faturamento", "consulta"], escrever: ["admin", "financeiro", "faturamento"] },

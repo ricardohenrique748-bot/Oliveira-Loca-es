@@ -36,7 +36,7 @@ export async function rodarJobs() {
   }, ["/", "/dashboard", "/medicoes", "/pagar", "/manutencao"]);
 }
 
-const perfil = z.enum(["admin", "financeiro", "faturamento", "manutencao", "consulta"]);
+const perfil = z.enum(["admin", "financeiro", "faturamento", "manutencao", "consulta", "comercial"]);
 const usuarioSchema = z.object({
   nome: z.string().trim().min(2, "Informe o nome"),
   email: z.string().trim().email("E-mail inválido"),

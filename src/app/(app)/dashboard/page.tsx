@@ -1,9 +1,10 @@
 import React from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, CalendarClock, ClipboardList, HandCoins, Receipt, TrendingUp, Wallet } from "lucide-react";
 import { useAuth, exigirSessao } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
-import { veReceita } from "@/lib/permissoes";
+import { podeLer, veReceita } from "@/lib/permissoes";
+import { MENU } from "@/components/layout/navegacao";
 import { competenciaDe, hojeSP } from "@/lib/calculos";
 import { formatBRL, formatCompetencia } from "@/lib/format";
 import { CarregandoPagina } from "@/components/app/carregando";
@@ -58,6 +59,11 @@ export default function DashboardPage() {
     };
   }, [mesParam, clienteParam, placaParam, sessao?.empresaId]);
 
+  // perfil sem dashboard (ex.: comercial) cai na primeira tela que pode ver
+  if (sessao && !podeLer(sessao.perfil, "dashboard")) {
+    const inicio = MENU.flatMap((g) => g.itens).find((it) => podeLer(sessao.perfil, it.modulo));
+    if (inicio) return <Navigate to={inicio.href} replace />;
+  }
   if (loading || !data) return <CarregandoPagina />;
 
   const { d, clientes, mes, hoje, receita, empresa, s } = data;

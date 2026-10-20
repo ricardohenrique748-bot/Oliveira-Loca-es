@@ -18,6 +18,7 @@ import FornecedoresPage from "@/app/(app)/cadastros/fornecedores/page";
 import ContasBancariasPage from "@/app/(app)/cadastros/contas-bancarias/page";
 import CategoriasPage from "@/app/(app)/cadastros/categorias/page";
 import EmpresasPage from "@/app/(app)/cadastros/empresas/page";
+import PropostasPage from "@/app/(app)/comercial/propostas/page";
 import ContratosPage from "@/app/(app)/contratos/page";
 import ContratoDetalhePage from "@/app/(app)/contratos/[id]/page";
 import MedicoesPage from "@/app/(app)/medicoes/page";
@@ -30,6 +31,7 @@ import OrdemDetalhePage from "@/app/(app)/manutencao/ordens/[id]/page";
 import PlanosPage from "@/app/(app)/manutencao/planos/page";
 import LeiturasPage from "@/app/(app)/manutencao/leituras/page";
 import DocumentosPage from "@/app/(app)/manutencao/documentos/page";
+import MultasPage from "@/app/(app)/manutencao/multas/page";
 import PneusPage from "@/app/(app)/manutencao/pneus/page";
 import RelatoriosPage from "@/app/(app)/relatorios/page";
 import ConfiguracoesPage from "@/app/(app)/configuracoes/page";
@@ -58,6 +60,9 @@ export function App() {
         <Route path="/cadastros/categorias" element={<CategoriasPage />} />
         <Route path="/cadastros/empresas" element={<EmpresasPage />} />
 
+        {/* Comercial */}
+        <Route path="/comercial/propostas" element={<PropostasPage />} />
+
         {/* Operação */}
         <Route path="/contratos" element={<ContratosPage />} />
         <Route path="/contratos/:id" element={<ContratoDetalhePage />} />
@@ -73,6 +78,7 @@ export function App() {
         <Route path="/manutencao/planos" element={<PlanosPage />} />
         <Route path="/manutencao/leituras" element={<LeiturasPage />} />
         <Route path="/manutencao/documentos" element={<DocumentosPage />} />
+        <Route path="/manutencao/multas" element={<MultasPage />} />
         <Route path="/manutencao/pneus" element={<PneusPage />} />
 
         {/* Gestão */}

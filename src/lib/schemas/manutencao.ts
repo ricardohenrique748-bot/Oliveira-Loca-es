@@ -102,3 +102,23 @@ export const leituraSchema = z.object({
   km: numeroOpc,
   horimetro: numeroOpc,
 }).refine((l) => l.km != null || l.horimetro != null, "Informe km ou horímetro");
+
+export const multaSchema = z.object({
+  veiculo_id: uuidObr("o veículo"),
+  auto_infracao: textoOpc,
+  data_infracao: dataObr("a data da infração"),
+  orgao: textoOpc,
+  descricao: textoOpc,
+  codigo: textoOpc,
+  pontos: z.number().int().min(0).max(40).nullish().transform((v) => v ?? null),
+  valor: z.number({ required_error: "Informe o valor", invalid_type_error: "Informe o valor" }).min(0).max(999_999_999),
+  vencimento: dataOpc,
+  status: z.enum(["pendente", "recurso", "paga", "cancelada"]),
+  responsavel: z.enum(["empresa", "cliente", "locador"]),
+  pago_em: dataOpc,
+  anexo_url: textoOpc,
+  observacoes: textoOpc,
+}).superRefine((m, ctx) => {
+  if (m.status === "paga" && !m.pago_em) ctx.addIssue({ code: "custom", message: "Informe a data do pagamento", path: ["pago_em"] });
+});
+export type MultaForm = z.input<typeof multaSchema>;

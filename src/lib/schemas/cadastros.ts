@@ -100,6 +100,8 @@ export type CategoriaForm = z.infer<typeof categoriaSchema>;
 
 export const veiculoSchema = z.object({
   placa,
+  renavam: z.preprocess((v) => (typeof v === "string" ? v.replace(/\D/g, "") || null : v ?? null),
+    z.string().regex(/^\d{9,11}$/, "RENAVAM deve ter 9 a 11 dígitos").nullable()),
   tipo: z.enum(["caminhao", "guindaste", "trator", "munck", "outro"]),
   marca: textoOpc,
   modelo: textoOpc,

@@ -1,6 +1,6 @@
 import {
   BarChart3, Building2, CalendarClock, ClipboardList, FileSpreadsheet, FileText, Gauge, HandCoins, Landmark, LayoutDashboard,
-  Receipt, Settings, Truck, Users, Wallet, Wrench, Tags, UserSquare2, Factory, CircleDot, FileBadge,
+  Receipt, Settings, Truck, Users, Wallet, Wrench, Tags, UserSquare2, Factory, CircleDot, FileBadge, TriangleAlert, Handshake,
   type LucideIcon,
 } from "lucide-react";
 import type { Modulo } from "@/lib/permissoes";
@@ -24,6 +24,12 @@ export interface GrupoMenu {
 export const MENU: GrupoMenu[] = [
   { itens: [{ titulo: "Dashboard", href: "/dashboard", icone: LayoutDashboard, modulo: "dashboard", descricao: "Visão geral do mês" }] },
   {
+    titulo: "Comercial",
+    itens: [
+      { titulo: "Propostas", href: "/comercial/propostas", icone: Handshake, modulo: "comercial", descricao: "Orçamentos de locação para clientes" },
+    ],
+  },
+  {
     titulo: "Operação",
     itens: [
       { titulo: "Contratos", href: "/contratos", icone: FileText, modulo: "contratos", descricao: "Locações por placa e cliente", secao: "Faturamento" },
@@ -41,6 +47,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: "Planos preventivos", href: "/manutencao/planos", icone: CalendarClock, modulo: "manutencao", descricao: "Revisões programadas", secao: "Manutenção" },
       { titulo: "Leituras km/h", href: "/manutencao/leituras", icone: Gauge, modulo: "manutencao", descricao: "Hodômetro e horímetro", secao: "Controle" },
       { titulo: "Documentos", href: "/manutencao/documentos", icone: FileBadge, modulo: "manutencao", descricao: "CRLV, seguro e laudos", secao: "Controle" },
+      { titulo: "Multas", href: "/manutencao/multas", icone: TriangleAlert, modulo: "manutencao", descricao: "Infrações e vencimentos", secao: "Controle" },
       { titulo: "Pneus", href: "/manutencao/pneus", icone: CircleDot, modulo: "manutencao", descricao: "Vida útil e rodízio", secao: "Controle" },
     ],
   },

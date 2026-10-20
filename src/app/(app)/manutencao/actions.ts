@@ -4,7 +4,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { excluirRegistro, salvarRegistro } from "@/lib/crud";
 import { createClient } from "@/lib/supabase/server";
-import { abrirOSSchema, documentoSchema, editarOSSchema, fecharOSSchema, itemOSSchema, leituraSchema, planoSchema, pneuSchema } from "@/lib/schemas/manutencao";
+import { abrirOSSchema, documentoSchema, editarOSSchema, fecharOSSchema, itemOSSchema, leituraSchema, multaSchema, planoSchema, pneuSchema } from "@/lib/schemas/manutencao";
 
 const M = "/manutencao";
 const REV = [M, `${M}/ordens`, `${M}/planos`, "/dashboard", "/cadastros/veiculos"];
@@ -109,6 +109,14 @@ export async function salvarDocumento(id: string | null, dados: unknown) {
 }
 export async function excluirDocumento(id: string) {
   return excluirRegistro({ tabela: "documentos_veiculo", modulo: "manutencao", id, revalidar: [`${M}/documentos`, M] });
+}
+
+// ---------- Multas ----------
+export async function salvarMulta(id: string | null, dados: unknown) {
+  return salvarRegistro({ tabela: "multas", modulo: "manutencao", id, dados, schema: multaSchema, revalidar: [`${M}/multas`, M, "/cadastros/veiculos"] });
+}
+export async function excluirMulta(id: string) {
+  return excluirRegistro({ tabela: "multas", modulo: "manutencao", id, revalidar: [`${M}/multas`, M, "/cadastros/veiculos"] });
 }
 
 // ---------- Pneus ----------

@@ -7,8 +7,11 @@ import { PGlite } from "@electric-sql/pglite";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const RAIZ = path.resolve(__dirname, "..", "..");
+const AQUI = path.dirname(fileURLToPath(import.meta.url));
+
+const RAIZ = path.resolve(AQUI, "..", "..");
 const MIGRATIONS = path.join(RAIZ, "supabase", "migrations");
 const SEED = path.join(RAIZ, "supabase", "seed.sql");
 

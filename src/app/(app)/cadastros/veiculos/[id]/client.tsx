@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { BarChart3, ClipboardList, FileBadge, FileText, Gauge, Truck, Wrench } from "lucide-react";
+import { BarChart3, ClipboardList, FileBadge, FileText, Gauge, TriangleAlert, Truck, Wrench } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/overlays";
@@ -20,7 +20,7 @@ import { camposVeiculo } from "../campos";
 import { atualizarFotoVeiculo } from "./actions";
 
 type Veiculo = {
-  id: string; placa: string; tipo: VeiculoForm["tipo"]; marca: string | null; modelo: string | null; ano: number | null; proprietario: VeiculoForm["proprietario"];
+  id: string; placa: string; renavam: string | null; tipo: VeiculoForm["tipo"]; marca: string | null; modelo: string | null; ano: number | null; proprietario: VeiculoForm["proprietario"];
   locador_id: string | null; locador: string | null; empresa_id: string; empresa: string; km_atual: number; horimetro_atual: number;
   status: VeiculoForm["status"]; foto_url: string | null; observacoes: string | null;
 };
@@ -67,6 +67,19 @@ const colDocs: ColumnDef<Doc, unknown>[] = [
   { accessorKey: "validade", header: "Validade", cell: ({ getValue }) => <ValidadeBadge validade={getValue() as string | null} /> },
   { accessorKey: "anexo_url", header: "Anexo", cell: ({ getValue }) => <LinkAnexo referencia={getValue() as string | null} rotulo="Abrir" /> },
 ];
+type Multa = {
+  id: string; data_infracao: string; descricao: string | null; auto_infracao: string | null; valor: number; vencimento: string | null;
+  status: string; status_exibicao: string; cliente_nome: string | null; pago_em: string | null;
+};
+const colMultas: ColumnDef<Multa, unknown>[] = [
+  { accessorKey: "data_infracao", header: "Infração", meta: { tituloMobile: true }, cell: ({ getValue }) => formatData(getValue() as string) },
+  { accessorKey: "descricao", header: "Descrição", cell: ({ row: { original: m } }) => <span>{m.descricao ?? "—"}{m.auto_infracao && <span className="text-xs text-muted-foreground"> · AIT {m.auto_infracao}</span>}</span> },
+  { accessorKey: "cliente_nome", header: "Cliente na data", cell: ({ getValue }) => (getValue() as string | null) ?? "—" },
+  { accessorKey: "valor", header: "Valor", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number} /> },
+  { accessorKey: "vencimento", header: "Vencimento", cell: ({ row: { original: m } }) =>
+    m.status === "pendente" ? <ValidadeBadge validade={m.vencimento} /> : m.status === "paga" ? `Paga em ${formatData(m.pago_em)}` : formatData(m.vencimento) },
+  { accessorKey: "status_exibicao", header: "Status", cell: ({ getValue }) => <StatusBadge status={getValue() as string} /> },
+];
 const colLeituras: ColumnDef<Leitura, unknown>[] = [
   { accessorKey: "data", header: "Data", meta: { tituloMobile: true }, cell: ({ getValue }) => formatData(getValue() as string) },
   { accessorKey: "km", header: "Km", meta: { direita: true }, cell: ({ getValue }) => formatKm(getValue() as number | null) },
@@ -83,8 +96,8 @@ const colResultado: ColumnDef<Resultado, unknown>[] = [
   { accessorKey: "margem_pct", header: "%", meta: { direita: true }, cell: ({ getValue }) => formatPct(getValue() as number | null) },
 ];
 
-export function FichaVeiculo({ veiculo: v, empresas, locadores, contratos, medicoes, ordens, documentos, leituras, planos, resultado, permissoes }: {
-  veiculo: Veiculo; empresas: Opcao[]; locadores: Opcao[]; contratos: Contrato[]; medicoes: Medicao[]; ordens: OS[]; documentos: Doc[];
+export function FichaVeiculo({ veiculo: v, empresas, locadores, contratos, medicoes, ordens, documentos, multas, leituras, planos, resultado, permissoes }: {
+  veiculo: Veiculo; empresas: Opcao[]; locadores: Opcao[]; contratos: Contrato[]; medicoes: Medicao[]; ordens: OS[]; documentos: Doc[]; multas: Multa[];
   leituras: Leitura[]; planos: Plano[]; resultado: Resultado[];
   permissoes: { editar: boolean; contratos: boolean; medicoes: boolean; resultado: boolean };
 }) {
@@ -118,6 +131,7 @@ export function FichaVeiculo({ veiculo: v, empresas, locadores, contratos, medic
           {permissoes.medicoes && <TabsTrigger value="medicoes"><ClipboardList /> Medições</TabsTrigger>}
           <TabsTrigger value="os"><Wrench /> OS ({ordens.length})</TabsTrigger>
           <TabsTrigger value="documentos"><FileBadge /> Documentos ({documentos.length})</TabsTrigger>
+          <TabsTrigger value="multas"><TriangleAlert /> Multas ({multas.filter((m) => m.status === "pendente").length})</TabsTrigger>
           <TabsTrigger value="leituras"><Gauge /> Leituras</TabsTrigger>
           {permissoes.resultado && <TabsTrigger value="resultado"><BarChart3 /> Resultado</TabsTrigger>}
         </TabsList>
@@ -125,7 +139,7 @@ export function FichaVeiculo({ veiculo: v, empresas, locadores, contratos, medic
         <TabsContent value="dados" className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2"><CardContent className="pt-5">
             <Formulario<VeiculoForm> campos={campos} schema={veiculoSchema as never}
-              valores={{ placa: v.placa, tipo: v.tipo, marca: v.marca, modelo: v.modelo, ano: v.ano, proprietario: v.proprietario, locador_id: v.locador_id, empresa_id: v.empresa_id, km_atual: v.km_atual, horimetro_atual: v.horimetro_atual, status: v.status, foto_url: v.foto_url, observacoes: v.observacoes }}
+              valores={{ placa: v.placa, renavam: v.renavam, tipo: v.tipo, marca: v.marca, modelo: v.modelo, ano: v.ano, proprietario: v.proprietario, locador_id: v.locador_id, empresa_id: v.empresa_id, km_atual: v.km_atual, horimetro_atual: v.horimetro_atual, status: v.status, foto_url: v.foto_url, observacoes: v.observacoes }}
               onSalvar={(d) => salvarVeiculo(v.id, d)} onSucesso={() => router.refresh()} />
           </CardContent></Card>
           <div className="space-y-4">
@@ -171,6 +185,9 @@ export function FichaVeiculo({ veiculo: v, empresas, locadores, contratos, medic
         </TabsContent>
         <TabsContent value="documentos">
           <DataTable colunas={colDocs} dados={documentos} getId={(d) => d.id} topo={<Button asChild size="sm" variant="outline"><Link href={`/manutencao/documentos?veiculo=${v.id}`}>Gerenciar documentos</Link></Button>} />
+        </TabsContent>
+        <TabsContent value="multas">
+          <DataTable colunas={colMultas} dados={multas} getId={(m) => m.id} topo={<Button asChild size="sm" variant="outline"><Link href={`/manutencao/multas?veiculo=${v.id}`}>Gerenciar multas</Link></Button>} />
         </TabsContent>
         <TabsContent value="leituras">
           <DataTable colunas={colLeituras} dados={leituras} getId={(l) => l.id} />

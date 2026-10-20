@@ -52,6 +52,12 @@ const STATUS: Record<string, { rotulo: string; variante: BadgeVariant }> = {
   pago: { rotulo: "Pago", variante: "ok" },
   // conta a pagar
   a_vencer: { rotulo: "A vencer", variante: "info" },
+  // proposta
+  rascunho: { rotulo: "Rascunho", variante: "neutro" },
+  enviada: { rotulo: "Enviada", variante: "info" },
+  aprovada: { rotulo: "Aprovada", variante: "ok" },
+  recusada: { rotulo: "Recusada", variante: "critico" },
+  convertida: { rotulo: "Virou contrato", variante: "ok" },
   // contrato
   ativo: { rotulo: "Ativo", variante: "ok" },
   encerrado: { rotulo: "Encerrado", variante: "neutro" },
@@ -68,6 +74,10 @@ const STATUS: Record<string, { rotulo: string; variante: BadgeVariant }> = {
   aguardando_peca: { rotulo: "Aguardando peça", variante: "critico" },
   fechada: { rotulo: "Fechada", variante: "ok" },
   cancelada: { rotulo: "Cancelada", variante: "neutro" },
+  // multa
+  pendente: { rotulo: "Pendente", variante: "alerta" },
+  recurso: { rotulo: "Em recurso", variante: "info" },
+  paga: { rotulo: "Paga", variante: "ok" },
   // preventiva
   em_dia: { rotulo: "Em dia", variante: "ok" },
   proxima: { rotulo: "Próxima", variante: "alerta" },
