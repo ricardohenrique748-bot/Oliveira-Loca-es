@@ -4,14 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { HandCoins, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { Ban, Barcode, FileDown, HandCoins, Loader2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { IconeEmail, IconeWhatsApp } from "@/components/app/icones";
 import { Badge, Label, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/overlays";
 import { SelectSimples, type Opcao } from "@/components/ui/select";
-import { Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
+import { BotaoCopiar, Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { KpiCard } from "@/components/app/kpi";
 import { DataTable } from "@/components/app/data-table";
 import { BarraFiltros, BuscaUrl, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
@@ -19,15 +19,19 @@ import { InputMoeda } from "@/components/app/campos";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { formatBRL, formatData, formatPeriodo, formatPlaca, hojeSP, linkEmail, linkWhatsApp, preencherTemplate } from "@/lib/format";
 import { somar } from "@/lib/calculos";
-import { baixarEmLote, buscarFaturasAbertas, estornarRecebimento, listarRecebimentos, registrarRecebimento } from "./actions";
+import {
+  atualizarBoletos, baixarEmLote, baixarPdfBoleto, buscarFaturasAbertas, cancelarBoleto, emitirBoleto, estornarRecebimento, listarRecebimentos, registrarRecebimento, type Boleto,
+} from "./actions";
 
 export type LinhaReceber = {
   id: string; empresa_id: string; empresa_apelido: string; cliente_id: string; cliente_fantasia: string; obra_id: string | null; obra_nome: string | null;
   placa: string; periodo_inicio: string; periodo_fim: string; numero_nf: string | null; data_emissao: string | null; data_vencimento: string | null;
   valor_final: number; valor_recebido: number; saldo: number; status: string; status_exibicao: string; dias_atraso: number | null; data_ultimo_recebimento: string | null;
+  boleto?: Boleto | null;
 };
 export type ContatoCobranca = { cliente_id: string; obra_id: string | null; nome: string; email: string | null; whatsapp: string | null };
-type Conta = Opcao & { empresa_id: string };
+/** boleto: conta Sicredi com código do beneficiário (emite boleto pelo sistema) */
+type Conta = Opcao & { empresa_id: string; boleto?: boolean };
 
 const FAIXAS = [
   { chave: "a_vencer", rotulo: "A vencer", tom: undefined },
@@ -46,14 +50,35 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
   const [baixando, setBaixando] = React.useState<LinhaReceber | null>(null);
   const [lote, setLote] = React.useState<LinhaReceber[] | null>(null);
   const [lancando, setLancando] = React.useState(false);
+  const [boletoDe, setBoletoDe] = React.useState<LinhaReceber | null>(null);
+  const [atualizando, setAtualizando] = React.useState(false);
+  const empresasBoleto = React.useMemo(() => new Set(contas.filter((c) => c.boleto).map((c) => c.empresa_id)), [contas]);
+  const boletosAbertos = linhas.filter((m) => m.boleto?.status === "emitido").length;
+
+  const atualizar = async () => {
+    setAtualizando(true);
+    const r = await atualizarBoletos();
+    setAtualizando(false);
+    if (!r.ok) return void toast.error(r.erro);
+    const { consultados, pagos, erros } = r.dados;
+    if (erros.length) toast.error(`${erros.length} boleto(s) não consultado(s): ${erros[0]}`);
+    toast.success(pagos ? `${pagos} boleto(s) pago(s) — recebimento lançado` : `${consultados} boleto(s) consultado(s), nenhum pagamento novo`);
+    if (pagos) router.refresh();
+  };
 
   const contatosDe = React.useCallback((m: LinhaReceber) =>
     contatos.filter((c) => c.cliente_id === m.cliente_id && (!c.obra_id || c.obra_id === m.obra_id)), [contatos]);
 
-  const mensagem = React.useCallback((m: LinhaReceber, tpl: string, contato: string) => preencherTemplate(tpl, {
-    contato, nf: m.numero_nf ?? "", placa: formatPlaca(m.placa), periodo: formatPeriodo(m.periodo_inicio, m.periodo_fim),
-    valor: formatBRL(m.saldo), vencimento: formatData(m.data_vencimento), empresa: m.empresa_apelido === "TDTS" ? "TDTS & Oliveira Locações" : "Oliveira & Oliveira Locações",
-  }), []);
+  const mensagem = React.useCallback((m: LinhaReceber, tpl: string, contato: string) => {
+    const b = m.boleto?.status === "emitido" ? m.boleto : null;
+    const texto = preencherTemplate(tpl, {
+      contato, nf: m.numero_nf ?? "", placa: formatPlaca(m.placa), periodo: formatPeriodo(m.periodo_inicio, m.periodo_fim),
+      valor: formatBRL(b ? b.valor : m.saldo), vencimento: formatData(b ? b.data_vencimento : m.data_vencimento),
+      empresa: m.empresa_apelido === "TDTS" ? "TDTS & Oliveira Locações" : "Oliveira & Oliveira Locações",
+    });
+    if (!b) return texto;
+    return `${texto}\n\nBoleto — linha digitável:\n${b.linha_digitavel}${b.pix_copia_cola ? `\n\nPIX copia e cola:\n${b.pix_copia_cola}` : ""}`;
+  }, []);
 
   const colunas = React.useMemo<ColumnDef<LinhaReceber, unknown>[]>(() => [
     { id: "placa", header: "Placa / cliente", meta: { tituloMobile: true }, cell: ({ row: { original: m } }) => (
@@ -96,12 +121,15 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
             : <Button variant="ghost" size="icon-sm" disabled aria-label="Sem e-mail de faturamento" title="Cliente sem contato de faturamento com e-mail"><IconeEmail className="grayscale" /></Button>}
           {zap ? <Button asChild variant="ghost" size="icon-sm" aria-label="Enviar cobrança por WhatsApp" title={`WhatsApp ${comZap!.nome}`}><a href={zap} target="_blank" rel="noopener"><IconeWhatsApp /></a></Button>
             : <Button variant="ghost" size="icon-sm" disabled aria-label="Sem WhatsApp" title="Cliente sem contato de faturamento com WhatsApp"><IconeWhatsApp className="grayscale" /></Button>}
+          {m.boleto?.status === "emitido"
+            ? <Button variant="ghost" size="icon-sm" aria-label="Ver boleto" title={`Boleto ${m.boleto.nosso_numero} · venc. ${formatData(m.boleto.data_vencimento)}`} onClick={() => setBoletoDe(m)}><Barcode className="text-primary-ink" /></Button>
+            : podeEditar && m.saldo > 0 && empresasBoleto.has(m.empresa_id) && <Button variant="ghost" size="icon-sm" aria-label="Gerar boleto" title="Gerar boleto Sicredi" onClick={() => setBoletoDe(m)}><Barcode /></Button>}
           {podeEditar && m.status !== "recebido" && <Button size="xs" onClick={() => setBaixando(m)}><HandCoins /> Baixar</Button>}
           {m.status === "recebido" && <Button size="xs" variant="outline" onClick={() => setBaixando(m)}>Ver</Button>}
         </div>
       );
     } },
-  ], [linhas, contatosDe, mensagem, templates, podeEditar]);
+  ], [linhas, contatosDe, mensagem, templates, podeEditar, empresasBoleto]);
 
   const totalAberto = Object.values(aging).reduce((a, b) => a + b, 0);
   const faixaAtual = url.get("faixa");
@@ -109,7 +137,12 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
   return (
     <div className="space-y-4">
       <Cabecalho titulo="Contas a receber" descricao="Medições faturadas. Baixa total ou parcial; o status da medição e a liberação do repasse são atualizados automaticamente."
-        acoes={podeEditar && <Button onClick={() => setLancando(true)}><Plus /> Lançar recebimento</Button>} />
+        acoes={podeEditar && <>
+          {empresasBoleto.size > 0 && <Button variant="outline" disabled={atualizando} onClick={atualizar} title="Consulta no Sicredi os boletos em aberto e lança os pagos">
+            {atualizando ? <Loader2 className="animate-spin" /> : <RefreshCw />} Atualizar boletos{boletosAbertos ? ` (${boletosAbertos})` : ""}
+          </Button>}
+          <Button onClick={() => setLancando(true)}><Plus /> Lançar recebimento</Button>
+        </>} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard titulo="Total em aberto" valor={<Moeda valor={totalAberto} />} destaque={!faixaAtual} href="/receber" />
@@ -145,6 +178,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
       <DialogoBaixa medicao={baixando} contas={contas} podeEditar={podeEditar} onOpenChange={(v) => !v && setBaixando(null)} onFeito={() => router.refresh()} />
       <DialogoLancar aberto={lancando} onOpenChange={setLancando} onEscolher={(m) => { setLancando(false); setBaixando(m); }} />
       <DialogoLote lote={lote} contas={contas} onOpenChange={(v) => !v && setLote(null)} onFeito={() => router.refresh()} />
+      <DialogoBoleto medicao={boletoDe} contas={contas.filter((c) => c.boleto)} podeEditar={podeEditar} onOpenChange={(v) => !v && setBoletoDe(null)} onFeito={() => router.refresh()} />
       <p className="text-xs text-muted-foreground">Cobrança usa os contatos marcados “recebe fatura” do cliente/obra e os templates em <Link href="/configuracoes" className="underline">Configurações</Link>.</p>
     </div>
   );
@@ -292,6 +326,118 @@ function DialogoBaixa({ medicao: m, contas, podeEditar, onOpenChange, onFeito }:
           onConfirmar={async () => {
             if (!estornar) return;
             const r = await rodarAcao(estornarRecebimento(estornar.id));
+            if (r.ok) { onOpenChange(false); onFeito(); }
+          }} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Sem boleto em aberto: formulário de emissão. Com boleto: linha digitável, PIX, PDF e cancelamento. */
+function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }: {
+  medicao: LinhaReceber | null; contas: Conta[]; podeEditar: boolean; onOpenChange: (v: boolean) => void; onFeito: () => void;
+}) {
+  const [conta, setConta] = React.useState<string | null>(null);
+  const [vencimento, setVencimento] = React.useState("");
+  const [ocupado, setOcupado] = React.useState<"emitir" | "pdf" | "atualizar" | null>(null);
+  const [cancelar, setCancelar] = React.useState(false);
+  const contasEmpresa = contas.filter((c) => m && c.empresa_id === m.empresa_id);
+  const b = m?.boleto?.status === "emitido" ? m.boleto : null;
+
+  React.useEffect(() => {
+    if (!m) return;
+    setConta(contasEmpresa[0]?.value ?? null);
+    setVencimento(m.data_vencimento && m.data_vencimento >= hojeSP() ? m.data_vencimento : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [m?.id]);
+
+  const emitir = async () => {
+    if (!m) return;
+    setOcupado("emitir");
+    const r = await rodarAcao(emitirBoleto(m.id, conta, vencimento));
+    setOcupado(null);
+    if (r.ok) { onOpenChange(false); onFeito(); }
+  };
+
+  const pdf = async () => {
+    if (!b) return;
+    setOcupado("pdf");
+    const r = await baixarPdfBoleto(b);
+    setOcupado(null);
+    if (!r.ok) toast.error(r.erro);
+  };
+
+  const consultar = async () => {
+    if (!b) return;
+    setOcupado("atualizar");
+    const r = await atualizarBoletos([b.id]);
+    setOcupado(null);
+    if (!r.ok) return void toast.error(r.erro);
+    if (r.dados.erros.length) return void toast.error(r.dados.erros[0]);
+    if (r.dados.pagos) { toast.success("Boleto pago — recebimento lançado"); onOpenChange(false); onFeito(); }
+    else if (r.dados.baixados) { toast.info("Boleto foi baixado no banco"); onOpenChange(false); onFeito(); }
+    else toast.info("Boleto ainda em aberto no banco");
+  };
+
+  return (
+    <Dialog open={!!m} onOpenChange={onOpenChange}>
+      <DialogContent tamanho="md">
+        <DialogHeader>
+          <DialogTitle>{b ? "Boleto Sicredi" : "Gerar boleto Sicredi"}</DialogTitle>
+          <DialogDescription>{m && <>{formatPlaca(m.placa)} · {m.cliente_fantasia} · NF {m.numero_nf ?? "—"}</>}</DialogDescription>
+        </DialogHeader>
+        {m && b && (
+          <div className="space-y-4">
+            {b.ambiente === "sandbox" && <Badge variant="alerta">Ambiente de testes — este boleto não vale para pagamento</Badge>}
+            <div className="grid grid-cols-3 gap-2 rounded-md bg-muted p-3 text-sm">
+              <div><p className="text-xs text-muted-foreground">Valor</p><Moeda valor={b.valor} className="font-bold" /></div>
+              <div><p className="text-xs text-muted-foreground">Vencimento</p>{formatData(b.data_vencimento)}</div>
+              <div><p className="text-xs text-muted-foreground">Nosso número</p><span className="num">{b.nosso_numero}</span></div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Linha digitável</Label>
+              <div className="flex items-center gap-2"><code className="num min-w-0 flex-1 break-all rounded-md border px-3 py-2 text-xs">{b.linha_digitavel}</code><BotaoCopiar texto={b.linha_digitavel} /></div>
+            </div>
+            {b.pix_copia_cola && (
+              <div className="space-y-1.5">
+                <Label>PIX copia e cola</Label>
+                <div className="flex items-center gap-2"><code className="min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-xs" title={b.pix_copia_cola}>{b.pix_copia_cola}</code><BotaoCopiar texto={b.pix_copia_cola} /></div>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">Os botões de e-mail e WhatsApp da fatura já incluem a linha digitável e o PIX.</p>
+          </div>
+        )}
+        {m && !b && (
+          contasEmpresa.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma conta Sicredi desta empresa com código do beneficiário. Cadastre em <Link href="/cadastros/contas-bancarias" className="underline">Contas bancárias</Link>.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-md bg-muted p-3 text-sm"><p className="text-xs text-muted-foreground">Valor do boleto (saldo em aberto)</p><Moeda valor={m.saldo} className="text-lg font-bold" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label htmlFor="bol-venc">Vencimento</Label><Input id="bol-venc" type="date" min={hojeSP()} value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
+                  {m.data_vencimento && m.data_vencimento < hojeSP() && <p className="text-xs text-status-alerta">Fatura venceu em {formatData(m.data_vencimento)} — informe nova data</p>}</div>
+                <div className="space-y-1.5"><Label>Conta de cobrança</Label><SelectSimples value={conta} onChange={setConta} opcoes={contasEmpresa} /></div>
+              </div>
+              <p className="text-xs text-muted-foreground">O boleto sai com QR Code PIX e é registrado no Sicredi em nome do cliente (CNPJ e endereço do cadastro).</p>
+            </div>
+          )
+        )}
+        <DialogFooter className="flex-wrap gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
+          {b && <>
+            {podeEditar && <Button variant="outline" onClick={() => setCancelar(true)} disabled={!!ocupado}><Ban /> Cancelar boleto</Button>}
+            {podeEditar && <Button variant="outline" onClick={consultar} disabled={!!ocupado}>{ocupado === "atualizar" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Consultar pagamento</Button>}
+            <Button onClick={pdf} disabled={!!ocupado}>{ocupado === "pdf" ? <Loader2 className="animate-spin" /> : <FileDown />} Baixar PDF</Button>
+          </>}
+          {m && !b && podeEditar && contasEmpresa.length > 0 && (
+            <Button onClick={emitir} disabled={!!ocupado || !conta || !vencimento}>{ocupado === "emitir" ? <Loader2 className="animate-spin" /> : <Barcode />} Gerar boleto</Button>
+          )}
+        </DialogFooter>
+        <Confirmar aberto={cancelar} onOpenChange={setCancelar} titulo="Cancelar boleto no Sicredi?" destrutivo rotulo="Cancelar boleto"
+          descricao="O boleto é baixado no banco e não poderá mais ser pago. A fatura continua em aberto e você pode gerar outro."
+          onConfirmar={async () => {
+            if (!b) return;
+            const r = await rodarAcao(cancelarBoleto(b.id));
             if (r.ok) { onOpenChange(false); onFeito(); }
           }} />
       </DialogContent>

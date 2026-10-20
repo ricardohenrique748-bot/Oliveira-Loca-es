@@ -34,6 +34,8 @@ export const contaBancariaSchema = z.object({
   banco: z.enum(["Bradesco", "Sicredi", "Inter", "Outro"], { errorMap: () => ({ message: "Selecione o banco" }) }),
   agencia: textoOpc,
   conta: textoOpc,
+  posto: textoOpc,
+  codigo_beneficiario: textoOpc,
   apelido: textoObr("Apelido"),
   ativo: z.boolean().default(true),
 });
@@ -45,6 +47,10 @@ export const clienteSchema = z.object({
   cnpj: cnpjOpc,
   email: emailOpc,
   whatsapp: telefoneOpc,
+  cep: textoOpc.transform((v) => (v ? soDig(v) : null)).refine((v) => !v || v.length === 8, "CEP com 8 dígitos"),
+  endereco: textoOpc,
+  cidade: textoOpc,
+  uf: z.string().trim().length(2, "UF com 2 letras").transform((v) => v.toUpperCase()).nullish().or(z.literal("")).transform((v) => (v ? v : null)),
   observacoes: textoOpc,
   ativo: z.boolean().default(true),
 });

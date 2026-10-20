@@ -14,7 +14,7 @@ export default function ContasBancariasPage() {
     const supabase = createClient();
     let q = supabase
       .from("contas_bancarias")
-      .select("id, empresa_id, banco, agencia, conta, apelido, ativo, empresas(apelido)")
+      .select("id, empresa_id, banco, agencia, conta, posto, codigo_beneficiario, apelido, ativo, empresas(apelido)")
       .order("apelido");
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     const { data: linhas } = await q;

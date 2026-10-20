@@ -15,3 +15,6 @@ scripts/importacao/relatorios/
 supabase/.temp/
 supabase/.branches/
 .vercel
+
+# segredos das Edge Functions
+supabase/functions/.env

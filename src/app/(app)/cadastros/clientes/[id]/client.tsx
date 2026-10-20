@@ -15,7 +15,7 @@ import { formatData, formatPlaca, maskTelefone } from "@/lib/format";
 import { cnpjParaCliente } from "@/lib/cnpj";
 import { salvarCliente, salvarContato, excluirContato, salvarObra, excluirObra } from "../../actions";
 
-type Cliente = { id: string; razao_social: string; nome_fantasia: string | null; cnpj: string | null; email: string | null; whatsapp: string | null; observacoes: string | null; ativo: boolean };
+type Cliente = { id: string; razao_social: string; nome_fantasia: string | null; cnpj: string | null; email: string | null; whatsapp: string | null; cep: string | null; endereco: string | null; cidade: string | null; uf: string | null; observacoes: string | null; ativo: boolean };
 type Obra = { id: string; cliente_id: string; nome: string; codigo: string | null; cidade: string | null; uf: string | null; ativo: boolean };
 type Contato = { id: string; cliente_id: string; obra_id: string | null; obra: string | null; nome: string; email: string | null; whatsapp: string | null; recebe_fatura: boolean };
 type Contrato = { id: string; numero: string | null; status: string; valor_mensal: number; data_inicio: string; data_desmobilizacao: string | null; obra: string | null; placa: string; empresa: string };
@@ -56,6 +56,10 @@ export function FichaCliente({ cliente, obras, contatos, contratos, podeEditar, 
     { nome: "ativo", rotulo: "Ativo", tipo: "checkbox", col: 3 },
     { nome: "email", rotulo: "E-mail", tipo: "email", col: 3 },
     { nome: "whatsapp", rotulo: "WhatsApp", tipo: "telefone", col: 3 },
+    { nome: "cep", rotulo: "CEP", col: 2, placeholder: "00000-000" },
+    { nome: "endereco", rotulo: "Endereço", col: 4, ajuda: "Rua, número, bairro — sai no boleto" },
+    { nome: "cidade", rotulo: "Cidade", col: 4 },
+    { nome: "uf", rotulo: "UF", col: 2 },
     { nome: "observacoes", rotulo: "Observações", tipo: "textarea", col: 6 },
   ].map((c) => ({ ...c, desabilitado: !podeEditar })) as Campo<ClienteForm>[];
   const camposObra: Campo<ObraForm>[] = [
@@ -88,7 +92,7 @@ export function FichaCliente({ cliente, obras, contatos, contratos, podeEditar, 
         <TabsContent value="dados">
           <Card><CardContent className="pt-5">
             <Formulario<ClienteForm> campos={camposCliente} schema={clienteSchema}
-              valores={{ razao_social: cliente.razao_social, nome_fantasia: cliente.nome_fantasia, cnpj: cliente.cnpj, email: cliente.email, whatsapp: cliente.whatsapp, observacoes: cliente.observacoes, ativo: cliente.ativo }}
+              valores={{ razao_social: cliente.razao_social, nome_fantasia: cliente.nome_fantasia, cnpj: cliente.cnpj, email: cliente.email, whatsapp: cliente.whatsapp, cep: cliente.cep, endereco: cliente.endereco, cidade: cliente.cidade, uf: cliente.uf, observacoes: cliente.observacoes, ativo: cliente.ativo }}
               onSalvar={(v) => salvarCliente(cliente.id, v)} onSucesso={() => router.refresh()} />
           </CardContent></Card>
         </TabsContent>

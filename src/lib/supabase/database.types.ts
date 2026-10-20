@@ -97,6 +97,104 @@ export type Database = {
         }
         Relationships: []
       }
+      boletos: {
+        Row: {
+          ambiente: string
+          codigo_barras: string | null
+          conta_bancaria_id: string
+          created_at: string
+          created_by: string | null
+          data_pagamento: string | null
+          data_vencimento: string
+          empresa_id: string
+          id: string
+          linha_digitavel: string
+          medicao_id: string
+          nosso_numero: string
+          pix_copia_cola: string | null
+          recebimento_id: string | null
+          seu_numero: string
+          status: string
+          txid: string | null
+          updated_at: string
+          valor: number
+          valor_pago: number | null
+        }
+        Insert: {
+          ambiente: string
+          codigo_barras?: string | null
+          conta_bancaria_id: string
+          created_at?: string
+          created_by?: string | null
+          data_pagamento?: string | null
+          data_vencimento: string
+          empresa_id: string
+          id?: string
+          linha_digitavel: string
+          medicao_id: string
+          nosso_numero: string
+          pix_copia_cola?: string | null
+          recebimento_id?: string | null
+          seu_numero: string
+          status?: string
+          txid?: string | null
+          updated_at?: string
+          valor: number
+          valor_pago?: number | null
+        }
+        Update: {
+          ambiente?: string
+          codigo_barras?: string | null
+          conta_bancaria_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string
+          empresa_id?: string
+          id?: string
+          linha_digitavel?: string
+          medicao_id?: string
+          nosso_numero?: string
+          pix_copia_cola?: string | null
+          recebimento_id?: string | null
+          seu_numero?: string
+          status?: string
+          txid?: string | null
+          updated_at?: string
+          valor?: number
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boletos_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boletos_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boletos_medicao_id_fkey"
+            columns: ["medicao_id"]
+            isOneToOne: false
+            referencedRelation: "medicoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boletos_recebimento_id_fkey"
+            columns: ["recebimento_id"]
+            isOneToOne: false
+            referencedRelation: "recebimentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categorias_despesa: {
         Row: {
           ativo: boolean
@@ -130,40 +228,52 @@ export type Database = {
       clientes: {
         Row: {
           ativo: boolean
+          cep: string | null
+          cidade: string | null
           cnpj: string | null
           created_at: string
           created_by: string | null
           email: string | null
+          endereco: string | null
           id: string
           nome_fantasia: string | null
           observacoes: string | null
           razao_social: string
+          uf: string | null
           updated_at: string
           whatsapp: string | null
         }
         Insert: {
           ativo?: boolean
+          cep?: string | null
+          cidade?: string | null
           cnpj?: string | null
           created_at?: string
           created_by?: string | null
           email?: string | null
+          endereco?: string | null
           id?: string
           nome_fantasia?: string | null
           observacoes?: string | null
           razao_social: string
+          uf?: string | null
           updated_at?: string
           whatsapp?: string | null
         }
         Update: {
           ativo?: boolean
+          cep?: string | null
+          cidade?: string | null
           cnpj?: string | null
           created_at?: string
           created_by?: string | null
           email?: string | null
+          endereco?: string | null
           id?: string
           nome_fantasia?: string | null
           observacoes?: string | null
           razao_social?: string
+          uf?: string | null
           updated_at?: string
           whatsapp?: string | null
         }
@@ -202,11 +312,13 @@ export type Database = {
           apelido: string
           ativo: boolean
           banco: Database["public"]["Enums"]["banco"]
+          codigo_beneficiario: string | null
           conta: string | null
           created_at: string
           created_by: string | null
           empresa_id: string
           id: string
+          posto: string | null
           updated_at: string
         }
         Insert: {
@@ -214,11 +326,13 @@ export type Database = {
           apelido: string
           ativo?: boolean
           banco: Database["public"]["Enums"]["banco"]
+          codigo_beneficiario?: string | null
           conta?: string | null
           created_at?: string
           created_by?: string | null
           empresa_id: string
           id?: string
+          posto?: string | null
           updated_at?: string
         }
         Update: {
@@ -226,11 +340,13 @@ export type Database = {
           apelido?: string
           ativo?: boolean
           banco?: Database["public"]["Enums"]["banco"]
+          codigo_beneficiario?: string | null
           conta?: string | null
           created_at?: string
           created_by?: string | null
           empresa_id?: string
           id?: string
+          posto?: string | null
           updated_at?: string
         }
         Relationships: [

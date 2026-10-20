@@ -67,6 +67,50 @@ export async function buscarFaturasAbertas(busca: string) {
   });
 }
 
+// ---------- boletos (Edge Function sicredi-boleto) ----------
+export type Boleto = {
+  id: string; medicao_id: string; nosso_numero: string; linha_digitavel: string; pix_copia_cola: string | null; valor: number;
+  data_vencimento: string; status: "emitido" | "pago" | "baixado"; data_pagamento: string | null; ambiente: "sandbox" | "producao";
+};
+
+async function sicredi<T>(corpo: Record<string, unknown>): Promise<T> {
+  await exigirEscrita("receber");
+  const supabase = await createClient();
+  const { data, error } = await supabase.functions.invoke("sicredi-boleto", { body: corpo });
+  if (error) {
+    const resp = (error as { context?: Response }).context;
+    const msg = resp ? await resp.json().then((j) => j?.erro as string | undefined).catch(() => undefined) : undefined;
+    throw new Error(msg ?? "Não foi possível falar com o serviço de boletos. Verifique se a função sicredi-boleto está rodando.");
+  }
+  return data as T;
+}
+
+export async function emitirBoleto(medicaoId: string, contaId: string | null, vencimento: string) {
+  return executar(() => sicredi<Boleto>({ acao: "emitir", medicao_id: z.string().uuid().parse(medicaoId), conta_bancaria_id: contaId ?? undefined, vencimento }),
+    REVALIDAR, "Boleto gerado");
+}
+
+export async function cancelarBoleto(boletoId: string) {
+  return executar(() => sicredi({ acao: "baixar", boleto_id: z.string().uuid().parse(boletoId) }), REVALIDAR, "Boleto cancelado no banco");
+}
+
+/** Consulta no Sicredi os boletos em aberto; os pagos viram recebimento. */
+export async function atualizarBoletos(ids?: string[]) {
+  return executar(() => sicredi<{ consultados: number; pagos: number; baixados: number; erros: string[] }>({ acao: "atualizar", boleto_ids: ids }), REVALIDAR);
+}
+
+export async function baixarPdfBoleto(b: Pick<Boleto, "id" | "nosso_numero">) {
+  return executar(async () => {
+    const { pdf_base64 } = await sicredi<{ pdf_base64: string }>({ acao: "pdf", boleto_id: b.id });
+    const bytes = Uint8Array.from(atob(pdf_base64), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `boleto-${b.nosso_numero}.pdf` });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return null;
+  });
+}
+
 export async function listarRecebimentos(medicaoId: string) {
   return executar(async () => {
     const supabase = await createClient();

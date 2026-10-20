@@ -9,6 +9,7 @@ import { hojeSP } from "@/lib/calculos";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { ReceberCliente, type LinhaReceber, type ContatoCobranca } from "./client";
+import type { Boleto } from "./actions";
 
 export default function ReceberPage() {
   const { sessao } = useAuth();
@@ -53,24 +54,37 @@ export default function ReceberPage() {
       q.order(ordem, { ascending: !p.desc, nullsFirst: false }).range(p.de, p.ate),
       qa,
       supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("ativo", true).order("nome_fantasia"),
-      supabase.from("contas_bancarias").select("id, apelido, empresa_id").eq("ativo", true).order("apelido"),
+      supabase.from("contas_bancarias").select("id, apelido, empresa_id, banco, codigo_beneficiario").eq("ativo", true).order("apelido"),
     ]);
     const ids = [...new Set((linhas ?? []).map((m) => m.cliente_id!))];
-    const { data: contatos } = ids.length
-      ? await supabase.from("contatos").select("cliente_id, obra_id, nome, email, whatsapp").in("cliente_id", ids).eq("recebe_fatura", true)
-      : { data: [] };
+    const medicoes = (linhas ?? []).map((m) => m.id!);
+    const [{ data: contatos }, { data: boletos }] = await Promise.all([
+      ids.length
+        ? supabase.from("contatos").select("cliente_id, obra_id, nome, email, whatsapp").in("cliente_id", ids).eq("recebe_fatura", true)
+        : Promise.resolve({ data: [] }),
+      medicoes.length
+        ? supabase.from("boletos").select("id, medicao_id, nosso_numero, linha_digitavel, pix_copia_cola, valor, data_vencimento, status, data_pagamento, ambiente")
+          .in("medicao_id", medicoes).in("status", ["emitido", "pago"]).order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] }),
+    ]);
+    // o mais recente por medição (em aberto tem prioridade)
+    const boletoDe = new Map<string, Boleto>();
+    for (const b of (boletos ?? []) as Boleto[]) {
+      const atual = boletoDe.get(b.medicao_id);
+      if (!atual || (atual.status !== "emitido" && b.status === "emitido")) boletoDe.set(b.medicao_id, b);
+    }
 
     const resumo: Record<string, number> = { a_vencer: 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
     for (const a of aging ?? []) resumo[a.faixa!] = (resumo[a.faixa!] ?? 0) + Number(a.saldo);
 
     return {
-      linhas: (linhas ?? []) as LinhaReceber[],
+      linhas: ((linhas ?? []) as LinhaReceber[]).map((m) => ({ ...m, boleto: boletoDe.get(m.id) ?? null })),
       total: count ?? 0,
       pagina: p.pagina,
       tamanho: p.tamanho,
       aging: resumo,
       clientes: (clientes ?? []).map((c) => ({ value: c.id, label: c.nome_fantasia ?? c.razao_social })),
-      contas: (contas ?? []).map((c) => ({ value: c.id, label: c.apelido, empresa_id: c.empresa_id })),
+      contas: (contas ?? []).map((c) => ({ value: c.id, label: c.apelido, empresa_id: c.empresa_id, boleto: c.banco === "Sicredi" && !!c.codigo_beneficiario })),
       contatos: (contatos ?? []) as ContatoCobranca[],
       templates: { email: cfg.template_cobranca_email, whatsapp: cfg.template_cobranca_whatsapp },
       podeEditar: podeEscrever(s.perfil, "receber"),

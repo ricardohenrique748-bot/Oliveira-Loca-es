@@ -18,7 +18,7 @@ export default function ClientesPage() {
     const supabase = createClient();
     let q = supabase
       .from("clientes")
-      .select("id, razao_social, nome_fantasia, cnpj, email, whatsapp, observacoes, ativo, obras(id), contatos(id)", { count: "exact" });
+      .select("id, razao_social, nome_fantasia, cnpj, email, whatsapp, cep, endereco, cidade, uf, observacoes, ativo, obras(id), contatos(id)", { count: "exact" });
     if (p.q) q = q.or(`razao_social.ilike.${termoBusca(p.q)},nome_fantasia.ilike.${termoBusca(p.q)},cnpj.ilike.${termoBusca(p.q)}`);
     if (p.get("situacao") === "inativos") q = q.eq("ativo", false);
     else if (p.get("situacao") !== "todos") q = q.eq("ativo", true);
