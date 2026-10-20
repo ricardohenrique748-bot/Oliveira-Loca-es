@@ -1,8 +1,9 @@
 "use client";
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Ban, CalendarPlus, CheckCheck, FileSpreadsheet, FileText, Loader2, Save, Undo2, Wand2 } from "lucide-react";
+import { Ban, CalendarPlus, CheckCheck, Eye, FileDown, FileSpreadsheet, FileText, Loader2, Save, Undo2, Wand2 } from "lucide-react";
 import { Badge, Card, Checkbox, Label, Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ export type LinhaMedicao = {
   data_emissao: string | null; data_vencimento: string | null; status: string; status_exibicao: string; observacoes: string | null; final: boolean;
   cliente_id: string; cliente_fantasia: string; obra_nome: string | null; placa: string; proprietario: string; prazo_pagamento_dias: number;
   dia_corte_inicio: number; valor_recebido: number; repasse_liquido: number | null; margem: number;
+  contrato_numero: string | number | null; cliente_nome: string | null; veiculo_tipo: string | null; saldo: number;
 };
 
 type Editavel = Pick<LinhaMedicao, "dias" | "acrescimos" | "descontos" | "numero_nf" | "data_emissao" | "data_vencimento" | "observacoes">;
@@ -57,6 +59,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
   const [gerarAberto, setGerarAberto] = React.useState(false);
   const [faturarAberto, setFaturarAberto] = React.useState(false);
   const [cancelarAberto, setCancelarAberto] = React.useState(false);
+  const [detalhe, setDetalhe] = React.useState<LinhaMedicao | null>(null);
   const tabela = React.useRef<HTMLTableElement>(null);
 
   React.useEffect(() => { setEdicoes({}); setSelecao(new Set()); }, [linhas]);
@@ -203,11 +206,12 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
               <TableHead className="w-36">Vencimento</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="min-w-[10rem]">Observações</TableHead>
+              <TableHead className="w-10"><span className="sr-only">Abrir</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {linhas.length === 0 && (
-              <TableRow><TableCell colSpan={13} className="h-24 text-center text-muted-foreground">
+              <TableRow><TableCell colSpan={14}className="h-24 text-center text-muted-foreground">
                 Nenhuma medição {competencia === "todas" ? "pendente" : `em ${formatCompetencia(competencia)}`}. {podeEditar && "Use “Gerar medições do período”."}
               </TableCell></TableRow>
             )}
@@ -218,8 +222,8 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
               return (
                 <TableRow key={m.id} data-state={selecao.has(m.id) ? "selected" : undefined} className={cn(mudou && "bg-accent/50", m.status_exibicao === "vencido" && "border-l-2 border-l-status-critico")}>
                   <TableCell><Checkbox aria-label={`Selecionar ${m.placa}`} checked={selecao.has(m.id)} onCheckedChange={() => alternar(m.id)} /></TableCell>
-                  <TableCell>
-                    <span className="font-mono font-semibold">{formatPlaca(m.placa)}</span>
+                  <TableCell className="cursor-pointer" onClick={() => setDetalhe(m)} title="Abrir medição">
+                    <span className="font-mono font-semibold hover:underline">{formatPlaca(m.placa)}</span>
                     {m.proprietario === "locador" && <Badge variant="info" className="ml-1">Sub</Badge>}
                     {m.final && <Badge variant="neutro" className="ml-1">Final</Badge>}
                     <p className="max-w-[14rem] truncate text-xs text-muted-foreground">{m.empresa_apelido} · {m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""}</p>
@@ -238,6 +242,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                   <TableCell><Input data-linha={i} data-col="data_vencimento" aria-label="Vencimento" type="date" className="h-8 px-2" disabled={!ed} value={valor(m, "data_vencimento") ?? ""} onChange={(e) => editar(m, "data_vencimento", e.target.value || null)} /></TableCell>
                   <TableCell><StatusBadge status={m.status_exibicao} /></TableCell>
                   <TableCell><Input data-linha={i} data-col="observacoes" aria-label="Observações" className="h-8 px-2" disabled={!podeEditar || m.status === "cancelado"} value={valor(m, "observacoes") ?? ""} onChange={(e) => editar(m, "observacoes", e.target.value || null)} /></TableCell>
+                  <TableCell><Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Abrir medição ${m.placa}`} onClick={() => setDetalhe(m)}><Eye /></Button></TableCell>
                 </TableRow>
               );
             })}
@@ -247,7 +252,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
               <TableRow>
                 <TableCell colSpan={7}>{linhas.length} medições{total > linhas.length ? ` (de ${total})` : ""}</TableCell>
                 <TableCell className="text-right"><Moeda valor={totalValor} /></TableCell>
-                <TableCell colSpan={5} />
+                <TableCell colSpan={6} />
               </TableRow>
             </TableFooter>
           )}
@@ -276,7 +281,10 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                 <label className="space-y-1"><span className="text-xs text-muted-foreground">NF</span><Input className="h-9" disabled={!ed} value={valor(m, "numero_nf") ?? ""} onChange={(e) => editar(m, "numero_nf", e.target.value || null)} /></label>
                 <label className="space-y-1"><span className="text-xs text-muted-foreground">Emissão</span><Input className="h-9" type="date" disabled={!ed} value={valor(m, "data_emissao") ?? ""} onChange={(e) => editar(m, "data_emissao", e.target.value || null)} /></label>
               </div>
-              <p className="text-xs text-muted-foreground">Vencimento: {formatData(valor(m, "data_vencimento"))}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Vencimento: {formatData(valor(m, "data_vencimento"))}</p>
+                <Button size="xs" variant="outline" onClick={() => setDetalhe(m)}><Eye /> Abrir</Button>
+              </div>
             </Card>
           );
         })}
@@ -290,6 +298,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
         </div>
       )}
 
+      <DialogoDetalhe medicao={detalhe} baseDias={baseDias} onOpenChange={(v) => !v && setDetalhe(null)} />
       <DialogoGerar aberto={gerarAberto} onOpenChange={setGerarAberto} competenciaInicial={competencia === "todas" ? competenciaPadrao : competencia}
         onGerado={(comp) => { url.set({ comp, status: null }); router.refresh(); }} />
       <DialogoFaturar aberto={faturarAberto} onOpenChange={setFaturarAberto} selecionados={selecionados}
@@ -298,6 +307,102 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
         descricao="Medições canceladas saem do faturamento e o repasse vinculado (se houver e não pago) também é cancelado."
         onConfirmar={async () => { const r = await rodarAcao(cancelarMedicoes(selecionados.map((s) => s.id))); if (r.ok) router.refresh(); }} />
     </div>
+  );
+}
+
+const brl = (v: number | null | undefined) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** PDF individual da medição (boletim para enviar ao cliente). */
+async function pdfMedicao(m: LinhaMedicao, baseDias: number) {
+  const linha = { descricao: `Locação ${m.veiculo_tipo ? `${m.veiculo_tipo} ` : ""}placa ${formatPlaca(m.placa)}`, ...m };
+  const colunas: ColunaExport<typeof linha>[] = [
+    { titulo: "Descrição", valor: (l) => l.descricao },
+    { titulo: "Período", valor: (l) => formatPeriodo(l.periodo_inicio, l.periodo_fim) },
+    { titulo: "Dias", valor: (l) => l.dias, tipo: "numero" },
+    { titulo: "Valor mensal", valor: (l) => l.valor_mensal, tipo: "moeda" },
+    { titulo: "Valor base", valor: (l) => l.valor_base, tipo: "moeda" },
+    { titulo: "Acréscimos", valor: (l) => l.acrescimos, tipo: "moeda" },
+    { titulo: "Descontos", valor: (l) => l.descontos, tipo: "moeda" },
+    { titulo: "Total", valor: (l) => l.valor_final, tipo: "moeda" },
+  ];
+  const resumo: [string, string][] = [
+    ["Empresa", m.empresa_apelido],
+    ["Cliente", m.cliente_nome && m.cliente_nome !== m.cliente_fantasia ? `${m.cliente_fantasia} (${m.cliente_nome})` : m.cliente_fantasia],
+    ...(m.obra_nome ? [["Obra", m.obra_nome] as [string, string]] : []),
+    ...(m.contrato_numero != null ? [["Contrato", String(m.contrato_numero)] as [string, string]] : []),
+    ["Placa", formatPlaca(m.placa)],
+    ["Competência", formatCompetencia(m.competencia.slice(0, 7), true)],
+    ["Período", `${formatPeriodo(m.periodo_inicio, m.periodo_fim)} (${m.dias} dias)`],
+    ["NF", m.numero_nf ?? "—"],
+    ["Emissão / vencimento", `${formatData(m.data_emissao)} / ${formatData(m.data_vencimento)}`],
+  ];
+  await exportarPDF(`medicao_${m.placa}_${m.competencia.slice(0, 7)}`, "Boletim de medição", colunas, [linha], {
+    resumo,
+    totais: ["Total da medição", "", "", "", "", "", "", m.valor_final],
+    rodape: [
+      `Cálculo: (valor mensal ÷ ${baseDias}) × ${m.dias} dias = ${brl(m.valor_base)}; + acréscimos ${brl(m.acrescimos)} − descontos ${brl(m.descontos)} = ${brl(m.valor_final)}.`,
+      ...(m.observacoes ? [`Observações: ${m.observacoes}`] : []),
+      "", "", "",
+      "______________________________________          ______________________________________",
+      "Oliveira Locações                                                         De acordo — cliente",
+    ],
+  });
+}
+
+function DialogoDetalhe({ medicao: m, baseDias, onOpenChange }: { medicao: LinhaMedicao | null; baseDias: number; onOpenChange: (v: boolean) => void }) {
+  const [gerando, setGerando] = React.useState(false);
+  const item = (rotulo: string, valor: React.ReactNode) => (
+    <div className="space-y-0.5"><p className="text-xs text-muted-foreground">{rotulo}</p><div className="text-sm font-medium">{valor ?? "—"}</div></div>
+  );
+  return (
+    <Dialog open={!!m} onOpenChange={onOpenChange}>
+      <DialogContent tamanho="lg">
+        {m && <>
+          <DialogHeader>
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              Medição <span className="font-mono">{formatPlaca(m.placa)}</span> <StatusBadge status={m.status_exibicao} />
+              {m.final && <Badge variant="neutro">Final</Badge>}
+            </DialogTitle>
+            <DialogDescription>{m.empresa_apelido} · {m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""} · {formatCompetencia(m.competencia.slice(0, 7), true)}</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {item("Cliente", m.cliente_nome ?? m.cliente_fantasia)}
+            {item("Obra", m.obra_nome)}
+            {item("Contrato", <Link className="underline" href={`/contratos/${m.contrato_id}`}>{m.contrato_numero ?? "Abrir contrato"}</Link>)}
+            {item("Período", `${formatPeriodo(m.periodo_inicio, m.periodo_fim)} (${m.dias} dias)`)}
+            {item("Veículo", `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)}
+            {item("Prazo de pagamento", `${m.prazo_pagamento_dias} dias`)}
+          </div>
+          <div className="rounded-md border">
+            <Table>
+              <TableBody>
+                <TableRow><TableCell>Valor mensal</TableCell><TableCell className="text-right"><Moeda valor={m.valor_mensal} /></TableCell></TableRow>
+                <TableRow><TableCell>Valor base (mensal ÷ {baseDias} × {m.dias} dias)</TableCell><TableCell className="text-right"><Moeda valor={m.valor_base} /></TableCell></TableRow>
+                <TableRow><TableCell>Acréscimos</TableCell><TableCell className="text-right"><Moeda valor={m.acrescimos} /></TableCell></TableRow>
+                <TableRow><TableCell>Descontos</TableCell><TableCell className="text-right">− <Moeda valor={m.descontos} /></TableCell></TableRow>
+              </TableBody>
+              <TableFooter><TableRow><TableCell>Total da medição</TableCell><TableCell className="text-right"><Moeda valor={m.valor_final} /></TableCell></TableRow></TableFooter>
+            </Table>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {item("NF", m.numero_nf)}
+            {item("Emissão", formatData(m.data_emissao))}
+            {item("Vencimento", formatData(m.data_vencimento))}
+            {item("Recebido", <Moeda valor={m.valor_recebido} />)}
+            {item("Saldo a receber", <Moeda valor={m.saldo} />)}
+            {m.repasse_liquido != null && item("Repasse líquido / margem", <><Moeda valor={m.repasse_liquido} /> / <Moeda valor={m.margem} /></>)}
+          </div>
+          {m.observacoes && <div className="rounded-md bg-muted p-3 text-sm"><p className="text-xs text-muted-foreground">Observações</p>{m.observacoes}</div>}
+          <p className="text-xs text-muted-foreground">Valores salvos. Edições não salvas na grade não aparecem aqui nem no PDF.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
+            <Button disabled={gerando} onClick={async () => { setGerando(true); try { await pdfMedicao(m, baseDias); } finally { setGerando(false); } }}>
+              {gerando ? <Loader2 className="animate-spin" /> : <FileDown />} Gerar PDF
+            </Button>
+          </DialogFooter>
+        </>}
+      </DialogContent>
+    </Dialog>
   );
 }
 

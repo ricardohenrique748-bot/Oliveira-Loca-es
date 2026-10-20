@@ -24,7 +24,8 @@ export default function MedicoesPage() {
 
     let q = supabase.from("medicoes_v").select(`id, contrato_id, empresa_id, empresa_apelido, periodo_inicio, periodo_fim, competencia, dias, valor_mensal,
       valor_base, acrescimos, descontos, valor_final, numero_nf, data_emissao, data_vencimento, status, status_exibicao, observacoes, final,
-      cliente_id, cliente_fantasia, obra_nome, placa, proprietario, prazo_pagamento_dias, dia_corte_inicio, valor_recebido, repasse_liquido, margem`, { count: "exact" });
+      cliente_id, cliente_fantasia, obra_nome, placa, proprietario, prazo_pagamento_dias, dia_corte_inicio, valor_recebido, repasse_liquido, margem,
+      contrato_numero, cliente_nome, veiculo_tipo, saldo`, { count: "exact" });
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     if (comp !== "todas") q = q.eq("competencia", `${comp}-01`);
     const status = p.get("status");
