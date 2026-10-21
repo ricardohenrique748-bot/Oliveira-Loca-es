@@ -6,6 +6,9 @@ import { Capacitor } from "@capacitor/core";
 
 export const MODO_COMERCIAL = import.meta.env.VITE_APP_MODO === "comercial";
 
+/** demonstração para o cliente (`npm run demo`): HTML único, banco embutido no navegador e sem login */
+export const MODO_DEMO = import.meta.env.VITE_APP_MODO === "demo";
+
 /** rodando dentro do app Android (e não no navegador) */
 export const nativo = () => Capacitor.isNativePlatform();
 

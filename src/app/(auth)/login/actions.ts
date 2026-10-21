@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import { COOKIE_LEMBRAR } from "@/lib/supabase/lembrar";
-import { INICIO } from "@/lib/plataforma";
+import { INICIO, MODO_DEMO } from "@/lib/plataforma";
 
 export interface EstadoLogin {
   erro?: string;
@@ -40,6 +40,6 @@ export async function sair() {
   const supabase = createClient();
   await supabase.auth.signOut();
   if (typeof window !== "undefined") {
-    window.location.href = "/login";
+    window.location.href = MODO_DEMO ? "#/login" : "/login";
   }
 }

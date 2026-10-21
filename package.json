@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "app:build": "vite build --mode comercial --outDir dist-comercial && cap sync android",
     "app:apk": "npm run app:build && cd android && gradlew assembleDebug",
+    "demo": "tsx scripts/demo/gerar.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

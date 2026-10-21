@@ -6,6 +6,7 @@ import {
   useSearchParams as useRouterSearchParams,
   type LinkProps as RouterLinkProps,
 } from "react-router-dom";
+import { MODO_DEMO } from "@/lib/plataforma";
 
 export interface LinkProps extends Omit<RouterLinkProps, "to"> {
   href?: string;
@@ -51,7 +52,7 @@ export function useSearchParams() {
 
 export function redirect(to: string) {
   if (typeof window !== "undefined") {
-    window.location.href = to;
+    window.location.href = MODO_DEMO && to.startsWith("/") ? `#${to}` : to;
   }
 }
 
