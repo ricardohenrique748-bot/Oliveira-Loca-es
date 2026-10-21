@@ -52,7 +52,7 @@ export async function salvarUsuario(userId: string | null, dados: unknown) {
     const u = usuarioSchema.parse(dados);
     const senhaFinal = (!userId && (!u.senha || u.senha.trim() === "")) ? "123456" : (u.senha || null);
 
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: id, error } = await supabase.rpc("fn_admin_salvar_usuario" as any, {
       p_user_id: userId,
       p_email: u.email,
