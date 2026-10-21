@@ -123,10 +123,12 @@ export function ConfiguracoesCliente({ parametros, usuarios, erroUsuarios, empre
 
 function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario: Usuario | "novo" | null; empresas: Opcao[]; onOpenChange: (v: boolean) => void; onFeito: () => void }) {
   const u = usuario === "novo" ? null : usuario;
-  const [f, setF] = React.useState({ nome: "", email: "", senha: "", perfil: "consulta" as Perfil, ativo: true, empresas: [] as string[] });
+  const [f, setF] = React.useState({ nome: "", email: "", senha: "123456", perfil: "consulta" as Perfil, ativo: true, empresas: [] as string[] });
   const [salvando, setSalvando] = React.useState(false);
   React.useEffect(() => {
-    setF(u ? { nome: u.nome, email: u.email, senha: "", perfil: u.perfil, ativo: u.ativo, empresas: u.empresas } : { nome: "", email: "", senha: "", perfil: "consulta", ativo: true, empresas: empresas.map((e) => e.value) });
+    setF(u 
+      ? { nome: u.nome, email: u.email, senha: "", perfil: u.perfil, ativo: u.ativo, empresas: u.empresas } 
+      : { nome: "", email: "", senha: "123456", perfil: "consulta", ativo: true, empresas: empresas.map((e) => e.value) });
   }, [usuario, u, empresas]);
   return (
     <Dialog open={!!usuario} onOpenChange={onOpenChange}>
@@ -135,7 +137,11 @@ function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario:
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5"><Label htmlFor="u-nome">Nome</Label><Input id="u-nome" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} /></div>
           <div className="space-y-1.5"><Label htmlFor="u-email">E-mail</Label><Input id="u-email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
-          <div className="space-y-1.5"><Label htmlFor="u-senha">{u ? "Nova senha (opcional)" : "Senha inicial"}</Label><Input id="u-senha" type="password" autoComplete="new-password" value={f.senha} onChange={(e) => setF({ ...f, senha: e.target.value })} /></div>
+          <div className="space-y-1.5">
+            <Label htmlFor="u-senha">{u ? "Nova senha (opcional)" : "Senha inicial temporária"}</Label>
+            <Input id="u-senha" type="text" value={f.senha} placeholder={u ? "Manter a mesma" : "123456"} onChange={(e) => setF({ ...f, senha: e.target.value })} />
+            {!u && <p className="text-[11px] text-muted-foreground">Senha temporária: <strong>123456</strong> (para o usuário trocar após entrar).</p>}
+          </div>
           <div className="space-y-1.5"><Label>Perfil</Label><SelectSimples value={f.perfil} onChange={(v) => setF({ ...f, perfil: (v as Perfil) ?? "consulta" })} opcoes={PERFIS.map((x) => ({ value: x.valor, label: x.rotulo }))} /></div>
           <fieldset className="space-y-2 sm:col-span-2">
             <legend className="text-sm font-medium">Empresas</legend>
