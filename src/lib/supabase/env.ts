@@ -7,19 +7,25 @@ export function supabaseEnv(): { url: string; anonKey: string } | null {
   const metaEnv = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {} as Record<string, string>;
   const procEnv = typeof process !== "undefined" && process.env ? process.env : {} as Record<string, string>;
 
-  const url = (
+  let url = (
     metaEnv.VITE_SUPABASE_URL ||
     metaEnv.NEXT_PUBLIC_SUPABASE_URL ||
     procEnv.VITE_SUPABASE_URL ||
     procEnv.NEXT_PUBLIC_SUPABASE_URL
   )?.trim();
 
-  const anonKey = (
+  let anonKey = (
     metaEnv.VITE_SUPABASE_ANON_KEY ||
     metaEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     procEnv.VITE_SUPABASE_ANON_KEY ||
     procEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY
   )?.trim();
+
+  // Se não estiver configurado ou apontar para o projeto legado do Supabase, usa o novo projeto da nuvem
+  if (!url || !anonKey || url.includes("yvloohupcjaczotbhxos")) {
+    url = "https://hbhuofkpjcnmqnbuefrz.supabase.co";
+    anonKey = "sb_publishable_BwcOrx8hekJrl8-pJ1HsrA_miohLgiP";
+  }
 
   if (!url || !anonKey || !/^https?:\/\//.test(url)) return null;
   return { url, anonKey };
