@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Ban, CalendarPlus, CheckCheck, Eye, FileDown, FileSpreadsheet, FileText, History, Loader2, Plus, Save, Undo2, Wand2 } from "lucide-react";
+import { Ban, CalendarPlus, CheckCheck, Eye, FileDown, FileSpreadsheet, FileText, History, Loader2, Plus, Save, Trash2, Undo2, Wand2 } from "lucide-react";
 import { Badge, Card, Checkbox, Label, Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,7 @@ import { baixarFaturaPDF } from "@/lib/documentos/baixar";
 import { descricaoPadrao, type DadosFatura } from "@/lib/documentos/fatura";
 import { cn } from "@/lib/utils";
 import {
-  cancelarMedicoes, dadosLembrete, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarMedicoes, voltarParaAFaturar,
+  cancelarMedicoes, dadosLembrete, excluirCanceladas, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarMedicoes, voltarParaAFaturar,
   type EventoHistorico, type LinhaLembrete, type LinhaPrevia,
 } from "./actions";
 import { DialogoLancarMedicao } from "./lancar";
@@ -67,6 +67,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
   // faturas no diálogo de faturar: as selecionadas ou a da linha clicada
   const [faturando, setFaturando] = React.useState<LinhaMedicao[] | null>(null);
   const [cancelarAberto, setCancelarAberto] = React.useState(false);
+  const [excluirAberto, setExcluirAberto] = React.useState(false);
   const [detalhe, setDetalhe] = React.useState<LinhaMedicao | null>(null);
   const [lancarAberto, setLancarAberto] = React.useState(false);
   const tabela = React.useRef<HTMLTableElement>(null);
@@ -133,6 +134,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
   };
 
   const selecionados = linhas.filter((l) => selecao.has(l.id));
+  const canceladasSel = selecionados.filter((l) => l.status === "cancelado");
   const todos = linhas.length > 0 && selecao.size === linhas.length;
   const alternar = (id: string) => setSelecao((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
@@ -153,7 +155,8 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
   };
 
   const editavel = (m: LinhaMedicao) => podeEditar && (m.status === "a_faturar" || m.status === "faturado");
-  const totalValor = somar(linhas.map((m) => calc(m).valorFinal));
+  // canceladas aparecem no histórico, mas não entram no total
+  const totalValor = somar(linhas.filter((m) => m.status !== "cancelado").map((m) => calc(m).valorFinal));
 
   return (
     <div className="space-y-4">
@@ -190,6 +193,9 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
             <Button size="xs" onClick={() => setFaturando(selecionados)}><CheckCheck /> Marcar como faturado</Button>
             <Button size="xs" variant="outline" onClick={async () => { const r = await rodarAcao(voltarParaAFaturar(selecionados.map((s) => s.id))); if (r.ok) router.refresh(); }}><Undo2 /> Voltar p/ a faturar</Button>
             <Button size="xs" variant="outline" onClick={() => setCancelarAberto(true)}><Ban /> Cancelar</Button>
+            {canceladasSel.length > 0 && (
+              <Button size="xs" variant="destructive" onClick={() => setExcluirAberto(true)}><Trash2 /> Excluir canceladas ({canceladasSel.length})</Button>
+            )}
           </div>
         )}
         <div className="ml-auto flex flex-wrap gap-2">
@@ -340,6 +346,9 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
       <Confirmar aberto={cancelarAberto} onOpenChange={setCancelarAberto} titulo={`Cancelar ${selecionados.length} fatura(s)?`} destrutivo rotulo="Cancelar faturas"
         descricao="Faturas canceladas saem do faturamento e o repasse vinculado (se houver e não pago) também é cancelado."
         onConfirmar={async () => { const r = await rodarAcao(cancelarMedicoes(selecionados.map((s) => s.id))); if (r.ok) router.refresh(); }} />
+      <Confirmar aberto={excluirAberto} onOpenChange={setExcluirAberto} titulo={`Excluir ${canceladasSel.length} fatura(s) cancelada(s)?`} destrutivo rotulo="Excluir de vez"
+        descricao="A fatura some do sistema, junto com boletos, recebimentos e repasses ligados a ela. Não dá para desfazer. Só as canceladas da seleção são excluídas."
+        onConfirmar={async () => { const r = await rodarAcao(excluirCanceladas(canceladasSel.map((s) => s.id))); if (r.ok) router.refresh(); }} />
     </div>
   );
 }

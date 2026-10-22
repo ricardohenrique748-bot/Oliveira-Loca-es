@@ -202,6 +202,25 @@ export async function cancelarMedicoes(ids: unknown) {
   }, REVALIDAR, "Faturas canceladas");
 }
 
+/** Apaga de vez faturas já canceladas (com boletos, recebimentos e repasses delas). Repasse pago bloqueia. */
+export async function excluirCanceladas(ids: unknown) {
+  return executar(async () => {
+    await exigirEscrita("medicoes");
+    const lista = z.array(z.string().uuid()).min(1).parse(ids);
+    const supabase = await createClient();
+    const canceladas = (checar(await supabase.from("medicoes").select("id").in("id", lista).eq("status", "cancelado")) ?? []).map((m) => m.id);
+    if (!canceladas.length) throw new Error("Só faturas canceladas podem ser excluídas");
+    const { data: pagos } = await supabase.from("repasses").select("id").in("medicao_id", canceladas).eq("status", "pago").limit(1);
+    if (pagos?.length) throw new Error("Há repasse já pago ligado a uma dessas faturas: estorne o repasse antes de excluir");
+    // filhos primeiro: se algo falhar no meio, a fatura continua inteira
+    checar(await supabase.from("boletos").delete().in("medicao_id", canceladas));
+    checar(await supabase.from("recebimentos").delete().in("medicao_id", canceladas));
+    checar(await supabase.from("repasses").delete().in("medicao_id", canceladas));
+    checar(await supabase.from("medicoes").delete().in("id", canceladas));
+    return { excluidas: canceladas.length };
+  }, REVALIDAR, "Faturas canceladas excluídas");
+}
+
 export interface EventoHistorico {
   quando: string;
   usuario: string | null;
