@@ -17,7 +17,9 @@ async function gerar(montar: () => Promise<Parameters<typeof baixarDocumentoPDF>
     await baixarDocumentoPDF(d);
   } catch (e) {
     console.error(e);
-    toast.error("Não foi possível gerar o PDF");
+    // mostra o motivo: sem ele não dá para saber se foi o banco (consulta) ou o desenho do PDF
+    const motivo = e instanceof Error ? e.message : (e as { message?: string })?.message;
+    toast.error(`Não foi possível gerar o PDF${motivo ? `: ${motivo}` : ""}`);
   }
 }
 
