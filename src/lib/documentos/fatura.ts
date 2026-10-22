@@ -4,7 +4,7 @@
  */
 import { formatBRL, formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { ROTULOS } from "@/lib/schemas/cadastros";
-import { FORMAS_FATURA, type FormaFatura } from "@/lib/schemas/operacao";
+import { FORMAS_FATURA, type FormaFatura, type ItemAcrescimo } from "@/lib/schemas/operacao";
 import type { Bloco, Documento } from "./pdf";
 import { enderecoCompleto, rodapeEmpresa, type ClienteDoc, type EmpresaDoc } from "./proposta";
 
@@ -13,12 +13,12 @@ export interface DadosFatura {
   periodo_inicio: string; periodo_fim: string; dias: number;
   valor_mensal: number; valor_base: number; acrescimos: number; descontos: number; valor_final: number;
   numero_nf: string | null; data_emissao: string | null; data_vencimento: string | null;
-  forma_pagamento: FormaFatura; descricao: string | null; observacoes: string | null;
+  forma_pagamento: FormaFatura; acrescimos_itens: ItemAcrescimo[]; observacoes: string | null;
   placa: string; veiculo_tipo: keyof typeof ROTULOS.tipoVeiculo | null; obra: string | null;
   empresa: EmpresaDoc; cliente: ClienteDoc;
 }
 
-/** Descrição padrão quando o usuário não escreveu nenhuma: "Locação de munck placa CVP-0414" */
+/** "Locação de munck placa CVP-0414" */
 export function descricaoPadrao(d: Pick<DadosFatura, "veiculo_tipo" | "placa">): string {
   const tipo = d.veiculo_tipo ? ROTULOS.tipoVeiculo[d.veiculo_tipo]?.toLowerCase() : null;
   return `Locação ${tipo ? `de ${tipo} ` : ""}placa ${formatPlaca(d.placa)}`;
@@ -30,9 +30,11 @@ export function montarFatura(d: DadosFatura): Documento {
   const qtd = `${d.dias} ${diaria ? (d.dias === 1 ? "diária" : "diárias") : d.dias === 1 ? "dia" : "dias"}`;
 
   const itens: string[][] = [
-    [d.descricao?.trim() || descricaoPadrao(d), formatPeriodo(d.periodo_inicio, d.periodo_fim), qtd, formatBRL(d.valor_mensal), formatBRL(d.valor_base)],
+    [descricaoPadrao(d), formatPeriodo(d.periodo_inicio, d.periodo_fim), qtd, formatBRL(d.valor_mensal), formatBRL(d.valor_base)],
   ];
-  if (d.acrescimos > 0) itens.push(["Acréscimos", "", "", "", formatBRL(d.acrescimos)]);
+  // cada acréscimo discriminado; fatura antiga só com o total sai numa linha "Acréscimos"
+  const acrescimos = d.acrescimos_itens.length ? d.acrescimos_itens : d.acrescimos > 0 ? [{ descricao: "Acréscimos", valor: d.acrescimos }] : [];
+  for (const a of acrescimos) itens.push([a.descricao, "", "", "", formatBRL(a.valor)]);
   if (d.descontos > 0) itens.push(["Descontos", "", "", "", `- ${formatBRL(d.descontos)}`]);
 
   const calculo = diaria

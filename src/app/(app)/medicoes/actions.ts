@@ -4,7 +4,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { edicaoMedicaoSchema, lancamentoMedicaoSchema } from "@/lib/schemas/operacao";
-import { diffDias, minData, periodoContendo, proximoPeriodo, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
+import { diffDias, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
 
 const REVALIDAR = ["/medicoes", "/receber", "/repasses", "/dashboard"];
 const competencia = z.string().regex(/^\d{4}-\d{2}$/, "Competência inválida");
@@ -138,6 +138,7 @@ export async function lancarMedicao(dados: unknown) {
     const nova = checar(await supabase.from("medicoes").insert({
       contrato_id: c.id, empresa_id: c.empresa_id, periodo_inicio: d.periodo_inicio, periodo_fim: d.periodo_fim, dias: d.dias,
       valor_mensal: c.valor_mensal, acrescimos: d.acrescimos, descontos: d.descontos, observacoes: d.observacoes ?? null,
+      acrescimos_itens: d.acrescimos > 0 ? [{ descricao: "Acréscimos", valor: d.acrescimos }] : [],
       forma_pagamento: d.forma_pagamento,
       final: !!c.data_desmobilizacao && c.data_desmobilizacao >= d.periodo_inicio && c.data_desmobilizacao <= d.periodo_fim,
     }).select("id").single());
@@ -156,6 +157,7 @@ export async function salvarMedicoes(edicoes: unknown) {
       if (!atual) throw new Error("Fatura não encontrada");
       if (atual.status === "cancelado" || atual.status === "recebido") throw new Error("Faturas recebidas ou canceladas não podem ser editadas");
       if (atual.status !== "a_faturar" && campos.dias !== undefined) delete campos.dias;
+      if (campos.acrescimos_itens) campos.acrescimos = somar(campos.acrescimos_itens.map((i) => i.valor));
       checar(await supabase.from("medicoes").update(campos).eq("id", id));
     }
     return { salvas: lista.length };

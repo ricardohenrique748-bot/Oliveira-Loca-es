@@ -53,9 +53,13 @@ export const edicaoMedicaoSchema = z.object({
   data_vencimento: dataOpc.optional(),
   observacoes: z.string().trim().max(1000).nullable().optional(),
   forma_pagamento: z.enum(["boleto", "pix"]).optional(),
-  /** texto livre (várias linhas) da coluna Descrição na fatura em PDF */
-  descricao: z.string().trim().max(2000).nullable().optional(),
+  /** acréscimos discriminados; quando vem, o total (acrescimos) é a soma deles */
+  acrescimos_itens: z.array(z.object({
+    descricao: z.string().trim().min(1, "Descreva o acréscimo").max(200),
+    valor: z.number().positive("Valor do acréscimo deve ser maior que zero"),
+  })).max(50).optional(),
 });
+export type ItemAcrescimo = NonNullable<z.infer<typeof edicaoMedicaoSchema>["acrescimos_itens"]>[number];
 export type EdicaoMedicao = z.infer<typeof edicaoMedicaoSchema>;
 
 /** Condição de pagamento da fatura */

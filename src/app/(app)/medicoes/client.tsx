@@ -15,11 +15,9 @@ import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/ur
 import { baseCobranca, calcularValorMedicao, calcularVencimento, hojeSP, somar, type TipoCobranca } from "@/lib/calculos";
 import { formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
-import { FORMAS_FATURA, type FormaFatura } from "@/lib/schemas/operacao";
+import { FORMAS_FATURA, type FormaFatura, type ItemAcrescimo } from "@/lib/schemas/operacao";
 import { SelectSimples } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/input";
 import { baixarFaturaPDF } from "@/lib/documentos/baixar";
-import { descricaoPadrao, type DadosFatura } from "@/lib/documentos/fatura";
 import { cn } from "@/lib/utils";
 import {
   cancelarMedicoes, dadosLembrete, excluirCanceladas, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarMedicoes, voltarParaAFaturar,
@@ -34,7 +32,7 @@ export type LinhaMedicao = {
   cliente_id: string; cliente_fantasia: string; obra_nome: string | null; placa: string; proprietario: string; prazo_pagamento_dias: number;
   dia_corte_inicio: number; valor_recebido: number; repasse_liquido: number | null; margem: number;
   contrato_numero: string | number | null; cliente_nome: string | null; veiculo_tipo: string | null; saldo: number;
-  tipo_cobranca: TipoCobranca | null; forma_pagamento: string | null; descricao: string | null;
+  tipo_cobranca: TipoCobranca | null; forma_pagamento: string | null; acrescimos_itens: ItemAcrescimo[] | null;
 };
 
 type Editavel = Pick<LinhaMedicao, "dias" | "valor_mensal" | "acrescimos" | "descontos" | "numero_nf" | "data_emissao" | "data_vencimento" | "observacoes">;
@@ -359,7 +357,7 @@ const brl = (v: number | null | undefined) => (v ?? 0).toLocaleString("pt-BR", {
 const ROTULOS_HISTORICO: Record<string, string> = {
   status: "Status", periodo_inicio: "Início", periodo_fim: "Fim", dias: "Dias", valor_mensal: "Mensal", acrescimos: "Acréscimos",
   descontos: "Descontos", valor_final: "Valor", numero_nf: "NF", data_emissao: "Emissão", data_vencimento: "Vencimento",
-  observacoes: "Observações", final: "Medição final", forma_pagamento: "Pagamento", descricao: "Descrição",
+  observacoes: "Observações", final: "Medição final", forma_pagamento: "Pagamento", acrescimos_itens: "Itens de acréscimo",
 };
 const OPCOES_FORMA: Opcao[] = Object.entries(FORMAS_FATURA).map(([value, label]) => ({ value, label }));
 const rotuloForma = (f: string | null) => FORMAS_FATURA[(f ?? "boleto") as FormaFatura] ?? f ?? "—";
@@ -412,28 +410,40 @@ function HistoricoMedicao({ id }: { id: string }) {
   );
 }
 
+/** itens de acréscimo salvos; fatura antiga só com o total vira um item "Acréscimos" */
+function itensDe(m: LinhaMedicao | null): ItemAcrescimo[] {
+  if (!m) return [];
+  if (m.acrescimos_itens?.length) return m.acrescimos_itens.map((i) => ({ descricao: i.descricao, valor: Number(i.valor) }));
+  return m.acrescimos > 0 ? [{ descricao: "Acréscimos", valor: m.acrescimos }] : [];
+}
+
 function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalvo }: {
   medicao: LinhaMedicao | null; baseDias: number; podeEditar: boolean; onOpenChange: (v: boolean) => void; onSalvo: () => void;
 }) {
   const [gerando, setGerando] = React.useState(false);
   // dias, acréscimos e descontos saíram da grade: ajustam-se aqui
-  const [ajuste, setAjuste] = React.useState({ dias: 0, acrescimos: 0, descontos: 0, forma: "boleto" as FormaFatura, descricao: "" });
+  const [ajuste, setAjuste] = React.useState({ dias: 0, descontos: 0, forma: "boleto" as FormaFatura, itens: [] as ItemAcrescimo[] });
   const [salvando, setSalvando] = React.useState(false);
   const formaAtual = (m?.forma_pagamento ?? "boleto") as FormaFatura;
+  const itensAtuais = React.useMemo(() => itensDe(m), [m]);
   React.useEffect(() => {
-    if (m) setAjuste({ dias: m.dias, acrescimos: m.acrescimos, descontos: m.descontos, forma: (m.forma_pagamento ?? "boleto") as FormaFatura, descricao: m.descricao ?? "" });
+    if (m) setAjuste({ dias: m.dias, descontos: m.descontos, forma: (m.forma_pagamento ?? "boleto") as FormaFatura, itens: itensDe(m) });
   }, [m]);
   const ed = !!m && podeEditar && (m.status === "a_faturar" || m.status === "faturado");
-  const mudouDescricao = !!m && ajuste.descricao.trim() !== (m.descricao ?? "");
-  const mudou = !!m && (ajuste.dias !== m.dias || ajuste.acrescimos !== m.acrescimos || ajuste.descontos !== m.descontos || ajuste.forma !== formaAtual || mudouDescricao);
-  const total = m ? calcularValorMedicao({ valorMensal: m.valor_mensal, dias: ajuste.dias, acrescimos: ajuste.acrescimos, descontos: ajuste.descontos, baseDias: baseCobranca(m.tipo_cobranca, baseDias) }).valorFinal : 0;
+  const acrescimos = somar(ajuste.itens.map((i) => i.valor ?? 0));
+  const mudouItens = JSON.stringify(ajuste.itens) !== JSON.stringify(itensAtuais);
+  const mudou = !!m && (ajuste.dias !== m.dias || ajuste.descontos !== m.descontos || ajuste.forma !== formaAtual || mudouItens);
+  const total = m ? calcularValorMedicao({ valorMensal: m.valor_mensal, dias: ajuste.dias, acrescimos, descontos: ajuste.descontos, baseDias: baseCobranca(m.tipo_cobranca, baseDias) }).valorFinal : 0;
+  const editarItem = (i: number, campo: Partial<ItemAcrescimo>) =>
+    setAjuste((a) => ({ ...a, itens: a.itens.map((it, j) => (j === i ? { ...it, ...campo } : it)) }));
   const salvarAjuste = async () => {
     if (!m) return;
+    // linha totalmente vazia é descartada; incompleta é barrada pelo servidor com a mensagem
+    const itens = ajuste.itens.filter((i) => i.descricao.trim() || i.valor);
     setSalvando(true);
     const r = await rodarAcao(salvarMedicoes([{
-      id: m.id, ...(ajuste.dias !== m.dias ? { dias: ajuste.dias } : {}), acrescimos: ajuste.acrescimos, descontos: ajuste.descontos,
+      id: m.id, ...(ajuste.dias !== m.dias ? { dias: ajuste.dias } : {}), descontos: ajuste.descontos, acrescimos_itens: itens,
       ...(ajuste.forma !== formaAtual ? { forma_pagamento: ajuste.forma } : {}),
-      ...(mudouDescricao ? { descricao: ajuste.descricao.trim() || null } : {}),
     }]));
     setSalvando(false);
     if (r.ok) onSalvo();
@@ -460,13 +470,6 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             {item("Veículo", `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)}
             {item("Prazo de pagamento", `${m.prazo_pagamento_dias} dias`)}
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="fatura-descricao">Descrição na fatura</Label>
-            <Textarea id="fatura-descricao" rows={4} maxLength={2000} disabled={!ed} value={ajuste.descricao}
-              placeholder={`${descricaoPadrao({ placa: m.placa, veiculo_tipo: m.veiculo_tipo as DadosFatura["veiculo_tipo"] })} (padrão)`}
-              onChange={(e) => setAjuste((a) => ({ ...a, descricao: e.target.value }))} />
-            <p className="text-xs text-muted-foreground">Pode usar várias linhas. Em branco, sai a descrição padrão.</p>
-          </div>
           <div className="rounded-md border">
             <Table>
               <TableBody>
@@ -475,8 +478,24 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
                   <InputNumero aria-label="Dias" className="ml-auto h-8 w-20 text-right" value={ajuste.dias} disabled={!ed || m.status !== "a_faturar"}
                     onChange={(v) => setAjuste((a) => ({ ...a, dias: Math.min(31, v ?? 0) }))} />
                 </TableCell></TableRow>
-                <TableRow><TableCell>Acréscimos</TableCell><TableCell className="text-right">
-                  <div className="ml-auto w-36"><InputMoeda aria-label="Acréscimos" className="h-8" permitirVazio={false} disabled={!ed} value={ajuste.acrescimos} onChange={(v) => setAjuste((a) => ({ ...a, acrescimos: v ?? 0 }))} /></div>
+                <TableRow><TableCell colSpan={2} className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Acréscimos</span>
+                    <span className="text-right"><Moeda valor={acrescimos} /></span>
+                  </div>
+                  {ajuste.itens.map((it, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input aria-label={`Descrição do acréscimo ${i + 1}`} className="h-8 flex-1" placeholder="Ex.: hora extra do operador, frete, pedágio…" maxLength={200}
+                        disabled={!ed} value={it.descricao} onChange={(e) => editarItem(i, { descricao: e.target.value })} />
+                      <div className="w-36 shrink-0"><InputMoeda aria-label={`Valor do acréscimo ${i + 1}`} className="h-8" disabled={!ed} value={it.valor || null}
+                        onChange={(v) => editarItem(i, { valor: v ?? 0 })} /></div>
+                      {ed && <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label={`Remover acréscimo ${i + 1}`}
+                        onClick={() => setAjuste((a) => ({ ...a, itens: a.itens.filter((_, j) => j !== i) }))}><Trash2 /></Button>}
+                    </div>
+                  ))}
+                  {ed && <Button size="xs" variant="outline" onClick={() => setAjuste((a) => ({ ...a, itens: [...a.itens, { descricao: "", valor: 0 }] }))}>
+                    <Plus /> Adicionar acréscimo
+                  </Button>}
                 </TableCell></TableRow>
                 <TableRow><TableCell>Descontos</TableCell><TableCell className="text-right">
                   <div className="ml-auto w-36"><InputMoeda aria-label="Descontos" className="h-8" permitirVazio={false} disabled={!ed} value={ajuste.descontos} onChange={(v) => setAjuste((a) => ({ ...a, descontos: v ?? 0 }))} /></div>

@@ -880,6 +880,7 @@ export type Database = {
       medicoes: {
         Row: {
           acrescimos: number
+          acrescimos_itens: Json
           contrato_id: string
           created_at: string
           created_by: string | null
@@ -904,6 +905,7 @@ export type Database = {
         }
         Insert: {
           acrescimos?: number
+          acrescimos_itens?: Json
           contrato_id: string
           created_at?: string
           created_by?: string | null
@@ -928,6 +930,7 @@ export type Database = {
         }
         Update: {
           acrescimos?: number
+          acrescimos_itens?: Json
           contrato_id?: string
           created_at?: string
           created_by?: string | null
@@ -1980,6 +1983,7 @@ export type Database = {
       medicoes_v: {
         Row: {
           acrescimos: number | null
+          acrescimos_itens: Json | null
           cliente_fantasia: string | null
           cliente_id: string | null
           cliente_nome: string | null
