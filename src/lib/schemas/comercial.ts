@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { dataOpc, moedaObr, moedaOpc, textoOpc, uuidObr, uuidOpc } from "./cadastros";
+import { clienteFormCampos, dataOpc, moedaObr, moedaOpc, textoOpc, uuidObr, uuidOpc, validarClienteForm } from "./cadastros";
+
+export { CLIENTE_NOVO } from "./cadastros";
 
 const textoLongo = z.string().trim().max(4000).nullish().transform((v) => (v ? v : null));
 
@@ -25,9 +27,6 @@ export const MODELO_PROPOSTA = {
   guindaste: "Guindaste / munck — com operador",
 } as const;
 export type ModeloProposta = keyof typeof MODELO_PROPOSTA;
-
-/** valor do select de cliente que libera o campo para digitar um cliente ainda sem cadastro */
-export const CLIENTE_NOVO = "__novo__";
 
 const propostaBase = z.object({
   modelo_documento: z.enum(["caminhao", "guindaste"]).default("guindaste"),
@@ -70,13 +69,8 @@ const exigirItem = (p: { veiculo_id: string | null; equipamento: string | null }
 export const propostaSchema = propostaBase.superRefine(exigirItem);
 
 /** formulário: aceita cliente sem cadastro (CLIENTE_NOVO + nome digitado), que é cadastrado ao salvar */
-export const propostaFormSchema = propostaBase.extend({
-  cliente_id: z.string({ required_error: "Selecione o cliente", invalid_type_error: "Selecione o cliente" }).min(1, "Selecione o cliente"),
-  cliente_novo: textoOpc,
-}).superRefine((p, ctx) => {
+export const propostaFormSchema = propostaBase.extend(clienteFormCampos).superRefine((p, ctx) => {
   exigirItem(p, ctx);
-  if (p.cliente_id === CLIENTE_NOVO) {
-    if (!p.cliente_novo) ctx.addIssue({ code: "custom", path: ["cliente_novo"], message: "Digite o nome do cliente" });
-  } else if (!z.string().uuid().safeParse(p.cliente_id).success) ctx.addIssue({ code: "custom", path: ["cliente_id"], message: "Selecione o cliente" });
+  validarClienteForm(p, ctx);
 });
 export type PropostaForm = z.input<typeof propostaFormSchema>;

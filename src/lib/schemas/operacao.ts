@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { dataObr, dataOpc, moedaObr, moedaOpc, textoOpc, uuidObr, uuidOpc } from "./cadastros";
+import { clienteFormCampos, dataObr, dataOpc, moedaObr, moedaOpc, textoOpc, uuidObr, uuidOpc, validarClienteForm } from "./cadastros";
 
-export const contratoSchema = z.object({
+const contratoBase = z.object({
   empresa_id: uuidObr("a empresa"),
   cliente_id: uuidObr("o cliente"),
   obra_id: uuidOpc,
@@ -17,10 +17,21 @@ export const contratoSchema = z.object({
   data_fim: dataOpc,
   status: z.enum(["ativo", "encerrado", "suspenso"]),
   observacoes: textoOpc,
-}).superRefine((c, ctx) => {
-  if (c.data_fim && c.data_fim < c.data_inicio) ctx.addIssue({ code: "custom", path: ["data_fim"], message: "Fim antes do início" });
 });
-export type ContratoForm = z.input<typeof contratoSchema>;
+
+const validarDatas = (c: { data_inicio: string; data_fim: string | null }, ctx: z.RefinementCtx) => {
+  if (c.data_fim && c.data_fim < c.data_inicio) ctx.addIssue({ code: "custom", path: ["data_fim"], message: "Fim antes do início" });
+};
+
+/** o que é gravado em contratos */
+export const contratoSchema = contratoBase.superRefine(validarDatas);
+
+/** formulário: aceita cliente sem cadastro (CLIENTE_NOVO + nome digitado), que é cadastrado ao salvar */
+export const contratoFormSchema = contratoBase.extend(clienteFormCampos).superRefine((c, ctx) => {
+  validarDatas(c, ctx);
+  validarClienteForm(c, ctx);
+});
+export type ContratoForm = z.input<typeof contratoFormSchema>;
 
 export const desmobilizarSchema = z.object({
   contrato_id: z.string().uuid(),

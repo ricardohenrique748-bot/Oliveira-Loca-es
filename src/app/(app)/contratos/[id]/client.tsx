@@ -11,7 +11,7 @@ import { Cabecalho, Moeda, StatusBadge } from "@/components/app/comuns";
 import { KpiCard } from "@/components/app/kpi";
 import { DataTable } from "@/components/app/data-table";
 import { FormularioDialog } from "@/components/app/formulario";
-import { contratoSchema } from "@/lib/schemas/operacao";
+import { contratoFormSchema } from "@/lib/schemas/operacao";
 import { formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { baixarContratoPDF } from "@/lib/documentos/baixar";
 import { salvarContrato } from "../actions";
@@ -98,7 +98,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
       </div>
 
       <FormularioDialog<ContratoFormTela> aberto={editando} onOpenChange={setEditando} titulo="Editar contrato" tamanho="lg"
-        campos={camposContrato(opcoes, empresas)} schema={contratoSchema as never}
+        campos={camposContrato(opcoes, empresas)} schema={contratoFormSchema as never}
         valores={{ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never }}
         onSalvar={(v) => salvarContrato(c.id, v)} onSucesso={() => router.refresh()} />
       <DialogoDesmobilizar contrato={c} aberto={desmob} onOpenChange={setDesmob} />

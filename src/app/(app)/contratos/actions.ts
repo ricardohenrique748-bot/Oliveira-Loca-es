@@ -1,12 +1,15 @@
 "use server";
 import { salvarRegistro } from "@/lib/crud";
+import { resolverClienteNovo } from "@/lib/clientes";
 import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { contratoSchema, desmobilizarSchema } from "@/lib/schemas/operacao";
 
 export async function salvarContrato(id: string | null, dados: unknown) {
-  return salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados, schema: contratoSchema, revalidar: ["/contratos", "/medicoes", "/dashboard"] });
+  const cliente = await resolverClienteNovo(dados, "contratos");
+  if (!cliente.ok) return cliente;
+  return salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados: cliente.dados, schema: contratoSchema, revalidar: ["/contratos", "/medicoes", "/dashboard"] });
 }
 
 export async function desmobilizarContrato(dados: unknown) {

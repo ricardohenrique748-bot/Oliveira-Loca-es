@@ -20,6 +20,21 @@ export const emailOpc = z.string().trim().email("E-mail inválido").nullish().or
 export const telefoneOpc = textoOpc.transform((v) => (v ? soDig(v) : null)).refine((v) => !v || v.length >= 10, "Telefone incompleto");
 export const placa = z.string({ required_error: "Informe a placa" }).transform((v) => v.toUpperCase().replace(/[^A-Z0-9]/g, "")).refine((v) => PLACA_RE.test(v), "Placa inválida (ABC1D23 ou ABC1234)");
 
+// ---------- cliente digitado no formulário (proposta, contrato) ----------
+/** valor do select de cliente que libera o campo para digitar um cliente ainda sem cadastro */
+export const CLIENTE_NOVO = "__novo__";
+export const clienteFormCampos = {
+  cliente_id: z.string({ required_error: "Selecione o cliente", invalid_type_error: "Selecione o cliente" }).min(1, "Selecione o cliente"),
+  cliente_novo: textoOpc,
+  cliente_novo_endereco: textoOpc,
+  cliente_novo_telefone: telefoneOpc,
+};
+export function validarClienteForm(p: { cliente_id: string; cliente_novo: string | null }, ctx: z.RefinementCtx) {
+  if (p.cliente_id === CLIENTE_NOVO) {
+    if (!p.cliente_novo) ctx.addIssue({ code: "custom", path: ["cliente_novo"], message: "Digite o nome do cliente" });
+  } else if (!z.string().uuid().safeParse(p.cliente_id).success) ctx.addIssue({ code: "custom", path: ["cliente_id"], message: "Selecione o cliente" });
+}
+
 // ---------- entidades ----------
 export const empresaSchema = z.object({
   apelido: textoObr("Apelido", 20).transform((v) => v.toUpperCase()),

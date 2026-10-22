@@ -50,8 +50,10 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
     // essencial
     { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: [{ value: CLIENTE_NOVO, label: "+ Cliente sem cadastro (digitar nome)" }, ...opcoes.clientes], obrigatorio: true, col: 4 },
     { nome: "data_inicio_prevista", rotulo: "Início previsto", tipo: "data", col: 2 },
-    { nome: "cliente_novo", rotulo: "Nome do cliente", obrigatorio: true, col: 6, visivel: clienteNovo, placeholder: "Ex.: Construtora Alfa Ltda",
-      ajuda: "Ao salvar, o cliente é cadastrado só com o nome — complete CNPJ e endereço depois em Clientes." },
+    { nome: "cliente_novo", rotulo: "Nome do cliente", obrigatorio: true, col: 6, visivel: clienteNovo, placeholder: "Ex.: Construtora Alfa Ltda" },
+    { nome: "cliente_novo_endereco", rotulo: "Endereço", col: 4, visivel: clienteNovo, placeholder: "Rua, número, bairro, cidade" },
+    { nome: "cliente_novo_telefone", rotulo: "Telefone", tipo: "telefone", col: 2, visivel: clienteNovo,
+      ajuda: "Ao salvar, o cliente é cadastrado com estes dados — complete o CNPJ depois em Clientes." },
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", vazio: "— definir depois", opcoes: veiculos, col: 6 },
     { nome: "equipamento", rotulo: "Equipamento", col: 6, placeholder: "Sem veículo definido? Descreva: Ex.: Guindaste 40t", visivel: (v) => !v.veiculo_id },
     { nome: "tipo_cobranca", rotulo: "Cobrança", tipo: "select", col: 3, opcoes: [{ value: "mensal", label: "Mensal" }, { value: "diaria", label: "Diária" }] },
@@ -170,13 +172,13 @@ export function PropostasCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
         </>}
         novo={{ modelo_documento: "guindaste", contato_cliente: null, local_operacao: null, quantidade: 1, franquia: null, km_livre: null, jornada: null,
-          valor_mobilizacao: null, valor_desmobilizacao: null, multa_rescisao_pct: 10, tipo_cobranca: "mensal", modalidade: "com_motorista", empresa_id: empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, obra_id: null, veiculo_id: null, equipamento: null,
+          valor_mobilizacao: null, valor_desmobilizacao: null, multa_rescisao_pct: 10, tipo_cobranca: "mensal", modalidade: "com_motorista", empresa_id: empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: null, equipamento: null,
           valor: undefined, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio_prevista: null, periodo_minimo: null,
           validade: null, condicoes: null, observacoes: null, status: "rascunho", motivo_recusa: null }}
         paraForm={(r) => ({
           modelo_documento: r.modelo_documento, contato_cliente: r.contato_cliente, local_operacao: r.local_operacao, quantidade: r.quantidade, franquia: r.franquia,
           km_livre: r.km_livre, jornada: r.jornada, valor_mobilizacao: r.valor_mobilizacao, valor_desmobilizacao: r.valor_desmobilizacao,
-          multa_rescisao_pct: r.multa_rescisao_pct, tipo_cobranca: r.tipo_cobranca, modalidade: r.modalidade, empresa_id: r.empresa_id, cliente_id: r.cliente_id, cliente_novo: null, obra_id: r.obra_id, veiculo_id: r.veiculo_id, equipamento: r.equipamento,
+          multa_rescisao_pct: r.multa_rescisao_pct, tipo_cobranca: r.tipo_cobranca, modalidade: r.modalidade, empresa_id: r.empresa_id, cliente_id: r.cliente_id, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: r.obra_id, veiculo_id: r.veiculo_id, equipamento: r.equipamento,
           valor: r.valor, dia_corte_inicio: String(r.dia_corte_inicio) as never, prazo_pagamento_dias: r.prazo_pagamento_dias,
           data_inicio_prevista: r.data_inicio_prevista, periodo_minimo: r.periodo_minimo, validade: r.validade, condicoes: r.condicoes,
           observacoes: r.observacoes, status: r.status as PropostaForm["status"], motivo_recusa: r.motivo_recusa,

@@ -12,7 +12,8 @@ import { Badge, Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Opcao } from "@/components/ui/select";
-import { contratoSchema, type ContratoForm } from "@/lib/schemas/operacao";
+import { contratoFormSchema, type ContratoForm } from "@/lib/schemas/operacao";
+import { CLIENTE_NOVO } from "@/lib/schemas/cadastros";
 import { formatData, formatPlaca, hojeSP } from "@/lib/format";
 import { baixarContratoPDF } from "@/lib/documentos/baixar";
 import { desmobilizarContrato, salvarContrato } from "./actions";
@@ -33,13 +34,18 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
   // diária: só cliente, veículo, valor e data — o resto fica no padrão
   const diaria = (v: ContratoFormTela) => v.tipo_cobranca === "diaria";
   const mensal = (v: ContratoFormTela) => !diaria(v);
+  const clienteNovo = (v: ContratoFormTela) => v.cliente_id === CLIENTE_NOVO;
   return [
     { nome: "tipo_cobranca", rotulo: "Tipo de cobrança", tipo: "select", col: 2, opcoes: [{ value: "mensal", label: "Mensal" }, { value: "diaria", label: "Diária" }] },
     { nome: "empresa_id", rotulo: "Empresa emissora", tipo: "select", opcoes: empresas, obrigatorio: true, col: 2 },
     { nome: "numero", rotulo: "Nº do contrato", col: 2, visivel: mensal, placeholder: "Automático", ajuda: "Deixe vazio para gerar (ex.: OL-012/26)" },
     { nome: "status", rotulo: "Status", tipo: "select", visivel: mensal, opcoes: [{ value: "ativo", label: "Ativo" }, { value: "suspenso", label: "Suspenso" }, { value: "encerrado", label: "Encerrado" }], col: 2 },
-    { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: opcoes.clientes, obrigatorio: true, col: 3 },
-    { nome: "obra_id", rotulo: "Obra", tipo: "select", visivel: mensal, vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3 },
+    { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: [{ value: CLIENTE_NOVO, label: "+ Cliente sem cadastro (digitar nome)" }, ...opcoes.clientes], obrigatorio: true, col: 3 },
+    { nome: "cliente_novo", rotulo: "Nome do cliente", obrigatorio: true, col: 3, visivel: clienteNovo, placeholder: "Ex.: Construtora Alfa Ltda" },
+    { nome: "cliente_novo_endereco", rotulo: "Endereço", col: 4, visivel: clienteNovo, placeholder: "Rua, número, bairro, cidade" },
+    { nome: "cliente_novo_telefone", rotulo: "Telefone", tipo: "telefone", col: 2, visivel: clienteNovo,
+      ajuda: "Ao salvar, o cliente é cadastrado com estes dados — complete o CNPJ depois em Clientes." },
+    { nome: "obra_id", rotulo: "Obra", tipo: "select", visivel: (v) => mensal(v) && !clienteNovo(v), vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3 },
     { nome: "sublocado", rotulo: "Sublocado?", tipo: "select", col: 2, opcoes: [{ value: "nao", label: "Não — frota própria (com motorista)" }, { value: "sim", label: "Sim — locador (sem motorista)" }] },
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", obrigatorio: true, col: 4, opcoes: (v) => opcoes.veiculos.filter((x) =>
       (!v.empresa_id || x.empresa_id === v.empresa_id) && (!v.sublocado || (x.proprietario === "locador") === (v.sublocado === "sim"))) },
@@ -58,7 +64,7 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
 
 export function valoresContrato(c: LinhaContrato): ContratoFormTela {
   return {
-    sublocado: c.proprietario === "locador" ? "sim" : "nao", tipo_cobranca: c.tipo_cobranca, empresa_id: c.empresa_id, cliente_id: c.cliente_id, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
+    sublocado: c.proprietario === "locador" ? "sim" : "nao", tipo_cobranca: c.tipo_cobranca, empresa_id: c.empresa_id, cliente_id: c.cliente_id, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
     valor_mensal: c.valor_mensal, valor_repasse_mensal: c.valor_repasse_mensal, dia_corte_inicio: c.dia_corte_inicio as never,
     prazo_pagamento_dias: c.prazo_pagamento_dias, data_inicio: c.data_inicio, data_fim: c.data_fim, status: c.status, observacoes: c.observacoes,
   };
@@ -128,14 +134,14 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
         titulo="Contratos" entidade="contrato" tamanhoForm="lg" abrirNovo={novo}
         descricao="Locação de cada placa para um cliente/obra. A margem prevista é o valor mensal menos o repasse ao locador."
         linhas={linhas} total={total} pagina={pagina} tamanho={tamanho} colunas={colunas}
-        campos={camposContrato(opcoes, empresas)} schema={contratoSchema as never}
+        campos={camposContrato(opcoes, empresas)} schema={contratoFormSchema as never}
         busca="Buscar placa…" hrefLinha={(c) => `/contratos/${c.id}`}
         filtros={<>
           <FiltroSelectUrl param="status" rotulo="Status" vazio="Ativos" opcoes={[{ value: "suspenso", label: "Suspensos" }, { value: "encerrado", label: "Encerrados" }, { value: "todos", label: "Todos" }]} />
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
           <FiltroSelectUrl param="corte" rotulo="Período" opcoes={[{ value: "1", label: "01 → fim" }, { value: "21", label: "21 → 20" }]} />
         </>}
-        novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null }}
+        novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null }}
         paraForm={(c) => ({ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never })}
         salvar={salvarContrato} podeEditar={podeEditar}
         acoesLinha={(c) => (
