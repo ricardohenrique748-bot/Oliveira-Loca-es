@@ -15,6 +15,11 @@ import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/ur
 import { baseCobranca, calcularValorMedicao, calcularVencimento, hojeSP, somar, type TipoCobranca } from "@/lib/calculos";
 import { formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
+import { FORMAS_FATURA, type FormaFatura } from "@/lib/schemas/operacao";
+import { SelectSimples } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/input";
+import { baixarFaturaPDF } from "@/lib/documentos/baixar";
+import { descricaoPadrao, type DadosFatura } from "@/lib/documentos/fatura";
 import { cn } from "@/lib/utils";
 import {
   cancelarMedicoes, dadosLembrete, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarMedicoes, voltarParaAFaturar,
@@ -29,7 +34,7 @@ export type LinhaMedicao = {
   cliente_id: string; cliente_fantasia: string; obra_nome: string | null; placa: string; proprietario: string; prazo_pagamento_dias: number;
   dia_corte_inicio: number; valor_recebido: number; repasse_liquido: number | null; margem: number;
   contrato_numero: string | number | null; cliente_nome: string | null; veiculo_tipo: string | null; saldo: number;
-  tipo_cobranca: TipoCobranca | null;
+  tipo_cobranca: TipoCobranca | null; forma_pagamento: string | null; descricao: string | null;
 };
 
 type Editavel = Pick<LinhaMedicao, "dias" | "valor_mensal" | "acrescimos" | "descontos" | "numero_nf" | "data_emissao" | "data_vencimento" | "observacoes">;
@@ -341,48 +346,13 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
 
 const brl = (v: number | null | undefined) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-/** PDF individual da medição (boletim para enviar ao cliente). */
-async function pdfMedicao(m: LinhaMedicao, baseDias: number) {
-  const linha = { descricao: `Locação ${m.veiculo_tipo ? `${m.veiculo_tipo} ` : ""}placa ${formatPlaca(m.placa)}`, ...m };
-  const colunas: ColunaExport<typeof linha>[] = [
-    { titulo: "Descrição", valor: (l) => l.descricao },
-    { titulo: "Período", valor: (l) => formatPeriodo(l.periodo_inicio, l.periodo_fim) },
-    { titulo: "Dias", valor: (l) => l.dias, tipo: "numero" },
-    { titulo: "Valor mensal", valor: (l) => l.valor_mensal, tipo: "moeda" },
-    { titulo: "Valor base", valor: (l) => l.valor_base, tipo: "moeda" },
-    { titulo: "Acréscimos", valor: (l) => l.acrescimos, tipo: "moeda" },
-    { titulo: "Descontos", valor: (l) => l.descontos, tipo: "moeda" },
-    { titulo: "Total", valor: (l) => l.valor_final, tipo: "moeda" },
-  ];
-  const resumo: [string, string][] = [
-    ["Empresa", m.empresa_apelido],
-    ["Cliente", m.cliente_nome && m.cliente_nome !== m.cliente_fantasia ? `${m.cliente_fantasia} (${m.cliente_nome})` : m.cliente_fantasia],
-    ...(m.obra_nome ? [["Obra", m.obra_nome] as [string, string]] : []),
-    ...(m.contrato_numero != null ? [["Contrato", String(m.contrato_numero)] as [string, string]] : []),
-    ["Placa", formatPlaca(m.placa)],
-    ["Competência", formatCompetencia(m.competencia.slice(0, 7), true)],
-    ["Período", `${formatPeriodo(m.periodo_inicio, m.periodo_fim)} (${m.dias} dias)`],
-    ["NF", m.numero_nf ?? "—"],
-    ["Emissão / vencimento", `${formatData(m.data_emissao)} / ${formatData(m.data_vencimento)}`],
-  ];
-  await exportarPDF(`medicao_${m.placa}_${m.competencia.slice(0, 7)}`, "Boletim de medição", colunas, [linha], {
-    resumo,
-    totais: ["Total da medição", "", "", "", "", "", "", m.valor_final],
-    rodape: [
-      `Cálculo: ${m.tipo_cobranca === "diaria" ? `diária ${brl(m.valor_mensal)}` : `(valor mensal ÷ ${baseDias})`} × ${m.dias} dias = ${brl(m.valor_base)}; + acréscimos ${brl(m.acrescimos)} − descontos ${brl(m.descontos)} = ${brl(m.valor_final)}.`,
-      ...(m.observacoes ? [`Observações: ${m.observacoes}`] : []),
-      "", "", "",
-      "______________________________________          ______________________________________",
-      "Oliveira Locações                                                         De acordo — cliente",
-    ],
-  });
-}
-
 const ROTULOS_HISTORICO: Record<string, string> = {
   status: "Status", periodo_inicio: "Início", periodo_fim: "Fim", dias: "Dias", valor_mensal: "Mensal", acrescimos: "Acréscimos",
   descontos: "Descontos", valor_final: "Valor", numero_nf: "NF", data_emissao: "Emissão", data_vencimento: "Vencimento",
-  observacoes: "Observações", final: "Medição final",
+  observacoes: "Observações", final: "Medição final", forma_pagamento: "Pagamento", descricao: "Descrição",
 };
+const OPCOES_FORMA: Opcao[] = Object.entries(FORMAS_FATURA).map(([value, label]) => ({ value, label }));
+const rotuloForma = (f: string | null) => FORMAS_FATURA[(f ?? "boleto") as FormaFatura] ?? f ?? "—";
 const MOEDA_HISTORICO = new Set(["valor_mensal", "acrescimos", "descontos", "valor_final"]);
 const DATA_HISTORICO = new Set(["periodo_inicio", "periodo_fim", "data_emissao", "data_vencimento"]);
 const STATUS_ROTULO = Object.fromEntries(STATUS_OPCOES.map((o) => [o.value, o.label]));
@@ -392,6 +362,7 @@ function valorHistorico(campo: string, v: unknown) {
   if (MOEDA_HISTORICO.has(campo)) return brl(Number(v));
   if (DATA_HISTORICO.has(campo)) return formatData(String(v));
   if (campo === "status") return STATUS_ROTULO[String(v)] ?? String(v);
+  if (campo === "forma_pagamento") return rotuloForma(String(v));
   if (typeof v === "boolean") return v ? "Sim" : "Não";
   return String(v);
 }
@@ -436,16 +407,24 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
 }) {
   const [gerando, setGerando] = React.useState(false);
   // dias, acréscimos e descontos saíram da grade: ajustam-se aqui
-  const [ajuste, setAjuste] = React.useState({ dias: 0, acrescimos: 0, descontos: 0 });
+  const [ajuste, setAjuste] = React.useState({ dias: 0, acrescimos: 0, descontos: 0, forma: "boleto" as FormaFatura, descricao: "" });
   const [salvando, setSalvando] = React.useState(false);
-  React.useEffect(() => { if (m) setAjuste({ dias: m.dias, acrescimos: m.acrescimos, descontos: m.descontos }); }, [m]);
+  const formaAtual = (m?.forma_pagamento ?? "boleto") as FormaFatura;
+  React.useEffect(() => {
+    if (m) setAjuste({ dias: m.dias, acrescimos: m.acrescimos, descontos: m.descontos, forma: (m.forma_pagamento ?? "boleto") as FormaFatura, descricao: m.descricao ?? "" });
+  }, [m]);
   const ed = !!m && podeEditar && (m.status === "a_faturar" || m.status === "faturado");
-  const mudou = !!m && (ajuste.dias !== m.dias || ajuste.acrescimos !== m.acrescimos || ajuste.descontos !== m.descontos);
-  const total = m ? calcularValorMedicao({ valorMensal: m.valor_mensal, ...ajuste, baseDias: baseCobranca(m.tipo_cobranca, baseDias) }).valorFinal : 0;
+  const mudouDescricao = !!m && ajuste.descricao.trim() !== (m.descricao ?? "");
+  const mudou = !!m && (ajuste.dias !== m.dias || ajuste.acrescimos !== m.acrescimos || ajuste.descontos !== m.descontos || ajuste.forma !== formaAtual || mudouDescricao);
+  const total = m ? calcularValorMedicao({ valorMensal: m.valor_mensal, dias: ajuste.dias, acrescimos: ajuste.acrescimos, descontos: ajuste.descontos, baseDias: baseCobranca(m.tipo_cobranca, baseDias) }).valorFinal : 0;
   const salvarAjuste = async () => {
     if (!m) return;
     setSalvando(true);
-    const r = await rodarAcao(salvarMedicoes([{ id: m.id, ...(ajuste.dias !== m.dias ? { dias: ajuste.dias } : {}), acrescimos: ajuste.acrescimos, descontos: ajuste.descontos }]));
+    const r = await rodarAcao(salvarMedicoes([{
+      id: m.id, ...(ajuste.dias !== m.dias ? { dias: ajuste.dias } : {}), acrescimos: ajuste.acrescimos, descontos: ajuste.descontos,
+      ...(ajuste.forma !== formaAtual ? { forma_pagamento: ajuste.forma } : {}),
+      ...(mudouDescricao ? { descricao: ajuste.descricao.trim() || null } : {}),
+    }]));
     setSalvando(false);
     if (r.ok) onSalvo();
   };
@@ -471,6 +450,13 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             {item("Veículo", `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)}
             {item("Prazo de pagamento", `${m.prazo_pagamento_dias} dias`)}
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="fatura-descricao">Descrição na fatura</Label>
+            <Textarea id="fatura-descricao" rows={4} maxLength={2000} disabled={!ed} value={ajuste.descricao}
+              placeholder={`${descricaoPadrao({ placa: m.placa, veiculo_tipo: m.veiculo_tipo as DadosFatura["veiculo_tipo"] })} (padrão)`}
+              onChange={(e) => setAjuste((a) => ({ ...a, descricao: e.target.value }))} />
+            <p className="text-xs text-muted-foreground">Pode usar várias linhas. Em branco, sai a descrição padrão.</p>
+          </div>
           <div className="rounded-md border">
             <Table>
               <TableBody>
@@ -490,6 +476,10 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             </Table>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {item("Condição de pagamento", ed
+              ? <SelectSimples aria-label="Condição de pagamento" className="h-8" value={ajuste.forma} opcoes={OPCOES_FORMA}
+                  onChange={(v) => setAjuste((a) => ({ ...a, forma: (v as FormaFatura | null) ?? "boleto" }))} />
+              : rotuloForma(m.forma_pagamento))}
             {item("NF", m.numero_nf)}
             {item("Emissão", formatData(m.data_emissao))}
             {item("Vencimento", formatData(m.data_vencimento))}
@@ -503,8 +493,9 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
             {ed && <Button variant="outline" disabled={!mudou || salvando} onClick={salvarAjuste}>{salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar ajustes</Button>}
-            <Button disabled={gerando} onClick={async () => { setGerando(true); try { await pdfMedicao(m, baseDias); } finally { setGerando(false); } }}>
-              {gerando ? <Loader2 className="animate-spin" /> : <FileDown />} Gerar PDF
+            <Button disabled={gerando} title={mudou ? "Salve os ajustes antes: o PDF usa os valores salvos" : undefined}
+              onClick={async () => { setGerando(true); try { await baixarFaturaPDF(m.id, baseDias); } finally { setGerando(false); } }}>
+              {gerando ? <Loader2 className="animate-spin" /> : <FileDown />} Gerar fatura (PDF)
             </Button>
           </DialogFooter>
         </>}

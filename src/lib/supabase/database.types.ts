@@ -883,7 +883,9 @@ export type Database = {
           data_emissao: string | null
           data_vencimento: string | null
           descontos: number
+          descricao: string | null
           dias: number
+          forma_pagamento: Database["public"]["Enums"]["forma_pagamento"]
           empresa_id: string
           final: boolean
           id: string
@@ -905,7 +907,9 @@ export type Database = {
           data_emissao?: string | null
           data_vencimento?: string | null
           descontos?: number
+          descricao?: string | null
           dias: number
+          forma_pagamento?: Database["public"]["Enums"]["forma_pagamento"]
           empresa_id: string
           final?: boolean
           id?: string
@@ -927,7 +931,9 @@ export type Database = {
           data_emissao?: string | null
           data_vencimento?: string | null
           descontos?: number
+          descricao?: string | null
           dias?: number
+          forma_pagamento?: Database["public"]["Enums"]["forma_pagamento"]
           empresa_id?: string
           final?: boolean
           id?: string
@@ -1983,12 +1989,14 @@ export type Database = {
           data_ultimo_recebimento: string | null
           data_vencimento: string | null
           descontos: number | null
+          descricao: string | null
           dia_corte_inicio: number | null
           dias: number | null
           dias_atraso: number | null
           empresa_apelido: string | null
           empresa_id: string | null
           final: boolean | null
+          forma_pagamento: Database["public"]["Enums"]["forma_pagamento"] | null
           id: string | null
           locador_id: string | null
           margem: number | null

@@ -11,7 +11,8 @@ export type Bloco =
   | { t: "secao"; texto: string }
   | { t: "paragrafo"; texto: string; rotulo?: string; alinhar?: "esquerda" | "centro" | "direita"; negrito?: boolean }
   | { t: "lista"; itens: string[]; marcador?: "letra" | "ponto" }
-  | { t: "tabela"; cabecalho?: string[]; linhas: string[][]; direita?: number[]; larguras?: number[]; negritoPrimeira?: boolean }
+  /** `total`: linha de fechamento em destaque (amarelo) */
+  | { t: "tabela"; cabecalho?: string[]; linhas: string[][]; direita?: number[]; larguras?: number[]; negritoPrimeira?: boolean; total?: string[] }
   /** `preencher`: valores vazios ficam em branco e as linhas ganham altura para escrever à mão (checklist) */
   | { t: "campos"; pares: [string, string][]; colunas?: 1 | 2; preencher?: boolean }
   | { t: "assinaturas"; partes: { titulo: string; linhas: string[] }[] }
@@ -165,7 +166,10 @@ export async function renderizarPDF(d: Documento, imgLogo: string | null): Promi
           theme: "grid",
           head: b.cabecalho ? [b.cabecalho.map(limparTexto)] : undefined,
           body: b.linhas.map((l) => l.map(limparTexto)),
+          foot: b.total ? [b.total.map(limparTexto)] : undefined,
+          showFoot: "lastPage",
           headStyles: { fillColor: PRETO, textColor: AMARELO, fontStyle: "bold" },
+          footStyles: { fillColor: AMARELO, textColor: PRETO, fontStyle: "bold" },
           columnStyles: Object.fromEntries(Array.from({ length: Math.max(b.cabecalho?.length ?? 0, ...b.linhas.map((l) => l.length)) }, (_, i) => [i, {
             halign: b.direita?.includes(i) ? "right" : "left",
             ...(b.larguras?.[i] ? { cellWidth: b.larguras[i] } : {}),

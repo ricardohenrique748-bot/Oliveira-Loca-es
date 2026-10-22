@@ -138,6 +138,7 @@ export async function lancarMedicao(dados: unknown) {
     const nova = checar(await supabase.from("medicoes").insert({
       contrato_id: c.id, empresa_id: c.empresa_id, periodo_inicio: d.periodo_inicio, periodo_fim: d.periodo_fim, dias: d.dias,
       valor_mensal: c.valor_mensal, acrescimos: d.acrescimos, descontos: d.descontos, observacoes: d.observacoes ?? null,
+      forma_pagamento: d.forma_pagamento,
       final: !!c.data_desmobilizacao && c.data_desmobilizacao >= d.periodo_inicio && c.data_desmobilizacao <= d.periodo_fim,
     }).select("id").single());
     return { id: nova!.id, competencia: d.periodo_fim.slice(0, 7) };

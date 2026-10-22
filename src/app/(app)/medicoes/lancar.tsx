@@ -11,7 +11,10 @@ import { Moeda } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { baseCobranca, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde } from "@/lib/calculos";
 import { formatPeriodo, formatPlaca } from "@/lib/format";
+import { FORMAS_FATURA, type FormaFatura } from "@/lib/schemas/operacao";
 import { dadosLancamento, lancarMedicao, type ContratoLancamento } from "./actions";
+
+const OPCOES_FORMA: Opcao[] = Object.entries(FORMAS_FATURA).map(([value, label]) => ({ value, label }));
 
 /**
  * Lançamento manual de medição: escolhe o contrato (ou vem fixo) e o período.
@@ -34,11 +37,12 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   const [acrescimos, setAcrescimos] = React.useState(0);
   const [descontos, setDescontos] = React.useState(0);
   const [observacoes, setObservacoes] = React.useState("");
+  const [forma, setForma] = React.useState<FormaFatura>("boleto");
   const [carregando, setCarregando] = React.useState(false);
 
   React.useEffect(() => {
     if (!aberto) return;
-    setContrato(contratoId ?? null); setInfo(null); setAcrescimos(0); setDescontos(0); setObservacoes(""); setDiasManual(false);
+    setContrato(contratoId ?? null); setInfo(null); setAcrescimos(0); setDescontos(0); setObservacoes(""); setForma("boleto"); setDiasManual(false);
   }, [aberto, contratoId]);
 
   React.useEffect(() => {
@@ -67,7 +71,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   const lancar = async () => {
     if (!info) return;
     setCarregando(true);
-    const r = await lancarMedicao({ contrato_id: info.id, periodo_inicio: inicio, periodo_fim: fim, dias, acrescimos, descontos, observacoes: observacoes || null });
+    const r = await lancarMedicao({ contrato_id: info.id, periodo_inicio: inicio, periodo_fim: fim, dias, acrescimos, descontos, forma_pagamento: forma, observacoes: observacoes || null });
     setCarregando(false);
     if (!r.ok) return toast.error(r.erro);
     toast.success(`Fatura ${formatPlaca(info.placa)} lançada (${formatPeriodo(inicio, fim)})`);
@@ -123,6 +127,10 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
                 <Label htmlFor="lancar-desc">Descontos</Label>
                 <InputMoeda id="lancar-desc" permitirVazio={false} value={descontos} onChange={(v) => setDescontos(v ?? 0)} />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lancar-forma">Condição de pagamento</Label>
+              <SelectSimples id="lancar-forma" value={forma} onChange={(v) => setForma((v as FormaFatura | null) ?? "boleto")} opcoes={OPCOES_FORMA} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="lancar-obs">Observações</Label>

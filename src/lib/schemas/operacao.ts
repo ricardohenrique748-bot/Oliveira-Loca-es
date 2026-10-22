@@ -50,8 +50,15 @@ export const edicaoMedicaoSchema = z.object({
   data_emissao: dataOpc.optional(),
   data_vencimento: dataOpc.optional(),
   observacoes: z.string().trim().max(1000).nullable().optional(),
+  forma_pagamento: z.enum(["boleto", "pix"]).optional(),
+  /** texto livre (várias linhas) da coluna Descrição na fatura em PDF */
+  descricao: z.string().trim().max(2000).nullable().optional(),
 });
 export type EdicaoMedicao = z.infer<typeof edicaoMedicaoSchema>;
+
+/** Condição de pagamento da fatura */
+export const FORMAS_FATURA = { boleto: "Boleto", pix: "PIX" } as const;
+export type FormaFatura = keyof typeof FORMAS_FATURA;
 
 export const lancamentoMedicaoSchema = z.object({
   contrato_id: uuidObr("o contrato"),
@@ -60,6 +67,7 @@ export const lancamentoMedicaoSchema = z.object({
   dias: z.number().int().min(1, "Dias deve ser ao menos 1").max(31, "Dias deve ser no máximo 31"),
   acrescimos: z.number().min(0).default(0),
   descontos: z.number().min(0).default(0),
+  forma_pagamento: z.enum(["boleto", "pix"]).default("boleto"),
   observacoes: z.string().trim().max(1000).nullable().optional(),
 }).refine((d) => d.periodo_fim >= d.periodo_inicio, { message: "O fim do período deve ser depois do início", path: ["periodo_fim"] });
 export type LancamentoMedicao = z.input<typeof lancamentoMedicaoSchema>;

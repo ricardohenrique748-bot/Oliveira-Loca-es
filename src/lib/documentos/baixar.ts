@@ -3,6 +3,7 @@
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { montarContrato, type DadosContrato } from "./contrato";
+import { montarFatura, type DadosFatura } from "./fatura";
 import { montarProposta, type DadosProposta } from "./proposta";
 import { baixarDocumentoPDF } from "./pdf";
 
@@ -59,5 +60,28 @@ export function baixarContratoPDF(id: string) {
       veiculo: { ...c.veiculos, km_atual: Number(c.veiculos.km_atual), horimetro_atual: Number(c.veiculos.horimetro_atual) },
     };
     return montarContrato(dados);
+  });
+}
+
+export function baixarFaturaPDF(id: string, baseDias: number) {
+  return gerar(async () => {
+    const { data: m, error } = await createClient().from("medicoes")
+      .select(`periodo_inicio, periodo_fim, dias, valor_mensal, valor_base, acrescimos, descontos, valor_final, numero_nf, data_emissao,
+        data_vencimento, forma_pagamento, descricao, observacoes,
+        empresas(${EMPRESA}), contratos(numero, tipo_cobranca, clientes(${CLIENTE}), obras(nome), veiculos(placa, tipo))`)
+      .eq("id", id).maybeSingle();
+    if (error) throw error;
+    const c = m?.contratos;
+    if (!m?.empresas || !c?.clientes || !c.veiculos) return null;
+    const dados: DadosFatura = {
+      ...m,
+      valor_mensal: Number(m.valor_mensal), valor_base: Number(m.valor_base), acrescimos: Number(m.acrescimos),
+      descontos: Number(m.descontos), valor_final: Number(m.valor_final),
+      forma_pagamento: m.forma_pagamento as DadosFatura["forma_pagamento"],
+      contrato_numero: c.numero == null ? null : String(c.numero), tipo_cobranca: c.tipo_cobranca as DadosFatura["tipo_cobranca"], base_dias: baseDias,
+      placa: c.veiculos.placa, veiculo_tipo: c.veiculos.tipo, obra: c.obras?.nome ?? null,
+      empresa: m.empresas, cliente: c.clientes,
+    };
+    return montarFatura(dados);
   });
 }
