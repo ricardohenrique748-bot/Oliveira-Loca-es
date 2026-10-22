@@ -26,7 +26,10 @@ export const MODELO_PROPOSTA = {
 } as const;
 export type ModeloProposta = keyof typeof MODELO_PROPOSTA;
 
-export const propostaSchema = z.object({
+/** valor do select de cliente que libera o campo para digitar um cliente ainda sem cadastro */
+export const CLIENTE_NOVO = "__novo__";
+
+const propostaBase = z.object({
   modelo_documento: z.enum(["caminhao", "guindaste"]).default("guindaste"),
   empresa_id: uuidObr("a empresa"),
   cliente_id: uuidObr("o cliente"),
@@ -57,7 +60,23 @@ export const propostaSchema = z.object({
   // "convertida" só pela geração do contrato
   status: z.enum(["rascunho", "enviada", "aprovada", "recusada"]),
   motivo_recusa: textoOpc,
-}).superRefine((p, ctx) => {
-  if (!p.veiculo_id && !p.equipamento) ctx.addIssue({ code: "custom", path: ["equipamento"], message: "Escolha o veículo ou descreva o equipamento" });
 });
-export type PropostaForm = z.input<typeof propostaSchema>;
+
+const exigirItem = (p: { veiculo_id: string | null; equipamento: string | null }, ctx: z.RefinementCtx) => {
+  if (!p.veiculo_id && !p.equipamento) ctx.addIssue({ code: "custom", path: ["equipamento"], message: "Escolha o veículo ou descreva o equipamento" });
+};
+
+/** o que é gravado em propostas */
+export const propostaSchema = propostaBase.superRefine(exigirItem);
+
+/** formulário: aceita cliente sem cadastro (CLIENTE_NOVO + nome digitado), que é cadastrado ao salvar */
+export const propostaFormSchema = propostaBase.extend({
+  cliente_id: z.string({ required_error: "Selecione o cliente", invalid_type_error: "Selecione o cliente" }).min(1, "Selecione o cliente"),
+  cliente_novo: textoOpc,
+}).superRefine((p, ctx) => {
+  exigirItem(p, ctx);
+  if (p.cliente_id === CLIENTE_NOVO) {
+    if (!p.cliente_novo) ctx.addIssue({ code: "custom", path: ["cliente_novo"], message: "Digite o nome do cliente" });
+  } else if (!z.string().uuid().safeParse(p.cliente_id).success) ctx.addIssue({ code: "custom", path: ["cliente_id"], message: "Selecione o cliente" });
+});
+export type PropostaForm = z.input<typeof propostaFormSchema>;

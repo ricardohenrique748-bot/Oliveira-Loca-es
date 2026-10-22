@@ -11,7 +11,7 @@ import type { Campo } from "@/components/app/formulario";
 import { Badge } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import type { Opcao } from "@/components/ui/select";
-import { MODALIDADE_PROPOSTA, MODELO_PROPOSTA, propostaSchema, STATUS_PROPOSTA, type ModalidadeProposta, type ModeloProposta, type PropostaForm, type StatusProposta } from "@/lib/schemas/comercial";
+import { CLIENTE_NOVO, MODALIDADE_PROPOSTA, MODELO_PROPOSTA, propostaFormSchema, STATUS_PROPOSTA, type ModalidadeProposta, type ModeloProposta, type PropostaForm, type StatusProposta } from "@/lib/schemas/comercial";
 import { formatBRL, formatData, formatPlaca, hojeSP } from "@/lib/format";
 import { baixarPropostaPDF } from "@/lib/documentos/baixar";
 import { JORNADA_PADRAO } from "@/lib/documentos/proposta";
@@ -45,10 +45,13 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
   // todos os veículos: ao escolher um, empresa, modalidade e modelo do PDF seguem o cadastro dele (ajustesProposta)
   const veiculos = opcoes.veiculos.map((x) => ({ ...x, label: x.label + (ROTULO_STATUS_VEICULO[x.status] ? ` — ${ROTULO_STATUS_VEICULO[x.status]}` : "") }));
   const guindaste = (v: PropostaForm) => v.modelo_documento !== "caminhao";
+  const clienteNovo = (v: PropostaForm) => v.cliente_id === CLIENTE_NOVO;
   return [
     // essencial
-    { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: opcoes.clientes, obrigatorio: true, col: 4 },
+    { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: [{ value: CLIENTE_NOVO, label: "+ Cliente sem cadastro (digitar nome)" }, ...opcoes.clientes], obrigatorio: true, col: 4 },
     { nome: "data_inicio_prevista", rotulo: "Início previsto", tipo: "data", col: 2 },
+    { nome: "cliente_novo", rotulo: "Nome do cliente", obrigatorio: true, col: 6, visivel: clienteNovo, placeholder: "Ex.: Construtora Alfa Ltda",
+      ajuda: "Ao salvar, o cliente é cadastrado só com o nome — complete CNPJ e endereço depois em Clientes." },
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", vazio: "— definir depois", opcoes: veiculos, col: 6 },
     { nome: "equipamento", rotulo: "Equipamento", col: 6, placeholder: "Sem veículo definido? Descreva: Ex.: Guindaste 40t", visivel: (v) => !v.veiculo_id },
     { nome: "tipo_cobranca", rotulo: "Cobrança", tipo: "select", col: 3, opcoes: [{ value: "mensal", label: "Mensal" }, { value: "diaria", label: "Diária" }] },
@@ -56,7 +59,7 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
     { nome: "valor", rotulo: "Valor da diária", tipo: "moeda", obrigatorio: true, col: 3, visivel: diaria },
 
     // mais opções
-    { nome: "obra_id", rotulo: "Obra", tipo: "select", vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3, avancado: true },
+    { nome: "obra_id", rotulo: "Obra", tipo: "select", vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3, visivel: (v) => !clienteNovo(v), avancado: true },
     { nome: "status", rotulo: "Situação", tipo: "select", col: 3, avancado: true, opcoes: (["rascunho", "enviada", "aprovada", "recusada"] as const).map((s) => ({ value: s, label: STATUS_PROPOSTA[s] })) },
     { nome: "motivo_recusa", rotulo: "Motivo da recusa", col: 6, visivel: (v) => v.status === "recusada", placeholder: "Preço, prazo, fechou com concorrente…", avancado: true },
     { nome: "dia_corte_inicio", rotulo: "Período de medição", tipo: "select", col: 2, visivel: (v) => !diaria(v), avancado: true, opcoes: [{ value: "1", label: "Dia 01 ao fim do mês" }, { value: "21", label: "Dia 21 ao dia 20" }] },
@@ -99,7 +102,7 @@ function ajustesProposta(opcoes: OpcoesContrato) {
 /** quadro abaixo do formulário: o que vai para o contrato quando a proposta for aprovada */
 function ResumoContrato({ v, opcoes }: { v: PropostaForm; opcoes: OpcoesContrato }) {
   const diaria = v.tipo_cobranca === "diaria";
-  const cliente = opcoes.clientes.find((c) => c.value === v.cliente_id)?.label;
+  const cliente = v.cliente_id === CLIENTE_NOVO ? v.cliente_novo : opcoes.clientes.find((c) => c.value === v.cliente_id)?.label;
   const obra = opcoes.obras.find((o) => o.value === v.obra_id)?.label;
   const veiculo = opcoes.veiculos.find((x) => x.value === v.veiculo_id)?.label;
   const valor = typeof v.valor === "number" && v.valor > 0 ? v.valor : null;
@@ -155,9 +158,9 @@ export function PropostasCliente({ linhas, total, pagina, tamanho, opcoes, empre
         titulo="Propostas" entidade="proposta" tamanhoForm="lg" abrirNovo={novo}
         rotuloAvancado="Mais opções (obra, pagamento, detalhes do PDF)" extraForm={(v) => <ResumoContrato v={v} opcoes={opcoes} />}
         aoAlterar={ajustes}
-        descricao={<>Orçamentos de locação. Fechou com o cliente? Use <strong>Gerar contrato</strong> na linha da proposta. Cliente novo? <Link className="underline" href="/cadastros/clientes">Cadastre em Clientes</Link>.</>}
+        descricao={<>Orçamentos de locação. Fechou com o cliente? Use <strong>Gerar contrato</strong> na linha da proposta. Cliente novo? Escolha <strong>+ Cliente sem cadastro</strong> e digite o nome.</>}
         linhas={linhas} total={total} pagina={pagina} tamanho={tamanho} colunas={colunas}
-        campos={camposProposta(opcoes, empresas)} schema={propostaSchema as never}
+        campos={camposProposta(opcoes, empresas)} schema={propostaFormSchema as never}
         busca="Buscar nº ou equipamento…"
         filtros={<>
           <FiltroSelectUrl param="status" rotulo="Situação" vazio="Em aberto" opcoes={[
@@ -167,13 +170,13 @@ export function PropostasCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
         </>}
         novo={{ modelo_documento: "guindaste", contato_cliente: null, local_operacao: null, quantidade: 1, franquia: null, km_livre: null, jornada: null,
-          valor_mobilizacao: null, valor_desmobilizacao: null, multa_rescisao_pct: 10, tipo_cobranca: "mensal", modalidade: "com_motorista", empresa_id: empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, obra_id: null, veiculo_id: null, equipamento: null,
+          valor_mobilizacao: null, valor_desmobilizacao: null, multa_rescisao_pct: 10, tipo_cobranca: "mensal", modalidade: "com_motorista", empresa_id: empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, obra_id: null, veiculo_id: null, equipamento: null,
           valor: undefined, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio_prevista: null, periodo_minimo: null,
           validade: null, condicoes: null, observacoes: null, status: "rascunho", motivo_recusa: null }}
         paraForm={(r) => ({
           modelo_documento: r.modelo_documento, contato_cliente: r.contato_cliente, local_operacao: r.local_operacao, quantidade: r.quantidade, franquia: r.franquia,
           km_livre: r.km_livre, jornada: r.jornada, valor_mobilizacao: r.valor_mobilizacao, valor_desmobilizacao: r.valor_desmobilizacao,
-          multa_rescisao_pct: r.multa_rescisao_pct, tipo_cobranca: r.tipo_cobranca, modalidade: r.modalidade, empresa_id: r.empresa_id, cliente_id: r.cliente_id, obra_id: r.obra_id, veiculo_id: r.veiculo_id, equipamento: r.equipamento,
+          multa_rescisao_pct: r.multa_rescisao_pct, tipo_cobranca: r.tipo_cobranca, modalidade: r.modalidade, empresa_id: r.empresa_id, cliente_id: r.cliente_id, cliente_novo: null, obra_id: r.obra_id, veiculo_id: r.veiculo_id, equipamento: r.equipamento,
           valor: r.valor, dia_corte_inicio: String(r.dia_corte_inicio) as never, prazo_pagamento_dias: r.prazo_pagamento_dias,
           data_inicio_prevista: r.data_inicio_prevista, periodo_minimo: r.periodo_minimo, validade: r.validade, condicoes: r.condicoes,
           observacoes: r.observacoes, status: r.status as PropostaForm["status"], motivo_recusa: r.motivo_recusa,
