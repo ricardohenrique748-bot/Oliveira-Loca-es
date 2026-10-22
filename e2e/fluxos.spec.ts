@@ -80,7 +80,7 @@ test("abrir e fechar OS gerando conta a pagar", async ({ page }) => {
   const item = page.getByRole("dialog", { name: "Novo item" });
   await item.getByLabel("Descrição").fill("Regulagem de freio");
   await item.getByLabel("Quantidade").fill("1");
-  await item.getByLabel("Valor unitário").fill("35000");
+  await item.getByLabel("Valor unitário").fill("350");
   await item.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("row", { name: /Regulagem de freio/ })).toContainText("R$ 350,00");
 
