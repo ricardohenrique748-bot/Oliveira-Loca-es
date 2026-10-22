@@ -42,6 +42,8 @@ export const desmobilizarSchema = z.object({
 export const edicaoMedicaoSchema = z.object({
   id: z.string().uuid(),
   dias: z.number().int().min(0).max(31).optional(),
+  /** valor mensal (ou da diária) desta medição; o contrato só dá o valor inicial */
+  valor_mensal: z.number().min(0).max(999_999_999).optional(),
   acrescimos: z.number().min(0).optional(),
   descontos: z.number().min(0).optional(),
   numero_nf: z.string().trim().max(30).nullable().optional(),

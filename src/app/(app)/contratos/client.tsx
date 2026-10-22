@@ -16,7 +16,7 @@ import { contratoFormSchema, type ContratoForm } from "@/lib/schemas/operacao";
 import { CLIENTE_NOVO } from "@/lib/schemas/cadastros";
 import { formatData, formatPlaca, hojeSP } from "@/lib/format";
 import { baixarContratoPDF } from "@/lib/documentos/baixar";
-import { desmobilizarContrato, salvarContrato } from "./actions";
+import { desmobilizarContrato, excluirContrato, salvarContrato } from "./actions";
 import type { OpcoesContrato } from "./dados";
 
 export type LinhaContrato = {
@@ -143,7 +143,8 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
         </>}
         novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null }}
         paraForm={(c) => ({ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never })}
-        salvar={salvarContrato} podeEditar={podeEditar}
+        salvar={salvarContrato} excluir={excluirContrato} podeEditar={podeEditar}
+        avisoExcluir={(c) => <>O contrato <strong className="font-mono">{c.numero ?? formatPlaca(c.placa)}</strong> ({c.cliente}) será apagado <strong>junto com todas as medições dele</strong>, inclusive recebimentos, boletos e repasses. Esta ação não pode ser desfeita. Se o contrato só terminou, use <strong>Desmobilizar</strong>.</>}
         acoesLinha={(c) => (
           <>
             <Button variant="ghost" size="icon-sm" onClick={() => baixarContratoPDF(c.id)} title="PDF do contrato" aria-label={`PDF do contrato ${c.numero ?? formatPlaca(c.placa)}`}><FileDown /></Button>
@@ -163,7 +164,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
         ] }}
       />
       <DialogoDesmobilizar contrato={desmob} aberto={!!desmob} onOpenChange={(v) => !v && setDesmob(null)} />
-      <p className="mt-3 text-xs text-muted-foreground">Dica: as medições são geradas em <Link className="underline" href="/medicoes">Medições → Gerar medições do período</Link>.</p>
+      <p className="mt-3 text-xs text-muted-foreground">Dica: as medições são geradas em <Link className="underline" href="/medicoes">Faturamento → Gerar medições do período</Link>.</p>
     </>
   );
 }

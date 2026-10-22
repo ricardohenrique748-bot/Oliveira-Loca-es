@@ -34,7 +34,7 @@ const MENU_COMPLETO: GrupoMenu[] = [
     titulo: "Operação",
     itens: [
       { titulo: "Contratos", href: "/contratos", icone: FileText, modulo: "contratos", descricao: "Locações por placa e cliente", secao: "Faturamento" },
-      { titulo: "Medições", href: "/medicoes", icone: ClipboardList, modulo: "medicoes", descricao: "Medições e notas fiscais", secao: "Faturamento" },
+      { titulo: "Faturamento", href: "/medicoes", icone: ClipboardList, modulo: "medicoes", descricao: "Medições e notas fiscais", secao: "Faturamento" },
       { titulo: "Contas a receber", href: "/receber", icone: HandCoins, modulo: "receber", descricao: "Faturas e recebimentos", secao: "Faturamento" },
       { titulo: "Repasses", href: "/repasses", icone: Wallet, modulo: "repasses", descricao: "Pagamentos aos locadores", secao: "Financeiro" },
       { titulo: "Contas a pagar", href: "/pagar", icone: Receipt, modulo: "pagar", descricao: "Despesas e vencimentos", secao: "Financeiro" },

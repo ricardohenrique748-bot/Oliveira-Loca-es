@@ -5,6 +5,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { resolverClienteNovo } from "@/lib/clientes";
+import { enviarAoFaturamento } from "../../medicoes/actions";
 import { propostaSchema } from "@/lib/schemas/comercial";
 
 const R = ["/comercial/propostas"];
@@ -31,6 +32,8 @@ export async function gerarContratoDaProposta(propostaId: string) {
     const id = z.string().uuid().parse(propostaId);
     const supabase = await createClient();
     const contratoId = checar(await supabase.rpc("fn_proposta_gerar_contrato", { p_proposta: id })) as string;
+    // como no contrato criado à mão, a primeira fatura já vai para o faturamento
+    await enviarAoFaturamento(contratoId);
     return { contratoId };
-  }, [...R, "/contratos", "/cadastros/veiculos"], "Contrato gerado a partir da proposta");
+  }, [...R, "/contratos", "/medicoes", "/cadastros/veiculos"], "Contrato gerado a partir da proposta");
 }

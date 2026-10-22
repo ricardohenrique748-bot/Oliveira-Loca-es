@@ -2,7 +2,8 @@
  * Gera a demonstração para o cliente: um único HTML que abre direto no navegador (duplo clique),
  * sem servidor, sem Supabase e sem login. Leva junto o Postgres (PGlite/WASM) já com migrations + seed.
  *
- *   npm run demo   →   dist-demo/Oliveira-Locacoes-Demo.html
+ *   npm run demo              →   dist-demo/Oliveira-Locacoes-Demo.html
+ *   npm run demo -- --vazio   →   dist-demo/Oliveira-Locacoes-Demo-Vazio.html (só clientes, fornecedores e placas)
  */
 import { build } from "vite";
 import { gzipSync } from "node:zlib";
@@ -14,7 +15,8 @@ import { criarBanco } from "../db/pglite";
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SAIDA = path.join(RAIZ, "dist-demo");
 const TEMP = path.join(SAIDA, "build");
-const ARQUIVO = path.join(SAIDA, "Oliveira-Locacoes-Demo.html");
+const VAZIO = process.argv.includes("--vazio");
+const ARQUIVO = path.join(SAIDA, VAZIO ? "Oliveira-Locacoes-Demo-Vazio.html" : "Oliveira-Locacoes-Demo.html");
 const PGLITE = path.join(RAIZ, "node_modules", "@electric-sql", "pglite", "dist");
 
 const mb = (n: number) => `${(n / 1024 / 1024).toFixed(1)} MB`;
@@ -23,13 +25,18 @@ const dataUri = (arquivo: string, tipo: string) => `data:${tipo};base64,${readFi
 // 1. banco com migrations + seed, salvo como tarball do diretório de dados
 console.log("→ montando o banco (migrations + seed)…");
 const db = await criarBanco({ seed: true });
+if (VAZIO) {
+  // mesmo script usado no banco real: mantém cadastros (clientes, fornecedores, placas) e zera o resto
+  await db.exec(readFileSync(path.join(RAIZ, "scripts", "demo", "zerar-sistema.sql"), "utf8"));
+  console.log("  sistema zerado, cadastros mantidos (--vazio)");
+}
 const dump = Buffer.from(await (await db.dumpDataDir("gzip")).arrayBuffer());
 await db.close();
 console.log(`  banco: ${mb(dump.length)}`);
 
 // 2. build do app em modo demo
 console.log("→ build do sistema (modo demo)…");
-rmSync(SAIDA, { recursive: true, force: true });
+rmSync(TEMP, { recursive: true, force: true });
 mkdirSync(SAIDA, { recursive: true });
 await build({ root: RAIZ, mode: "demo", logLevel: "warn", build: { outDir: TEMP, emptyOutDir: true } });
 

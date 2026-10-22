@@ -32,8 +32,8 @@ export type LinhaMedicao = {
   tipo_cobranca: TipoCobranca | null;
 };
 
-type Editavel = Pick<LinhaMedicao, "dias" | "acrescimos" | "descontos" | "numero_nf" | "data_emissao" | "data_vencimento" | "observacoes">;
-const COLS = ["dias", "acrescimos", "descontos", "numero_nf", "data_emissao", "data_vencimento", "observacoes"] as const;
+type Editavel = Pick<LinhaMedicao, "dias" | "valor_mensal" | "acrescimos" | "descontos" | "numero_nf" | "data_emissao" | "data_vencimento" | "observacoes">;
+const COLS = ["dias", "valor_mensal", "acrescimos", "descontos", "numero_nf", "data_emissao", "data_vencimento", "observacoes"] as const;
 
 const STATUS_OPCOES: Opcao[] = [
   { value: "a_faturar", label: "A faturar" }, { value: "faturado", label: "Faturado" }, { value: "vencido", label: "Vencido" },
@@ -59,7 +59,8 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
   const [selecao, setSelecao] = React.useState<Set<string>>(new Set());
   const [salvando, setSalvando] = React.useState(false);
   const [gerarAberto, setGerarAberto] = React.useState(false);
-  const [faturarAberto, setFaturarAberto] = React.useState(false);
+  // faturas no diálogo de faturar: as selecionadas ou a da linha clicada
+  const [faturando, setFaturando] = React.useState<LinhaMedicao[] | null>(null);
   const [cancelarAberto, setCancelarAberto] = React.useState(false);
   const [detalhe, setDetalhe] = React.useState<LinhaMedicao | null>(null);
   const [lancarAberto, setLancarAberto] = React.useState(false);
@@ -79,15 +80,15 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
     });
   };
   const calc = (m: LinhaMedicao) => calcularValorMedicao({
-    valorMensal: m.valor_mensal, dias: valor(m, "dias"), acrescimos: valor(m, "acrescimos"), descontos: valor(m, "descontos"), baseDias: baseCobranca(m.tipo_cobranca, baseDias),
+    valorMensal: valor(m, "valor_mensal"), dias: valor(m, "dias"), acrescimos: valor(m, "acrescimos"), descontos: valor(m, "descontos"), baseDias: baseCobranca(m.tipo_cobranca, baseDias),
   });
   const alterados = Object.keys(edicoes).filter((id) => {
     const m = linhas.find((l) => l.id === id);
     return m && COLS.some((k) => k in edicoes[id] && edicoes[id][k] !== m[k]);
   });
 
-  const salvar = React.useCallback(async () => {
-    if (!alterados.length) return;
+  const salvar = React.useCallback(async (): Promise<boolean> => {
+    if (!alterados.length) return true;
     setSalvando(true);
     const payload = alterados.map((id) => {
       const m = linhas.find((l) => l.id === id)!;
@@ -99,6 +100,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
     const r = await rodarAcao(salvarMedicoes(payload));
     setSalvando(false);
     if (r.ok) router.refresh();
+    return r.ok;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alterados, edicoes, linhas]);
 
@@ -150,11 +152,11 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
 
   return (
     <div className="space-y-4">
-      <Cabecalho titulo="Medições e faturamento"
-        descricao={<>Valor = (mensal ÷ {baseDias}) × dias + acréscimos − descontos. Vencimento = emissão + prazo do contrato. <kbd className="rounded border px-1 text-xs">Ctrl+S</kbd> salva · <kbd className="rounded border px-1 text-xs">Enter</kbd> desce na coluna.</>}
+      <Cabecalho titulo="Faturamento"
+        descricao={<>Faturas de cada contrato: digite o valor, a NF e a emissão e marque como faturado. Vencimento = emissão + prazo do contrato. <kbd className="rounded border px-1 text-xs">Ctrl+S</kbd> salva · <kbd className="rounded border px-1 text-xs">Enter</kbd> desce na coluna.</>}
         acoes={podeEditar && <>
-          <Button variant="outline" onClick={() => setLancarAberto(true)}><Plus /> Lançar medição</Button>
-          <Button onClick={() => setGerarAberto(true)}><Wand2 /> Gerar medições do período</Button>
+          <Button variant="outline" onClick={() => setLancarAberto(true)}><Plus /> Lançar fatura</Button>
+          <Button onClick={() => setGerarAberto(true)}><Wand2 /> Gerar faturas do período</Button>
         </>} />
 
       <BarraFiltros>
@@ -180,7 +182,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
         {selecionados.length > 0 && podeEditar && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary bg-accent px-3 py-1.5 text-sm">
             <span className="font-medium">{selecionados.length} selecionada(s)</span>
-            <Button size="xs" onClick={() => setFaturarAberto(true)}><CheckCheck /> Marcar como faturado</Button>
+            <Button size="xs" onClick={() => setFaturando(selecionados)}><CheckCheck /> Marcar como faturado</Button>
             <Button size="xs" variant="outline" onClick={async () => { const r = await rodarAcao(voltarParaAFaturar(selecionados.map((s) => s.id))); if (r.ok) router.refresh(); }}><Undo2 /> Voltar p/ a faturar</Button>
             <Button size="xs" variant="outline" onClick={() => setCancelarAberto(true)}><Ban /> Cancelar</Button>
           </div>
@@ -200,20 +202,16 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
       <Card className={cn("hidden overflow-hidden md:block", url.pendente && "opacity-60")}>
         <Table ref={tabela} onKeyDown={navegar} className="table-fixed text-xs [&_td]:px-1.5 [&_td]:py-1.5 [&_th]:h-10 [&_th]:px-1.5 [&_th]:text-xs">
           <colgroup>
-            <col className="w-[2.5%]" /><col className="w-[15%]" /><col className="w-[8.5%]" /><col className="w-[4.5%]" />
-            <col className="w-[8%]" /><col className="w-[8%]" /><col className="w-[9%]" /><col className="w-[7%]" />
-            <col className="w-[9.5%]" /><col className="w-[9.5%]" /><col className="w-[7.5%]" /><col className="w-[8%]" /><col className="w-[3%]" />
+            <col className="w-[3%]" /><col className="w-[22%]" /><col className="w-[10%]" /><col className="w-[12%]" />
+            <col className="w-[8%]" /><col className="w-[10.5%]" /><col className="w-[10.5%]" /><col className="w-[8.5%]" /><col className="w-[12%]" /><col className="w-[3.5%]" />
           </colgroup>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead><Checkbox aria-label="Selecionar todas" checked={todos ? true : selecao.size ? "indeterminate" : false}
                 onCheckedChange={(v) => setSelecao(v ? new Set(linhas.map((l) => l.id)) : new Set())} /></TableHead>
-              <TableHead>Placa / cliente</TableHead>
+              <TableHead>Contrato / cliente</TableHead>
               <TableHead>Período</TableHead>
-              <TableHead className="text-right">Dias</TableHead>
-              <TableHead className="text-right">Acréscimos</TableHead>
-              <TableHead className="text-right">Descontos</TableHead>
-              <TableHead className="text-right" title="Valor final (mensal abaixo)">Valor</TableHead>
+              <TableHead className="text-right" title="Valor da fatura (mensal abaixo)">Valor</TableHead>
               <TableHead>NF</TableHead>
               <TableHead>Emissão</TableHead>
               <TableHead>Vencimento</TableHead>
@@ -224,8 +222,8 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
           </TableHeader>
           <TableBody>
             {linhas.length === 0 && (
-              <TableRow><TableCell colSpan={13} className="h-24 text-center text-sm text-muted-foreground">
-                Nenhuma medição {competencia === "todas" ? "pendente" : competencia === "historico" ? "encontrada" : `em ${formatCompetencia(competencia)}`}. {podeEditar && "Use “Gerar medições do período”."}
+              <TableRow><TableCell colSpan={10} className="h-24 text-center text-sm text-muted-foreground">
+                Nenhuma fatura {competencia === "todas" ? "pendente" : competencia === "historico" ? "encontrada" : `em ${formatCompetencia(competencia)}`}. {podeEditar && "Use “Gerar faturas do período”."}
               </TableCell></TableRow>
             )}
             {linhas.map((m, i) => {
@@ -239,29 +237,37 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                   <TableCell><Checkbox aria-label={`Selecionar ${m.placa}`} checked={selecao.has(m.id)} onCheckedChange={() => alternar(m.id)} /></TableCell>
                   <TableCell className="cursor-pointer" onClick={() => setDetalhe(m)} title={`${m.empresa_apelido} · ${m.cliente_fantasia}${m.obra_nome ? ` · ${m.obra_nome}` : ""}`}>
                     <div className="flex items-center gap-1">
-                      <span className="font-mono text-sm font-semibold hover:underline">{formatPlaca(m.placa)}</span>
+                      {m.contrato_numero != null && <span className="font-mono text-sm font-semibold hover:underline">{m.contrato_numero}</span>}
+                      <span className={cn("font-mono", m.contrato_numero != null ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{formatPlaca(m.placa)}</span>
                       {m.proprietario === "locador" && <Badge variant="info" className="px-1.5 py-0 text-[10px]">Sub</Badge>}
                       {m.final && <Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Final</Badge>}
                     </div>
                     <p className="truncate text-muted-foreground">{m.empresa_apelido} · {m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""}</p>
                   </TableCell>
-                  <TableCell className="leading-tight">{formatData(m.periodo_inicio)}<br /><span className="text-muted-foreground">a {formatData(m.periodo_fim)}</span></TableCell>
-                  <TableCell>
-                    <InputNumero data-linha={i} data-col="dias" aria-label="Dias" className={cn(campo, "text-right")} value={valor(m, "dias")}
-                      disabled={!podeEditar || m.status !== "a_faturar"} onChange={(v) => editar(m, "dias", Math.min(31, v ?? 0))} />
+                  <TableCell className="leading-tight">{formatData(m.periodo_inicio)}<br /><span className="text-muted-foreground">a {formatData(m.periodo_fim)}</span>
+                    {(m.dias !== baseCobranca(m.tipo_cobranca, baseDias) || m.acrescimos > 0 || m.descontos > 0) && m.tipo_cobranca !== "diaria" && (
+                      <p className="text-[11px] text-status-alerta" title="Dias, acréscimos e descontos: abra a fatura para ajustar">{m.dias} dias{m.acrescimos > 0 ? " · +acr." : ""}{m.descontos > 0 ? " · −desc." : ""}</p>
+                    )}
+                    {m.tipo_cobranca === "diaria" && <p className="text-[11px] text-muted-foreground">{m.dias} diárias</p>}
                   </TableCell>
-                  <TableCell><InputMoeda data-linha={i} data-col="acrescimos" aria-label="Acréscimos" className={cn(campo, "pl-7")} permitirVazio={false} disabled={!ed} value={valor(m, "acrescimos")} onChange={(v) => editar(m, "acrescimos", v ?? 0)} /></TableCell>
-                  <TableCell><InputMoeda data-linha={i} data-col="descontos" aria-label="Descontos" className={cn(campo, "pl-7")} permitirVazio={false} disabled={!ed} value={valor(m, "descontos")} onChange={(v) => editar(m, "descontos", v ?? 0)} /></TableCell>
                   <TableCell className="text-right leading-tight">
                     <span className="text-sm font-semibold"><Moeda valor={valorFinal} /></span><br />
-                    <span className="text-[11px] text-muted-foreground" title="Valor mensal">mensal <Moeda valor={m.valor_mensal} /></span>
+                    {ed
+                      ? <InputMoeda data-linha={i} data-col="valor_mensal" aria-label={m.tipo_cobranca === "diaria" ? "Valor da diária" : "Valor mensal"} title={m.tipo_cobranca === "diaria" ? "Valor da diária" : "Valor mensal"}
+                          className="mt-0.5 h-6 w-28 pl-7 text-right text-[11px]" permitirVazio={false} value={valor(m, "valor_mensal")} onChange={(v) => editar(m, "valor_mensal", v ?? 0)} />
+                      : <span className="text-[11px] text-muted-foreground" title="Valor mensal">mensal <Moeda valor={m.valor_mensal} /></span>}
                   </TableCell>
                   <TableCell><Input data-linha={i} data-col="numero_nf" aria-label="Número da NF" className={campo} disabled={!ed} value={valor(m, "numero_nf") ?? ""} onChange={(e) => editar(m, "numero_nf", e.target.value || null)} /></TableCell>
                   <TableCell><Input data-linha={i} data-col="data_emissao" aria-label="Data de emissão" type="date" className={data} disabled={!ed} value={valor(m, "data_emissao") ?? ""} onChange={(e) => editar(m, "data_emissao", e.target.value || null)} /></TableCell>
                   <TableCell><Input data-linha={i} data-col="data_vencimento" aria-label="Vencimento" type="date" className={data} disabled={!ed} value={valor(m, "data_vencimento") ?? ""} onChange={(e) => editar(m, "data_vencimento", e.target.value || null)} /></TableCell>
-                  <TableCell><StatusBadge status={m.status_exibicao} className="whitespace-nowrap px-1.5 text-[11px]" /></TableCell>
+                  <TableCell>
+                    <StatusBadge status={m.status_exibicao} className="whitespace-nowrap px-1.5 text-[11px]" />
+                    {podeEditar && m.status === "a_faturar" && (
+                      <Button size="xs" className="mt-1 h-6 px-2 text-[11px]" onClick={() => setFaturando([m])} aria-label={`Faturar ${m.contrato_numero ?? m.placa}`}><CheckCheck /> Faturar</Button>
+                    )}
+                  </TableCell>
                   <TableCell><Input data-linha={i} data-col="observacoes" aria-label="Observações" className={campo} title={valor(m, "observacoes") ?? ""} disabled={!podeEditar || m.status === "cancelado"} value={valor(m, "observacoes") ?? ""} onChange={(e) => editar(m, "observacoes", e.target.value || null)} /></TableCell>
-                  <TableCell><Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Abrir medição ${m.placa}`} onClick={() => setDetalhe(m)}><Eye /></Button></TableCell>
+                  <TableCell><Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Abrir fatura ${m.placa}`} onClick={() => setDetalhe(m)}><Eye /></Button></TableCell>
                 </TableRow>
               );
             })}
@@ -269,7 +275,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
           {linhas.length > 0 && (
             <TableFooter>
               <TableRow>
-                <TableCell colSpan={6}>{linhas.length} medições{total > linhas.length ? ` (de ${total})` : ""}</TableCell>
+                <TableCell colSpan={3}>{linhas.length} faturas{total > linhas.length ? ` (de ${total})` : ""}</TableCell>
                 <TableCell className="text-right text-sm"><Moeda valor={totalValor} /></TableCell>
                 <TableCell colSpan={6} />
               </TableRow>
@@ -286,23 +292,24 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
             <Card key={m.id} className={cn("space-y-2 p-3", selecao.has(m.id) && "border-primary")}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-mono font-semibold">{formatPlaca(m.placa)} <span className="font-sans text-xs font-normal text-muted-foreground">{m.empresa_apelido}</span></p>
+                  <p className="font-mono font-semibold">{m.contrato_numero != null ? `${m.contrato_numero} · ` : ""}{formatPlaca(m.placa)} <span className="font-sans text-xs font-normal text-muted-foreground">{m.empresa_apelido}</span></p>
                   <p className="text-xs text-muted-foreground">{m.cliente_fantasia} · {formatPeriodo(m.periodo_inicio, m.periodo_fim)}</p>
                 </div>
                 <div className="flex items-center gap-2"><StatusBadge status={m.status_exibicao} /><Checkbox aria-label="Selecionar" checked={selecao.has(m.id)} onCheckedChange={() => alternar(m.id)} /></div>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <label className="space-y-1"><span className="text-xs text-muted-foreground">Dias</span>
-                  <InputNumero className="h-9" value={valor(m, "dias")} disabled={!podeEditar || m.status !== "a_faturar"} onChange={(v) => editar(m, "dias", v ?? 0)} /></label>
-                <div className="space-y-1"><span className="text-xs text-muted-foreground">Valor</span><p className="pt-2 font-semibold"><Moeda valor={calc(m).valorFinal} /></p></div>
-                <label className="space-y-1"><span className="text-xs text-muted-foreground">Acréscimos</span><InputMoeda className="h-9" permitirVazio={false} disabled={!ed} value={valor(m, "acrescimos")} onChange={(v) => editar(m, "acrescimos", v ?? 0)} /></label>
-                <label className="space-y-1"><span className="text-xs text-muted-foreground">Descontos</span><InputMoeda className="h-9" permitirVazio={false} disabled={!ed} value={valor(m, "descontos")} onChange={(v) => editar(m, "descontos", v ?? 0)} /></label>
+                <div className="col-span-2 space-y-1"><span className="text-xs text-muted-foreground">Valor da fatura</span><p className="font-semibold"><Moeda valor={calc(m).valorFinal} /></p></div>
+                <label className="col-span-2 space-y-1"><span className="text-xs text-muted-foreground">{m.tipo_cobranca === "diaria" ? "Valor da diária" : "Valor mensal"}</span>
+                  <InputMoeda className="h-9" permitirVazio={false} disabled={!ed} value={valor(m, "valor_mensal")} onChange={(v) => editar(m, "valor_mensal", v ?? 0)} /></label>
                 <label className="space-y-1"><span className="text-xs text-muted-foreground">NF</span><Input className="h-9" disabled={!ed} value={valor(m, "numero_nf") ?? ""} onChange={(e) => editar(m, "numero_nf", e.target.value || null)} /></label>
                 <label className="space-y-1"><span className="text-xs text-muted-foreground">Emissão</span><Input className="h-9" type="date" disabled={!ed} value={valor(m, "data_emissao") ?? ""} onChange={(e) => editar(m, "data_emissao", e.target.value || null)} /></label>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">Vencimento: {formatData(valor(m, "data_vencimento"))}</p>
-                <Button size="xs" variant="outline" onClick={() => setDetalhe(m)}><Eye /> Abrir</Button>
+                <div className="flex gap-2">
+                  {podeEditar && m.status === "a_faturar" && <Button size="xs" onClick={() => setFaturando([m])}><CheckCheck /> Faturar</Button>}
+                  <Button size="xs" variant="outline" onClick={() => setDetalhe(m)}><Eye /> Abrir</Button>
+                </div>
               </div>
             </Card>
           );
@@ -319,13 +326,14 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
 
       <DialogoLancarMedicao aberto={lancarAberto} onOpenChange={setLancarAberto} contratos={contratos} baseDias={baseDias}
         onLancado={(comp) => { url.set({ comp, status: null }); router.refresh(); }} />
-      <DialogoDetalhe medicao={detalhe} baseDias={baseDias} onOpenChange={(v) => !v && setDetalhe(null)} />
+      <DialogoDetalhe medicao={detalhe} baseDias={baseDias} podeEditar={podeEditar} onOpenChange={(v) => !v && setDetalhe(null)}
+        onSalvo={() => { setDetalhe(null); router.refresh(); }} />
       <DialogoGerar aberto={gerarAberto} onOpenChange={setGerarAberto} competenciaInicial={competencia === "todas" || competencia === "historico" ? competenciaPadrao : competencia}
         onGerado={(comp) => { url.set({ comp, status: null }); router.refresh(); }} />
-      <DialogoFaturar aberto={faturarAberto} onOpenChange={setFaturarAberto} selecionados={selecionados}
-        alteracoesPendentes={alterados.length > 0} onFeito={() => router.refresh()} />
-      <Confirmar aberto={cancelarAberto} onOpenChange={setCancelarAberto} titulo={`Cancelar ${selecionados.length} medição(ões)?`} destrutivo rotulo="Cancelar medições"
-        descricao="Medições canceladas saem do faturamento e o repasse vinculado (se houver e não pago) também é cancelado."
+      <DialogoFaturar aberto={!!faturando} onOpenChange={(v) => !v && setFaturando(null)} selecionados={faturando ?? []}
+        alteracoesPendentes={alterados.length > 0} salvarAntes={salvar} valorDe={(m) => calc(m).valorFinal} onFeito={() => router.refresh()} />
+      <Confirmar aberto={cancelarAberto} onOpenChange={setCancelarAberto} titulo={`Cancelar ${selecionados.length} fatura(s)?`} destrutivo rotulo="Cancelar faturas"
+        descricao="Faturas canceladas saem do faturamento e o repasse vinculado (se houver e não pago) também é cancelado."
         onConfirmar={async () => { const r = await rodarAcao(cancelarMedicoes(selecionados.map((s) => s.id))); if (r.ok) router.refresh(); }} />
     </div>
   );
@@ -423,8 +431,24 @@ function HistoricoMedicao({ id }: { id: string }) {
   );
 }
 
-function DialogoDetalhe({ medicao: m, baseDias, onOpenChange }: { medicao: LinhaMedicao | null; baseDias: number; onOpenChange: (v: boolean) => void }) {
+function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalvo }: {
+  medicao: LinhaMedicao | null; baseDias: number; podeEditar: boolean; onOpenChange: (v: boolean) => void; onSalvo: () => void;
+}) {
   const [gerando, setGerando] = React.useState(false);
+  // dias, acréscimos e descontos saíram da grade: ajustam-se aqui
+  const [ajuste, setAjuste] = React.useState({ dias: 0, acrescimos: 0, descontos: 0 });
+  const [salvando, setSalvando] = React.useState(false);
+  React.useEffect(() => { if (m) setAjuste({ dias: m.dias, acrescimos: m.acrescimos, descontos: m.descontos }); }, [m]);
+  const ed = !!m && podeEditar && (m.status === "a_faturar" || m.status === "faturado");
+  const mudou = !!m && (ajuste.dias !== m.dias || ajuste.acrescimos !== m.acrescimos || ajuste.descontos !== m.descontos);
+  const total = m ? calcularValorMedicao({ valorMensal: m.valor_mensal, ...ajuste, baseDias: baseCobranca(m.tipo_cobranca, baseDias) }).valorFinal : 0;
+  const salvarAjuste = async () => {
+    if (!m) return;
+    setSalvando(true);
+    const r = await rodarAcao(salvarMedicoes([{ id: m.id, ...(ajuste.dias !== m.dias ? { dias: ajuste.dias } : {}), acrescimos: ajuste.acrescimos, descontos: ajuste.descontos }]));
+    setSalvando(false);
+    if (r.ok) onSalvo();
+  };
   const item = (rotulo: string, valor: React.ReactNode) => (
     <div className="space-y-0.5"><p className="text-xs text-muted-foreground">{rotulo}</p><div className="text-sm font-medium">{valor ?? "—"}</div></div>
   );
@@ -434,7 +458,7 @@ function DialogoDetalhe({ medicao: m, baseDias, onOpenChange }: { medicao: Linha
         {m && <>
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2">
-              Medição <span className="font-mono">{formatPlaca(m.placa)}</span> <StatusBadge status={m.status_exibicao} />
+              Fatura <span className="font-mono">{m.contrato_numero ?? formatPlaca(m.placa)}</span> <StatusBadge status={m.status_exibicao} />
               {m.final && <Badge variant="neutro">Final</Badge>}
             </DialogTitle>
             <DialogDescription>{m.empresa_apelido} · {m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""} · {formatCompetencia(m.competencia.slice(0, 7), true)}</DialogDescription>
@@ -451,11 +475,18 @@ function DialogoDetalhe({ medicao: m, baseDias, onOpenChange }: { medicao: Linha
             <Table>
               <TableBody>
                 <TableRow><TableCell>Valor mensal</TableCell><TableCell className="text-right"><Moeda valor={m.valor_mensal} /></TableCell></TableRow>
-                <TableRow><TableCell>Valor base ({m.tipo_cobranca === "diaria" ? "diária" : `mensal ÷ ${baseDias}`} × {m.dias} dias)</TableCell><TableCell className="text-right"><Moeda valor={m.valor_base} /></TableCell></TableRow>
-                <TableRow><TableCell>Acréscimos</TableCell><TableCell className="text-right"><Moeda valor={m.acrescimos} /></TableCell></TableRow>
-                <TableRow><TableCell>Descontos</TableCell><TableCell className="text-right">− <Moeda valor={m.descontos} /></TableCell></TableRow>
+                <TableRow><TableCell>Dias ({m.tipo_cobranca === "diaria" ? "diária" : `mensal ÷ ${baseDias}`} × dias)</TableCell><TableCell className="text-right">
+                  <InputNumero aria-label="Dias" className="ml-auto h-8 w-20 text-right" value={ajuste.dias} disabled={!ed || m.status !== "a_faturar"}
+                    onChange={(v) => setAjuste((a) => ({ ...a, dias: Math.min(31, v ?? 0) }))} />
+                </TableCell></TableRow>
+                <TableRow><TableCell>Acréscimos</TableCell><TableCell className="text-right">
+                  <div className="ml-auto w-36"><InputMoeda aria-label="Acréscimos" className="h-8" permitirVazio={false} disabled={!ed} value={ajuste.acrescimos} onChange={(v) => setAjuste((a) => ({ ...a, acrescimos: v ?? 0 }))} /></div>
+                </TableCell></TableRow>
+                <TableRow><TableCell>Descontos</TableCell><TableCell className="text-right">
+                  <div className="ml-auto w-36"><InputMoeda aria-label="Descontos" className="h-8" permitirVazio={false} disabled={!ed} value={ajuste.descontos} onChange={(v) => setAjuste((a) => ({ ...a, descontos: v ?? 0 }))} /></div>
+                </TableCell></TableRow>
               </TableBody>
-              <TableFooter><TableRow><TableCell>Total da medição</TableCell><TableCell className="text-right"><Moeda valor={m.valor_final} /></TableCell></TableRow></TableFooter>
+              <TableFooter><TableRow><TableCell>Total da fatura</TableCell><TableCell className="text-right"><Moeda valor={total} /></TableCell></TableRow></TableFooter>
             </Table>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -468,9 +499,10 @@ function DialogoDetalhe({ medicao: m, baseDias, onOpenChange }: { medicao: Linha
           </div>
           {m.observacoes && <div className="rounded-md bg-muted p-3 text-sm"><p className="text-xs text-muted-foreground">Observações</p>{m.observacoes}</div>}
           <HistoricoMedicao id={m.id} />
-          <p className="text-xs text-muted-foreground">Valores salvos. Edições não salvas na grade não aparecem aqui nem no PDF.</p>
+          <p className="text-xs text-muted-foreground">Valores salvos. Edições não salvas na grade não aparecem aqui nem no PDF.{m.status === "faturado" && " Dias só mudam enquanto a fatura está “a faturar”."}</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
+            {ed && <Button variant="outline" disabled={!mudou || salvando} onClick={salvarAjuste}>{salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar ajustes</Button>}
             <Button disabled={gerando} onClick={async () => { setGerando(true); try { await pdfMedicao(m, baseDias); } finally { setGerando(false); } }}>
               {gerando ? <Loader2 className="animate-spin" /> : <FileDown />} Gerar PDF
             </Button>
@@ -501,7 +533,7 @@ function DialogoGerar({ aberto, onOpenChange, competenciaInicial, onGerado }: {
     const r = await gerarMedicoes(comp);
     setCarregando(false);
     if (!r.ok) return toast.error(r.erro);
-    toast.success(`${r.dados.geradas} medição(ões) gerada(s) em ${formatCompetencia(comp)}`);
+    toast.success(`${r.dados.geradas} fatura(s) gerada(s) em ${formatCompetencia(comp)}`);
     onOpenChange(false);
     onGerado(comp);
   };
@@ -510,9 +542,9 @@ function DialogoGerar({ aberto, onOpenChange, competenciaInicial, onGerado }: {
     <Dialog open={aberto} onOpenChange={onOpenChange}>
       <DialogContent tamanho="xl">
         <DialogHeader>
-          <DialogTitle>Gerar medições do período</DialogTitle>
+          <DialogTitle>Gerar faturas do período</DialogTitle>
           <DialogDescription>
-            Cria medições “a faturar” para todos os contratos vigentes que ainda não têm medição no período. Corte dia 01: 01 ao fim do mês; corte dia 21: 21 do mês anterior a 20 do mês escolhido.
+            Cria faturas “a faturar” para todos os contratos vigentes que ainda não têm fatura no período. Corte dia 01: 01 ao fim do mês; corte dia 21: 21 do mês anterior a 20 do mês escolhido.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap items-end gap-2">
@@ -524,7 +556,7 @@ function DialogoGerar({ aberto, onOpenChange, competenciaInicial, onGerado }: {
         </div>
         {previa && (
           previa.length === 0 ? (
-            <p className="rounded-md bg-muted p-4 text-sm">Nenhuma medição a gerar em {formatCompetencia(comp)} — todos os contratos vigentes já têm medição neste período.</p>
+            <p className="rounded-md bg-muted p-4 text-sm">Nenhuma fatura a gerar em {formatCompetencia(comp)} — todos os contratos vigentes já têm fatura neste período.</p>
           ) : (
             <div className="max-h-[50vh] overflow-auto rounded-md border">
               <Table>
@@ -547,7 +579,7 @@ function DialogoGerar({ aberto, onOpenChange, competenciaInicial, onGerado }: {
                   ))}
                 </TableBody>
                 <TableFooter><TableRow>
-                  <TableCell colSpan={6}>{previa.length} medições</TableCell>
+                  <TableCell colSpan={6}>{previa.length} faturas</TableCell>
                   <TableCell className="text-right"><Moeda valor={somar(previa.map((l) => l.valor_final))} /></TableCell>
                   <TableCell className="text-right"><Moeda valor={somar(previa.map((l) => l.valor_repasse_bruto ?? 0))} /></TableCell>
                 </TableRow></TableFooter>
@@ -557,31 +589,35 @@ function DialogoGerar({ aberto, onOpenChange, competenciaInicial, onGerado }: {
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          <Button disabled={!previa?.length || carregando} onClick={confirmar}>{carregando && previa ? <Loader2 className="animate-spin" /> : <Wand2 />} Gerar {previa?.length ?? ""} medições</Button>
+          <Button disabled={!previa?.length || carregando} onClick={confirmar}>{carregando && previa ? <Loader2 className="animate-spin" /> : <Wand2 />} Gerar {previa?.length ?? ""} faturas</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function DialogoFaturar({ aberto, onOpenChange, selecionados, alteracoesPendentes, onFeito }: {
-  aberto: boolean; onOpenChange: (v: boolean) => void; selecionados: LinhaMedicao[]; alteracoesPendentes: boolean; onFeito: () => void;
+function DialogoFaturar({ aberto, onOpenChange, selecionados, alteracoesPendentes, salvarAntes, valorDe, onFeito }: {
+  aberto: boolean; onOpenChange: (v: boolean) => void; selecionados: LinhaMedicao[]; alteracoesPendentes: boolean;
+  salvarAntes: () => Promise<boolean>; valorDe: (m: LinhaMedicao) => number; onFeito: () => void;
 }) {
   const [emissao, setEmissao] = React.useState(hojeSP());
   const aFaturar = selecionados.filter((s) => s.status === "a_faturar");
   const semNF = aFaturar.filter((s) => !s.numero_nf).length;
+  const semValor = aFaturar.filter((s) => valorDe(s) <= 0).length;
   return (
-    <Confirmar aberto={aberto} onOpenChange={onOpenChange} titulo={`Faturar ${aFaturar.length} medição(ões)`} rotulo="Marcar como faturado"
+    <Confirmar aberto={aberto} onOpenChange={onOpenChange} titulo={`Faturar ${aFaturar.length} fatura(s)`} rotulo="Marcar como faturado"
       descricao={<div className="space-y-2">
-        <p>As medições sem data de emissão receberão a data abaixo; o vencimento é calculado pelo prazo de cada contrato.</p>
-        {alteracoesPendentes && <p className="font-semibold text-status-alerta">Há alterações não salvas na grade — salve antes de faturar.</p>}
+        <p>As faturas sem data de emissão receberão a data abaixo; o vencimento é calculado pelo prazo de cada contrato.</p>
+        {alteracoesPendentes && <p>O que foi digitado na grade será salvo antes de faturar.</p>}
+        {semValor > 0 && <p className="font-semibold text-status-alerta">{semValor === 1 && aFaturar.length === 1 ? "A fatura está" : `${semValor} fatura(s) estão`} com valor R$ 0,00.</p>}
         {semNF > 0 && <p className="text-status-alerta">{semNF} sem número de NF.</p>}
         {aFaturar.length < selecionados.length && <p>{selecionados.length - aFaturar.length} já faturada(s) serão ignoradas.</p>}
       </div>}
       onConfirmar={async () => {
+        if (alteracoesPendentes && !(await salvarAntes())) throw new Error("Não foi possível salvar as alterações");
         const r = await faturarMedicoes(aFaturar.map((s) => s.id), emissao);
         if (!r.ok) { toast.error(r.erro); throw new Error(r.erro); }
-        toast.success(`${r.dados.faturadas} medição(ões) faturada(s)`);
+        toast.success(`${r.dados.faturadas} fatura(s) marcada(s) como faturada(s)`);
         onFeito();
       }}>
       <div className="space-y-1.5">

@@ -32,16 +32,17 @@ export async function previaMedicoes(comp: string) {
     const linhas = checar(await supabase.rpc("fn_gerar_medicoes", { p_competencia: `${c}-01`, p_dry_run: true })) ?? [];
     if (!linhas.length) return [] as LinhaPrevia[];
     const { data: contratos } = await supabase.from("contratos")
-      .select("id, clientes(razao_social, nome_fantasia), obras(nome), veiculos(placa), empresas(apelido)")
+      .select("id, tipo_cobranca, clientes(razao_social, nome_fantasia), obras(nome), veiculos(placa), empresas(apelido)")
       .in("id", linhas.map((l) => l.contrato_id));
     const mapa = new Map((contratos ?? []).map((k) => [k.id, k]));
     return linhas.map((l): LinhaPrevia => {
       const k = mapa.get(l.contrato_id);
+      const diaria = k?.tipo_cobranca === "diaria";
       return {
         contrato_id: l.contrato_id, placa: k?.veiculos?.placa ?? "", cliente: k?.clientes?.nome_fantasia ?? k?.clientes?.razao_social ?? "",
         obra: k?.obras?.nome ?? null, empresa: k?.empresas?.apelido ?? "", periodo_inicio: l.periodo_inicio, periodo_fim: l.periodo_fim,
-        dias: l.dias, valor_mensal: Number(l.valor_mensal), valor_final: Number(l.valor_final),
-        valor_repasse_bruto: l.valor_repasse_bruto == null ? null : Number(l.valor_repasse_bruto),
+        dias: diaria ? 0 : l.dias, valor_mensal: Number(l.valor_mensal), valor_final: diaria ? 0 : Number(l.valor_final),
+        valor_repasse_bruto: l.valor_repasse_bruto == null ? null : diaria ? 0 : Number(l.valor_repasse_bruto),
       };
     }).sort((a, b) => a.empresa.localeCompare(b.empresa) || a.cliente.localeCompare(b.cliente) || a.placa.localeCompare(b.placa));
   });
@@ -54,8 +55,34 @@ export async function gerarMedicoes(comp: string, contratos?: string[]) {
     const ids = contratos ? z.array(z.string().uuid()).parse(contratos) : undefined;
     const supabase = await createClient();
     const r = checar(await supabase.rpc("fn_gerar_medicoes", { p_competencia: `${c}-01`, ...(ids ? { p_contratos: ids } : {}) })) ?? [];
+    await zerarDiasDiaria(supabase, r.map((l) => l.medicao_id).filter((id): id is string => !!id));
     return { geradas: r.length };
   }, REVALIDAR);
+}
+
+/** Diária: a fatura nasce com 0 dias; os dias trabalhados são digitados ao abrir a fatura. */
+async function zerarDiasDiaria(supabase: Awaited<ReturnType<typeof createClient>>, medicaoIds: string[]) {
+  if (!medicaoIds.length) return;
+  const { data: meds } = await supabase.from("medicoes").select("id, contrato_id").in("id", medicaoIds);
+  const { data: diaria } = await supabase.from("contratos").select("id").in("id", [...new Set((meds ?? []).map((m) => m.contrato_id))]).eq("tipo_cobranca", "diaria");
+  const contratosDiaria = new Set((diaria ?? []).map((c) => c.id));
+  const diarias = (meds ?? []).filter((m) => contratosDiaria.has(m.contrato_id)).map((m) => m.id);
+  if (diarias.length) checar(await supabase.from("medicoes").update({ dias: 0 }).in("id", diarias));
+}
+
+/** Competência (AAAA-MM) da fatura que contém a data: corte 21 → a partir do dia 21 já é o período do mês seguinte. */
+function competenciaDaData(data: string, diaCorte: number): string {
+  const [ano, mes, dia] = data.split("-").map(Number);
+  const d = new Date(Date.UTC(ano, mes - 1 + (diaCorte === 21 && dia >= 21 ? 1 : 0), 1));
+  return d.toISOString().slice(0, 7);
+}
+
+/** Contrato novo vai direto para o faturamento: cria a fatura do período em que ele começa. */
+export async function enviarAoFaturamento(contratoId: string) {
+  const supabase = await createClient();
+  const { data: c } = await supabase.from("contratos").select("data_inicio, dia_corte_inicio, status").eq("id", contratoId).maybeSingle();
+  if (!c || c.status !== "ativo") return { ok: true as const, dados: { geradas: 0 } };
+  return gerarMedicoes(competenciaDaData(c.data_inicio, c.dia_corte_inicio), [contratoId]);
 }
 
 export interface ContratoLancamento {
@@ -114,7 +141,7 @@ export async function lancarMedicao(dados: unknown) {
       final: !!c.data_desmobilizacao && c.data_desmobilizacao >= d.periodo_inicio && c.data_desmobilizacao <= d.periodo_fim,
     }).select("id").single());
     return { id: nova!.id, competencia: d.periodo_fim.slice(0, 7) };
-  }, REVALIDAR, "Medição lançada");
+  }, REVALIDAR, "Fatura lançada");
 }
 
 /** Salva as edições da grade (dias, acréscimos, descontos, NF, emissão, vencimento, observações). */
@@ -125,13 +152,13 @@ export async function salvarMedicoes(edicoes: unknown) {
     const supabase = await createClient();
     for (const { id, ...campos } of lista) {
       const { data: atual } = await supabase.from("medicoes").select("status").eq("id", id).single();
-      if (!atual) throw new Error("Medição não encontrada");
-      if (atual.status === "cancelado" || atual.status === "recebido") throw new Error("Medições recebidas ou canceladas não podem ser editadas");
+      if (!atual) throw new Error("Fatura não encontrada");
+      if (atual.status === "cancelado" || atual.status === "recebido") throw new Error("Faturas recebidas ou canceladas não podem ser editadas");
       if (atual.status !== "a_faturar" && campos.dias !== undefined) delete campos.dias;
       checar(await supabase.from("medicoes").update(campos).eq("id", id));
     }
     return { salvas: lista.length };
-  }, REVALIDAR, "Medições salvas");
+  }, REVALIDAR, "Faturas salvas");
 }
 
 /** Marca como faturado. Emissão: a já informada na linha ou a data padrão. */
@@ -161,7 +188,7 @@ export async function voltarParaAFaturar(ids: unknown) {
     const supabase = await createClient();
     checar(await supabase.from("medicoes").update({ status: "a_faturar" }).in("id", lista).eq("status", "faturado"));
     return null;
-  }, REVALIDAR, "Medições voltaram para 'a faturar'");
+  }, REVALIDAR, "Faturas voltaram para 'a faturar'");
 }
 
 export async function cancelarMedicoes(ids: unknown) {
@@ -171,7 +198,7 @@ export async function cancelarMedicoes(ids: unknown) {
     const supabase = await createClient();
     checar(await supabase.from("medicoes").update({ status: "cancelado" }).in("id", lista).in("status", ["a_faturar", "faturado"]));
     return null;
-  }, REVALIDAR, "Medições canceladas");
+  }, REVALIDAR, "Faturas canceladas");
 }
 
 export interface EventoHistorico {

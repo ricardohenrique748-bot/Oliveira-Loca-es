@@ -2272,6 +2272,25 @@ export type Database = {
       }
     }
     Functions: {
+      fn_admin_salvar_usuario: {
+        Args: {
+          p_user_id: string
+          p_email: string
+          p_senha: string
+          p_nome: string
+          p_perfil: Database["public"]["Enums"]["perfil_usuario"]
+          p_ativo: boolean
+          p_empresas: string[]
+        }
+        Returns: string
+      }
+      fn_alterar_valor_repasse: {
+        Args: {
+          p_repasse: string
+          p_valor_mensal: number
+        }
+        Returns: { adiantado: boolean; aprovado_por: string | null; comprovante_url: string | null; created_at: string; created_by: string | null; data_pagamento: string | null; data_prevista: string | null; empresa_id: string; id: string; locador_id: string; medicao_id: string; observacoes: string | null; status: Database["public"]["Enums"]["status_repasse"]; updated_at: string; valor_abatimentos: number; valor_bruto: number; valor_liquido: number; valor_repasse_mensal: number; veiculo_id: string }
+      }
       fn_aplicar_plano_modelo: {
         Args: {
           p_plano: string

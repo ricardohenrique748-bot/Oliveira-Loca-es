@@ -220,7 +220,11 @@ function DialogoLancar({ aberto, onOpenChange, onEscolher }: { aberto: boolean; 
           {faturas === null ? (
             <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Buscando faturas…</p>
           ) : faturas.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">{busca ? "Nenhuma fatura em aberto encontrada." : "Não há faturas em aberto."}</p>
+            <div className="space-y-1 py-10 text-center text-sm text-muted-foreground">
+              <p>{busca ? "Nenhuma fatura em aberto encontrada." : "Não há faturas em aberto."}</p>
+              {/* só medição faturada vira fatura em aberto */}
+              <p className="text-xs">A medição aparece aqui depois de faturada: em <Link className="underline" href="/medicoes">Faturamento</Link>, preencha o valor, a NF e a emissão, selecione a linha e clique em <strong>Marcar como faturado</strong>.</p>
+            </div>
           ) : (
             <ul className="space-y-1">
               {faturas.map((m) => (

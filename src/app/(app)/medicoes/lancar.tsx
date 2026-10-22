@@ -70,7 +70,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     const r = await lancarMedicao({ contrato_id: info.id, periodo_inicio: inicio, periodo_fim: fim, dias, acrescimos, descontos, observacoes: observacoes || null });
     setCarregando(false);
     if (!r.ok) return toast.error(r.erro);
-    toast.success(`Medição ${formatPlaca(info.placa)} lançada (${formatPeriodo(inicio, fim)})`);
+    toast.success(`Fatura ${formatPlaca(info.placa)} lançada (${formatPeriodo(inicio, fim)})`);
     onOpenChange(false);
     onLancado(r.dados.competencia);
   };
@@ -79,8 +79,8 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     <Dialog open={aberto} onOpenChange={onOpenChange}>
       <DialogContent tamanho="md">
         <DialogHeader>
-          <DialogTitle>Lançar medição</DialogTitle>
-          <DialogDescription>Escolha o período. O sistema sugere o mês seguinte à última medição do contrato; dias e valor são calculados automaticamente.</DialogDescription>
+          <DialogTitle>Lançar fatura</DialogTitle>
+          <DialogDescription>Escolha o contrato e o período. O sistema sugere o mês seguinte à última fatura do contrato; dias e valor são calculados automaticamente.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           {!contratoId && (
@@ -94,7 +94,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
             <div className="rounded-md bg-muted p-3 text-sm">
               <p><span className="font-mono font-semibold">{formatPlaca(info.placa)}</span> · {info.cliente}{info.obra ? ` · ${info.obra}` : ""}</p>
               <p className="text-xs text-muted-foreground">
-                {info.tipo_cobranca === "diaria" ? "Diária" : "Mensal"} <Moeda valor={info.valor_mensal} /> · Última medição: {info.ultimo_periodo ? formatPeriodo(info.ultimo_periodo.inicio, info.ultimo_periodo.fim) : "nenhuma"}
+                {info.tipo_cobranca === "diaria" ? "Diária" : "Mensal"} <Moeda valor={info.valor_mensal} /> · Última fatura: {info.ultimo_periodo ? formatPeriodo(info.ultimo_periodo.inicio, info.ultimo_periodo.fim) : "nenhuma"}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -135,7 +135,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          <Button disabled={invalido || carregando} onClick={lancar}>{carregando && info ? <Loader2 className="animate-spin" /> : <Plus />} Lançar medição</Button>
+          <Button disabled={invalido || carregando} onClick={lancar}>{carregando && info ? <Loader2 className="animate-spin" /> : <Plus />} Lançar fatura</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

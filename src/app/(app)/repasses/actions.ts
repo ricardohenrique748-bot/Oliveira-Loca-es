@@ -1,4 +1,5 @@
 "use server";
+import { z } from "zod";
 import { exigirEscrita } from "@/lib/auth";
 import { checar, executar, traduzirErro } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
@@ -22,6 +23,18 @@ export async function pagarRepasse(dados: unknown) {
     if (error) throw error;
     return { adiantado: data?.adiantado ?? false };
   }, REVALIDAR, "Repasse pago");
+}
+
+/** Valor mensal digitado no repasse pendente: o banco recalcula bruto, abatimentos e líquido. */
+export async function alterarValorRepasse(repasseId: string, valorMensal: number) {
+  return executar(async () => {
+    await exigirEscrita("repasses");
+    const id = z.string().uuid().parse(repasseId);
+    const valor = z.number().min(0).max(999_999_999).parse(valorMensal);
+    const supabase = await createClient();
+    checar(await supabase.rpc("fn_alterar_valor_repasse", { p_repasse: id, p_valor_mensal: valor }));
+    return null;
+  }, REVALIDAR, "Valor do repasse salvo");
 }
 
 /** Pré-checagem: o repasse seria adiantado? (medição não recebida) */

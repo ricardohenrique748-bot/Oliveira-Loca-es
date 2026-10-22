@@ -17,7 +17,8 @@ import { somar } from "@/lib/calculos";
 import { exportarPDF } from "@/lib/exportar";
 import { ROTULOS } from "@/lib/schemas/cadastros";
 import { cn } from "@/lib/utils";
-import { buscarRepassesPendentes, pagarRepasse } from "./actions";
+import { InputMoeda } from "@/components/app/campos";
+import { alterarValorRepasse, buscarRepassesPendentes, pagarRepasse } from "./actions";
 
 export type Repasse = {
   id: string; medicao_id: string; locador_id: string; locador_nome: string; empresa_id: string; empresa_apelido: string; veiculo_id: string; placa: string;
@@ -132,6 +133,9 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, pode
                         <TableCell className="text-right"><Moeda valor={r.medicao_valor} /></TableCell>
                         <TableCell className="text-right">
                           <Moeda valor={r.valor_liquido} className="font-semibold" />
+                          {podeEditar && (r.status === "previsto" || r.status === "liberado") && (
+                            <ValorMensalRepasse repasse={r} onSalvo={() => router.refresh()} />
+                          )}
                           {abs.length > 0 && (
                             <button type="button" onClick={alternar} aria-expanded={aberto} className="flex w-full items-center justify-end gap-0.5 whitespace-nowrap text-xs text-status-critico hover:underline">
                               {aberto ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} −{formatBRL(r.valor_abatimentos)}
@@ -256,6 +260,27 @@ function DialogoLancar({ aberto, onOpenChange, onEscolher }: { aberto: boolean; 
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** valor mensal do repasse, salvo ao sair do campo ou com Enter */
+function ValorMensalRepasse({ repasse: r, onSalvo }: { repasse: Repasse; onSalvo: () => void }) {
+  const [valor, setValor] = React.useState<number | null>(r.valor_repasse_mensal);
+  const [salvando, setSalvando] = React.useState(false);
+  React.useEffect(() => setValor(r.valor_repasse_mensal), [r.valor_repasse_mensal]);
+
+  const salvar = async () => {
+    if (valor === null || valor === r.valor_repasse_mensal || salvando) return;
+    setSalvando(true);
+    const res = await alterarValorRepasse(r.id, valor);
+    setSalvando(false);
+    if (res.ok) { toast.success(res.mensagem); onSalvo(); } else { toast.error(res.erro); setValor(r.valor_repasse_mensal); }
+  };
+
+  return (
+    <InputMoeda aria-label={`Valor mensal do repasse ${formatPlaca(r.placa)}`} title="Valor mensal do repasse (proporcional aos dias medidos)"
+      className="mt-0.5 h-6 w-28 pl-7 text-right text-[11px]" permitirVazio={false} disabled={salvando}
+      value={valor} onChange={setValor} onBlur={salvar} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
   );
 }
 

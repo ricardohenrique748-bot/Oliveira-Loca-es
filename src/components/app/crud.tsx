@@ -30,6 +30,8 @@ export interface CrudProps<T extends { id: string }, V extends FieldValues> {
   paraForm: (r: T) => DefaultValues<V>;
   salvar: (id: string | null, dados: V) => Promise<Res>;
   excluir?: (id: string) => Promise<Res>;
+  /** texto do diálogo de exclusão (padrão: "Esta ação não pode ser desfeita.") */
+  avisoExcluir?: (r: T) => React.ReactNode;
   podeEditar: boolean;
   exportar?: OpcoesExport<T>;
   filtros?: React.ReactNode;
@@ -126,7 +128,7 @@ export function CrudSimples<T extends { id: string }, V extends FieldValues>(p: 
         extra={p.extraForm} rotuloAvancado={p.rotuloAvancado} aoAlterar={p.aoAlterar}
       />
       <Confirmar aberto={!!excluindo} onOpenChange={(v) => !v && setExcluindo(null)} titulo={`Excluir ${p.entidade}?`}
-        descricao="Esta ação não pode ser desfeita." rotulo="Excluir" destrutivo
+        descricao={(excluindo && p.avisoExcluir?.(excluindo)) ?? "Esta ação não pode ser desfeita."} rotulo="Excluir" destrutivo
         onConfirmar={async () => {
           if (!excluindo || !p.excluir) return;
           const r = await rodarAcao(p.excluir(excluindo.id) as never);
