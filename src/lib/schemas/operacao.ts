@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { clienteFormCampos, dataObr, dataOpc, moedaObr, moedaOpc, textoOpc, uuidObr, uuidOpc, validarClienteForm } from "./cadastros";
 
+/** "HH:MM" (o banco devolve "HH:MM:SS") */
+const horaOpc = z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Hora inválida").nullish().transform((v) => (v ? v.slice(0, 5) : null));
+
 const contratoBase = z.object({
   empresa_id: uuidObr("a empresa"),
   cliente_id: uuidObr("o cliente"),
@@ -15,14 +18,21 @@ const contratoBase = z.object({
   prazo_pagamento_dias: z.number({ invalid_type_error: "Informe o prazo" }).int().min(0).max(365),
   data_inicio: dataObr("a data de início"),
   data_fim: dataOpc,
+  /** por hora: horário do dia (as horas da fatura saem daqui) */
+  hora_inicio: horaOpc,
+  hora_fim: horaOpc,
   status: z.enum(["ativo", "encerrado", "suspenso"]),
   observacoes: textoOpc,
   /** PDF do contrato enviado pelo cliente: "anexos/contratos/..." */
   anexo_url: textoOpc,
 });
 
-const validarDatas = (c: { data_inicio: string; data_fim: string | null }, ctx: z.RefinementCtx) => {
+const validarDatas = (c: { data_inicio: string; data_fim: string | null; tipo_cobranca: string; hora_inicio: string | null; hora_fim: string | null }, ctx: z.RefinementCtx) => {
   if (c.data_fim && c.data_fim < c.data_inicio) ctx.addIssue({ code: "custom", path: ["data_fim"], message: "Fim antes do início" });
+  if (c.tipo_cobranca === "hora") {
+    if (!c.hora_inicio) ctx.addIssue({ code: "custom", path: ["hora_inicio"], message: "Informe a hora de início" });
+    if (!c.hora_fim) ctx.addIssue({ code: "custom", path: ["hora_fim"], message: "Informe a hora de término" });
+  }
 };
 
 /** o que é gravado em contratos */
@@ -44,6 +54,9 @@ export const desmobilizarSchema = z.object({
 export const renovacaoSchema = z.object({
   contrato_id: z.string().uuid(),
   data: dataObr("o dia da renovação"),
+  /** por hora: horário do dia renovado */
+  hora_inicio: horaOpc,
+  hora_fim: horaOpc,
 });
 
 /** linhas de acréscimo/desconto da fatura: descrição + valor */

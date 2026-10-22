@@ -73,7 +73,7 @@ export async function renovarContrato(dados: unknown) {
     if (!cobrancaAvulsa(c.tipo_cobranca)) throw new Error("Só contrato por diária ou por hora é renovado");
     if (c.status !== "ativo") throw new Error("Só contrato ativo pode ser renovado");
     if (d.data <= (c.data_fim ?? c.data_inicio)) throw new Error("Escolha um dia depois do último dia do contrato");
-    const f = await faturarDiaria(d.contrato_id, d.data);
+    const f = await faturarDiaria(d.contrato_id, d.data, { inicio: d.hora_inicio, fim: d.hora_fim });
     if (!f.ok) throw new Error(f.erro);
     checar(await supabase.from("contratos").update({ data_fim: d.data }).eq("id", d.contrato_id));
     return null;

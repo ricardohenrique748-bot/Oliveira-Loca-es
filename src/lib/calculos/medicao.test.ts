@@ -6,6 +6,7 @@ import {
   proximoPeriodo,
   calcularValorMedicao,
   calcularHoraExtra,
+  horasEntre,
   calcularVencimento,
   derivarStatusMedicao,
   periodoContendo,
@@ -218,5 +219,15 @@ describe("calcularHoraExtra", () => {
   });
   it("aceita meia hora", () => {
     expect(calcularHoraExtra(400, 1, 10.5)).toEqual({ horas: 0.5, valorHora: 44, total: 22 });
+  });
+});
+
+describe("horasEntre", () => {
+  it("conta as horas do dia", () => {
+    expect(horasEntre("08:00", "18:00")).toBe(10);
+    expect(horasEntre("07:30", "12:00")).toBe(4.5);
+  });
+  it("término antes do início passa da meia-noite", () => {
+    expect(horasEntre("22:00", "02:00")).toBe(4);
   });
 });

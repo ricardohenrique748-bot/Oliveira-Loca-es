@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Opcao } from "@/components/ui/select";
 import { contratoFormSchema, type ContratoForm } from "@/lib/schemas/operacao";
-import { cobrancaAvulsa, type TipoCobranca } from "@/lib/calculos";
+import { cobrancaAvulsa, horasEntre, type TipoCobranca } from "@/lib/calculos";
 import { CLIENTE_NOVO } from "@/lib/schemas/cadastros";
 import { formatBRL, formatData, formatPlaca, hojeSP } from "@/lib/format";
 import { baixarContratoPDF } from "@/lib/documentos/baixar";
@@ -23,7 +23,7 @@ import type { OpcoesContrato } from "./dados";
 export type LinhaContrato = {
   id: string; numero: string | null; empresa_id: string; cliente_id: string; obra_id: string | null; veiculo_id: string;
   tipo_cobranca: TipoCobranca; valor_mensal: number; valor_repasse_mensal: number | null; dia_corte_inicio: number; prazo_pagamento_dias: number;
-  data_inicio: string; data_fim: string | null; data_desmobilizacao: string | null; status: "ativo" | "encerrado" | "suspenso"; observacoes: string | null; anexo_url: string | null;
+  data_inicio: string; data_fim: string | null; hora_inicio: string | null; hora_fim: string | null; data_desmobilizacao: string | null; status: "ativo" | "encerrado" | "suspenso"; observacoes: string | null; anexo_url: string | null;
   empresa: string; cliente: string; obra: string | null; placa: string; modelo: string | null; proprietario: "proprio" | "locador";
 };
 
@@ -64,6 +64,8 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
     { nome: "prazo_pagamento_dias", rotulo: "Prazo de pagamento (dias)", tipo: "numero", col: 2, visivel: mensal },
     { nome: "data_inicio", rotulo: "Início (mobilização)", tipo: "data", obrigatorio: true, col: 2, visivel: mensal },
     { nome: "data_inicio", rotulo: "Data de início", tipo: "data", obrigatorio: true, col: 3, visivel: avulsa },
+    { nome: "hora_inicio", rotulo: "Hora de início", tipo: "hora", obrigatorio: true, col: 3, visivel: hora },
+    { nome: "hora_fim", rotulo: "Hora de término", tipo: "hora", obrigatorio: true, col: 3, visivel: hora, ajuda: "As horas da fatura saem do horário (antes do início = passou da meia-noite)" },
     { nome: "data_fim", rotulo: "Término previsto", tipo: "data", col: 2, visivel: mensal },
     { nome: "observacoes", rotulo: "Observações", tipo: "textarea", col: 6 },
   ];
@@ -73,7 +75,7 @@ export function valoresContrato(c: LinhaContrato): ContratoFormTela {
   return {
     sublocado: c.proprietario === "locador" ? "sim" : "nao", tipo_cobranca: c.tipo_cobranca, empresa_id: c.empresa_id, cliente_id: c.cliente_id, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
     valor_mensal: c.valor_mensal, valor_repasse_mensal: c.valor_repasse_mensal, dia_corte_inicio: c.dia_corte_inicio as never,
-    prazo_pagamento_dias: c.prazo_pagamento_dias, data_inicio: c.data_inicio, data_fim: c.data_fim, status: c.status, observacoes: c.observacoes, anexo_url: c.anexo_url,
+    prazo_pagamento_dias: c.prazo_pagamento_dias, data_inicio: c.data_inicio, data_fim: c.data_fim, hora_inicio: c.hora_inicio, hora_fim: c.hora_fim, status: c.status, observacoes: c.observacoes, anexo_url: c.anexo_url,
   };
 }
 
@@ -114,26 +116,43 @@ export function DialogoRenovar({ contrato, aberto, onOpenChange }: { contrato: L
   const router = useRouter();
   const ultimo = contrato ? contrato.data_fim ?? contrato.data_inicio : hojeSP();
   const [data, setData] = React.useState(diaSeguinte(ultimo));
-  React.useEffect(() => { if (aberto) setData(diaSeguinte(ultimo)); }, [aberto, ultimo]);
+  const [horario, setHorario] = React.useState({ inicio: "", fim: "" });
+  React.useEffect(() => {
+    if (aberto) { setData(diaSeguinte(ultimo)); setHorario({ inicio: contrato?.hora_inicio ?? "", fim: contrato?.hora_fim ?? "" }); }
+  }, [aberto, ultimo, contrato?.hora_inicio, contrato?.hora_fim]);
+  const porHora = contrato?.tipo_cobranca === "hora";
   return (
     <Confirmar aberto={aberto} onOpenChange={onOpenChange} titulo="Renovar contrato" rotulo="Renovar"
       descricao={contrato && (
         <div className="space-y-2">
           <p>Veículo <strong className="font-mono">{formatPlaca(contrato.placa)}</strong> — {contrato.cliente}. Último dia do contrato: <strong>{formatData(ultimo)}</strong>.</p>
           {contrato.tipo_cobranca === "hora"
-            ? <p>Será lançada no faturamento a fatura do dia escolhido, a <strong>{formatBRL(contrato.valor_mensal)} por hora</strong>. As horas trabalhadas são digitadas na fatura.</p>
+            ? <p>Será lançada no faturamento a fatura do dia escolhido: horas do horário abaixo × <strong>{formatBRL(contrato.valor_mensal)} por hora</strong>
+                {horario.inicio && horario.fim && <> = <strong>{String(horasEntre(horario.inicio, horario.fim)).replace(".", ",")} h</strong></>}.</p>
             : <p>Será lançada no faturamento <strong>1 diária de {formatBRL(contrato.valor_mensal)}</strong> para o dia escolhido.</p>}
         </div>
       )}
       onConfirmar={async () => {
         if (!contrato) return;
-        const r = await rodarAcao(renovarContrato({ contrato_id: contrato.id, data }));
+        const r = await rodarAcao(renovarContrato({ contrato_id: contrato.id, data, ...(porHora ? { hora_inicio: horario.inicio || null, hora_fim: horario.fim || null } : {}) }));
         if (r.ok) router.refresh();
       }}>
       <div className="space-y-1.5">
         <Label htmlFor="data-renovacao">Dia da renovação</Label>
         <Input id="data-renovacao" type="date" value={data} min={diaSeguinte(ultimo)} onChange={(e) => setData(e.target.value)} />
       </div>
+      {porHora && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="renovacao-hora-ini">Hora de início</Label>
+            <Input id="renovacao-hora-ini" type="time" value={horario.inicio} onChange={(e) => setHorario((h) => ({ ...h, inicio: e.target.value }))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="renovacao-hora-fim">Hora de término</Label>
+            <Input id="renovacao-hora-fim" type="time" value={horario.fim} onChange={(e) => setHorario((h) => ({ ...h, fim: e.target.value }))} />
+          </div>
+        </div>
+      )}
     </Confirmar>
   );
 }
@@ -186,7 +205,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
           <FiltroSelectUrl param="corte" rotulo="Período" opcoes={[{ value: "1", label: "01 → fim" }, { value: "21", label: "21 → 20" }]} />
         </>}
-        novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null, anexo_url: null }}
+        novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, hora_inicio: null, hora_fim: null, status: "ativo", observacoes: null, anexo_url: null }}
         paraForm={(c) => ({ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never })}
         salvar={salvarContrato} excluir={excluirContrato} podeEditar={podeEditar}
         avisoExcluir={(c) => <>O contrato <strong className="font-mono">{c.numero ?? formatPlaca(c.placa)}</strong> ({c.cliente}) será apagado <strong>junto com todas as medições dele</strong>, inclusive recebimentos, boletos e repasses. Esta ação não pode ser desfeita. Se o contrato só terminou, use <strong>Desmobilizar</strong>.</>}

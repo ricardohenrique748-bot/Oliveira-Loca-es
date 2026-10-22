@@ -17,7 +17,7 @@ import { InputCpfCnpj, InputMoeda, InputNumero, InputPlaca, InputTelefone } from
 import { CampoAnexo, type Bucket } from "./anexo";
 
 export type TipoCampo =
-  | "texto" | "email" | "textarea" | "moeda" | "numero" | "decimal" | "data" | "mes" | "select" | "checkbox"
+  | "texto" | "email" | "textarea" | "moeda" | "numero" | "decimal" | "data" | "hora" | "mes" | "select" | "checkbox"
   | "cpf_cnpj" | "telefone" | "placa" | "anexo";
 
 export interface Campo<V extends FieldValues> {
@@ -121,6 +121,8 @@ export function CampoControlado<V extends FieldValues>({ campo, control, valores
               return <InputNumero {...comum} casas={tipo === "decimal" ? 2 : 0} value={field.value} onChange={field.onChange} placeholder={campo.placeholder} />;
             case "data":
               return <Input {...comum} type="date" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value || null)} />;
+            case "hora":
+              return <Input {...comum} type="time" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value || null)} />;
             case "mes":
               return <Input {...comum} type="month" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value || null)} />;
             case "select":

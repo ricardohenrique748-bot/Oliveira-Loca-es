@@ -82,7 +82,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
             <div><dt className="text-xs text-muted-foreground">Período de medição</dt><dd>{avulsa ? `${c.tipo_cobranca === "hora" ? "Por hora" : "Diária"} (1 dia; mais dias = renovar)` : c.dia_corte_inicio === 1 ? "Dia 01 ao fim do mês" : "Dia 21 ao dia 20"}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Prazo de pagamento</dt><dd>{c.prazo_pagamento_dias} dias</dd></div>
-            <div><dt className="text-xs text-muted-foreground">Início</dt><dd>{formatData(c.data_inicio)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Início</dt><dd>{formatData(c.data_inicio)}{c.tipo_cobranca === "hora" && c.hora_inicio && c.hora_fim ? ` · ${c.hora_inicio} às ${c.hora_fim}` : ""}</dd></div>
             <div><dt className="text-xs text-muted-foreground">{c.data_desmobilizacao ? "Desmobilização" : avulsa ? "Último dia" : "Término previsto"}</dt><dd>{formatData(c.data_desmobilizacao ?? c.data_fim)}</dd></div>
             <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Veículo</dt>
               <dd><Link className="underline" href={`/cadastros/veiculos/${c.veiculo_id}`}>{formatPlaca(c.placa)} {c.modelo}</Link>{c.proprietario === "locador" ? " (sublocado · sem motorista)" : " (frota própria · com motorista)"}</dd></div>

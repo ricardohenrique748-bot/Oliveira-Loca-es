@@ -558,6 +558,8 @@ export type Database = {
           data_inicio: string
           dia_corte_inicio: number
           empresa_id: string
+          hora_fim: string | null
+          hora_inicio: string | null
           id: string
           numero: string | null
           obra_id: string | null
@@ -580,6 +582,8 @@ export type Database = {
           data_inicio: string
           dia_corte_inicio?: number
           empresa_id: string
+          hora_fim?: string | null
+          hora_inicio?: string | null
           id?: string
           numero?: string | null
           obra_id?: string | null
@@ -602,6 +606,8 @@ export type Database = {
           data_inicio?: string
           dia_corte_inicio?: number
           empresa_id?: string
+          hora_fim?: string | null
+          hora_inicio?: string | null
           id?: string
           numero?: string | null
           obra_id?: string | null

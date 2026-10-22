@@ -136,6 +136,14 @@ export function calcularHoraExtra(valorDiaria: number, diarias: number, horasTra
   return { horas, valorHora, total: deCentavos(Math.round(paraCentavos(valorHora) * horas)) };
 }
 
+/** Horas entre início e término ("HH:MM"); término antes do início = passou da meia-noite. */
+export function horasEntre(inicio: string, fim: string): number {
+  const min = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+  let d = min(fim) - min(inicio);
+  if (d <= 0) d += 24 * 60;
+  return Math.round((d / 60) * 100) / 100;
+}
+
 /** Vencimento = emissão + prazo (dias corridos). */
 export function calcularVencimento(dataEmissao: ISODate | null | undefined, prazoDias: number): ISODate | null {
   return dataEmissao ? addDias(dataEmissao, prazoDias) : null;

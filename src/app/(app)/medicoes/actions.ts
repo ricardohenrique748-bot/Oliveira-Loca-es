@@ -4,7 +4,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { edicaoMedicaoSchema, lancamentoMedicaoSchema } from "@/lib/schemas/operacao";
-import { cobrancaAvulsa, diffDias, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
+import { cobrancaAvulsa, diffDias, horasEntre, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
 
 const REVALIDAR = ["/medicoes", "/receber", "/repasses", "/dashboard"];
 const competencia = z.string().regex(/^\d{4}-\d{2}$/, "Competência inválida");
@@ -90,20 +90,30 @@ export async function enviarAoFaturamento(contratoId: string) {
 }
 
 /** Diária / hora: cada fatura cobre um dia só — o dia do contrato ou o de uma renovação.
- *  Diária nasce com 1 diária; hora nasce com 0 horas (as horas trabalhadas são digitadas na fatura). */
-export async function faturarDiaria(contratoId: string, data: string) {
+ *  Diária nasce com 1 diária; hora cobra as horas do horário (o do contrato ou o informado na renovação). */
+export async function faturarDiaria(contratoId: string, data: string, horario?: { inicio: string | null; fim: string | null }) {
   return executar(async () => {
     await exigirEscrita("medicoes");
     const id = z.string().uuid().parse(contratoId);
     const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida").parse(data);
     const supabase = await createClient();
-    const { data: c } = await supabase.from("contratos").select("id, empresa_id, valor_mensal, tipo_cobranca").eq("id", id).maybeSingle();
+    const { data: c } = await supabase.from("contratos").select("id, empresa_id, valor_mensal, tipo_cobranca, hora_inicio, hora_fim").eq("id", id).maybeSingle();
     if (!c) throw new Error("Contrato não encontrado");
+    const ini = horario?.inicio ?? c.hora_inicio?.slice(0, 5) ?? null;
+    const fim = horario?.fim ?? c.hora_fim?.slice(0, 5) ?? null;
+    // por hora: horas inteiras na quantidade; a fração (ex.: 30 min) entra como acréscimo, para cobrar exato
+    const horas = c.tipo_cobranca === "hora" && ini && fim ? horasEntre(ini, fim) : 0;
+    const inteiras = Math.floor(horas);
+    const fracao = Math.round((horas - inteiras) * 60);
+    const valorFracao = Math.round(Number(c.valor_mensal) * (fracao / 60) * 100) / 100;
+    const itensFracao = fracao > 0 ? [{ descricao: `Fração de hora (${fracao} min)`, valor: valorFracao }] : [];
     const { data: conflito } = await supabase.from("medicoes").select("id").eq("contrato_id", id).neq("status", "cancelado")
       .lte("periodo_inicio", dia).gte("periodo_fim", dia).limit(1).maybeSingle();
     if (conflito) throw new Error(`Já existe fatura deste contrato para ${dia.split("-").reverse().join("/")}`);
     const nova = checar(await supabase.from("medicoes").insert({
-      contrato_id: id, empresa_id: c.empresa_id, periodo_inicio: dia, periodo_fim: dia, dias: c.tipo_cobranca === "hora" ? 0 : 1, valor_mensal: c.valor_mensal,
+      contrato_id: id, empresa_id: c.empresa_id, periodo_inicio: dia, periodo_fim: dia, dias: c.tipo_cobranca === "hora" ? inteiras : 1, valor_mensal: c.valor_mensal,
+      acrescimos: itensFracao.length ? valorFracao : 0, acrescimos_itens: itensFracao,
+      observacoes: c.tipo_cobranca === "hora" && ini && fim ? `Horário: ${ini} às ${fim} (${String(horas).replace(".", ",")} h)` : null,
     }).select("id").single());
     return { id: nova!.id };
   }, REVALIDAR);
