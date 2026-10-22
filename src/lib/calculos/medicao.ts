@@ -82,11 +82,20 @@ export function calcularDiasPeriodoLivre({ periodo, dataInicioContrato, dataFimE
   return Math.min(diffDias(ini, fim) + 1, baseDias);
 }
 
-export type TipoCobranca = "mensal" | "diaria";
+export type TipoCobranca = "mensal" | "diaria" | "hora";
 
-/** Divisor do valor do contrato: diária = 1 (valor × dias), mensal = base de dias. */
+/** Diária e hora: contrato de um dia só (mais dias = renovar); a fatura cobra valor × quantidade (diárias ou horas). */
+export function cobrancaAvulsa(tipo: TipoCobranca | string | null | undefined): boolean {
+  return tipo === "diaria" || tipo === "hora";
+}
+
+export function rotuloValorCobranca(tipo: TipoCobranca | string | null | undefined): string {
+  return tipo === "diaria" ? "Valor da diária" : tipo === "hora" ? "Valor da hora" : "Valor mensal";
+}
+
+/** Divisor do valor do contrato: diária e hora = 1 (valor × quantidade), mensal = base de dias. */
 export function baseCobranca(tipo: TipoCobranca | null | undefined, baseDias = BASE_DIAS_PADRAO): number {
-  return tipo === "diaria" ? 1 : baseDias;
+  return cobrancaAvulsa(tipo) ? 1 : baseDias;
 }
 
 /** Dias corridos (inclusive) do período dentro da vigência — usado na diária. */
@@ -115,6 +124,16 @@ export function calcularValorMedicao({ valorMensal, dias, acrescimos = 0, descon
   const baseCent = Math.round((paraCentavos(valorMensal) * dias) / baseDias);
   const finalCent = Math.max(0, baseCent + paraCentavos(acrescimos) - paraCentavos(descontos));
   return { valorBase: deCentavos(baseCent), valorFinal: deCentavos(finalCent) };
+}
+
+/** Diária = 10 horas; a hora além disso custa a hora normal (diária ÷ 10) com 10% a mais. */
+export const HORAS_DIARIA = 10;
+export const ADICIONAL_HORA_EXTRA = 0.1;
+
+export function calcularHoraExtra(valorDiaria: number, diarias: number, horasTrabalhadas: number) {
+  const horas = Math.max(0, horasTrabalhadas - HORAS_DIARIA * diarias);
+  const valorHora = deCentavos(Math.round((paraCentavos(valorDiaria) / HORAS_DIARIA) * (1 + ADICIONAL_HORA_EXTRA)));
+  return { horas, valorHora, total: deCentavos(Math.round(paraCentavos(valorHora) * horas)) };
 }
 
 /** Vencimento = emissão + prazo (dias corridos). */

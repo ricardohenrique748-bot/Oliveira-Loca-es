@@ -98,7 +98,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
             <div className="rounded-md bg-muted p-3 text-sm">
               <p><span className="font-mono font-semibold">{formatPlaca(info.placa)}</span> · {info.cliente}{info.obra ? ` · ${info.obra}` : ""}</p>
               <p className="text-xs text-muted-foreground">
-                {info.tipo_cobranca === "diaria" ? "Diária" : "Mensal"} <Moeda valor={info.valor_mensal} /> · Última fatura: {info.ultimo_periodo ? formatPeriodo(info.ultimo_periodo.inicio, info.ultimo_periodo.fim) : "nenhuma"}
+                {({ mensal: "Mensal", diaria: "Diária", hora: "Hora" })[info.tipo_cobranca]} <Moeda valor={info.valor_mensal} /> · Última fatura: {info.ultimo_periodo ? formatPeriodo(info.ultimo_periodo.inicio, info.ultimo_periodo.fim) : "nenhuma"}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -136,7 +136,9 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
               <Label htmlFor="lancar-obs">Observações</Label>
               <Input id="lancar-obs" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
             </div>
-            <p className="text-xs text-muted-foreground">{info.tipo_cobranca === "diaria"
+            <p className="text-xs text-muted-foreground">{info.tipo_cobranca === "hora"
+              ? <>Por hora: digite as horas trabalhadas no campo Dias. Valor = hora × horas + acréscimos − descontos.</>
+              : info.tipo_cobranca === "diaria"
               ? <>Diária: conta os dias corridos. Valor = diária × dias + acréscimos − descontos.</>
               : <>Mês cheio conta {baseDias} dias. Valor = (mensal ÷ {baseDias}) × dias + acréscimos − descontos.</>}</p>
           </>}

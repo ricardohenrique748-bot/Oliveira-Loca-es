@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { FileDown, LogOut, Pencil, Plus } from "lucide-react";
+import { CalendarPlus, FileDown, LogOut, Pencil, Plus } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import type { Opcao } from "@/components/ui/select";
@@ -14,9 +14,10 @@ import { DataTable } from "@/components/app/data-table";
 import { FormularioDialog } from "@/components/app/formulario";
 import { contratoFormSchema } from "@/lib/schemas/operacao";
 import { formatData, formatPeriodo, formatPlaca } from "@/lib/format";
+import { cobrancaAvulsa, rotuloValorCobranca } from "@/lib/calculos";
 import { baixarContratoPDF } from "@/lib/documentos/baixar";
 import { salvarContrato } from "../actions";
-import { camposContrato, DialogoDesmobilizar, valoresContrato, type ContratoFormTela, type LinhaContrato } from "../client";
+import { camposContrato, DialogoDesmobilizar, DialogoRenovar, valoresContrato, type ContratoFormTela, type LinhaContrato } from "../client";
 import type { OpcoesContrato } from "../dados";
 import { DialogoLancarMedicao } from "../../medicoes/lancar";
 
@@ -46,6 +47,8 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
   const [editando, setEditando] = React.useState(false);
   const [lancar, setLancar] = React.useState(false);
   const [desmob, setDesmob] = React.useState(false);
+  const [renovar, setRenovar] = React.useState(false);
+  const avulsa = cobrancaAvulsa(c.tipo_cobranca);
   const faturado = medicoes.filter((m) => m.status_exibicao !== "cancelado").reduce((s, m) => s + m.valor_final, 0);
   const margem = medicoes.filter((m) => m.status_exibicao !== "cancelado").reduce((s, m) => s + m.margem, 0);
   const aReceber = medicoes.filter((m) => ["faturado", "recebido_parcial", "vencido"].includes(m.status_exibicao)).reduce((s, m) => s + m.valor_final - m.valor_recebido, 0);
@@ -60,11 +63,14 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
           <Button variant="outline" size="sm" onClick={() => baixarContratoPDF(c.id)}><FileDown /> PDF do contrato</Button>
           {podeEditar && <Button variant="outline" size="sm" onClick={() => setEditando(true)}><Pencil /> Editar</Button>}
           {podeEditar && c.status === "ativo" && <Button variant="outline" size="sm" onClick={() => setDesmob(true)}><LogOut /> Desmobilizar</Button>}
-          {podeLancar && c.status !== "suspenso" && <Button size="sm" onClick={() => setLancar(true)}><Plus /> Lançar medição</Button>}
+          {/* diária / hora vale um dia: mais dias só renovando */}
+          {avulsa
+            ? podeEditar && c.status === "ativo" && <Button size="sm" onClick={() => setRenovar(true)}><CalendarPlus /> Renovar</Button>
+            : podeLancar && c.status !== "suspenso" && <Button size="sm" onClick={() => setLancar(true)}><Plus /> Lançar medição</Button>}
         </>} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard titulo={c.tipo_cobranca === "diaria" ? "Valor da diária" : "Valor mensal"} valor={<Moeda valor={c.valor_mensal} />} sub={c.valor_repasse_mensal != null ? <>Repasse <Moeda valor={c.valor_repasse_mensal} /></> : "Frota própria"} />
+        <KpiCard titulo={rotuloValorCobranca(c.tipo_cobranca)} valor={<Moeda valor={c.valor_mensal} />} sub={c.valor_repasse_mensal != null ? <>Repasse <Moeda valor={c.valor_repasse_mensal} /></> : "Frota própria"} />
         <KpiCard titulo="Total medido" valor={<Moeda valor={faturado} />} sub={`${medicoes.length} medições`} />
         <KpiCard titulo="Margem acumulada" valor={<Moeda valor={margem} sinal />} />
         <KpiCard titulo="A receber" valor={<Moeda valor={aReceber} />} tom={aReceber > 0 ? "alerta" : undefined} />
@@ -74,10 +80,10 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
         <CardHeader><CardTitle>Condições</CardTitle></CardHeader>
         <CardContent>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
-            <div><dt className="text-xs text-muted-foreground">Período de medição</dt><dd>{c.tipo_cobranca === "diaria" ? "Diária (valor × dias)" : c.dia_corte_inicio === 1 ? "Dia 01 ao fim do mês" : "Dia 21 ao dia 20"}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Período de medição</dt><dd>{avulsa ? `${c.tipo_cobranca === "hora" ? "Por hora" : "Diária"} (1 dia; mais dias = renovar)` : c.dia_corte_inicio === 1 ? "Dia 01 ao fim do mês" : "Dia 21 ao dia 20"}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Prazo de pagamento</dt><dd>{c.prazo_pagamento_dias} dias</dd></div>
             <div><dt className="text-xs text-muted-foreground">Início</dt><dd>{formatData(c.data_inicio)}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">{c.data_desmobilizacao ? "Desmobilização" : "Término previsto"}</dt><dd>{formatData(c.data_desmobilizacao ?? c.data_fim)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{c.data_desmobilizacao ? "Desmobilização" : avulsa ? "Último dia" : "Término previsto"}</dt><dd>{formatData(c.data_desmobilizacao ?? c.data_fim)}</dd></div>
             <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Veículo</dt>
               <dd><Link className="underline" href={`/cadastros/veiculos/${c.veiculo_id}`}>{formatPlaca(c.placa)} {c.modelo}</Link>{c.proprietario === "locador" ? " (sublocado · sem motorista)" : " (frota própria · com motorista)"}</dd></div>
             {c.anexo_url && <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Contrato do cliente</dt><dd><LinkAnexo referencia={c.anexo_url} /></dd></div>}
@@ -104,6 +110,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
         valores={{ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never }}
         onSalvar={(v) => salvarContrato(c.id, v)} onSucesso={() => router.refresh()} />
       <DialogoDesmobilizar contrato={c} aberto={desmob} onOpenChange={setDesmob} />
+      <DialogoRenovar contrato={c} aberto={renovar} onOpenChange={setRenovar} />
       <DialogoLancarMedicao aberto={lancar} onOpenChange={setLancar} contratoId={c.id} baseDias={baseDias} onLancado={() => router.refresh()} />
     </div>
   );

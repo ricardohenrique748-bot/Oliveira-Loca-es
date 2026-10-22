@@ -9,7 +9,7 @@ import { cidadeUF, enderecoCompleto, rodapeEmpresa, type ClienteDoc, type Empres
 import type { Bloco, Documento } from "./pdf";
 
 export interface DadosContrato {
-  numero: string | null; tipo_cobranca: "mensal" | "diaria"; valor_mensal: number; dia_corte_inicio: number; prazo_pagamento_dias: number;
+  numero: string | null; tipo_cobranca: "mensal" | "diaria" | "hora"; valor_mensal: number; dia_corte_inicio: number; prazo_pagamento_dias: number;
   data_inicio: string; data_fim: string | null; obra: string | null;
   empresa: EmpresaDoc; cliente: ClienteDoc;
   veiculo: {
@@ -43,6 +43,7 @@ const extensoDias = (n: number) => `${n} (${numeroPorExtenso(n)})`;
 export function montarContrato(c: DadosContrato): Documento {
   const e = c.empresa, cli = c.cliente, v = c.veiculo;
   const diaria = c.tipo_cobranca === "diaria";
+  const hora = c.tipo_cobranca === "hora";
   const local = cidadeUF(e) || "São José do Rio Preto/SP";
   const prazoDias = c.data_fim ? diffDias(c.data_inicio, c.data_fim) : null;
   const valorTexto = `${formatBRL(c.valor_mensal)} (${valorPorExtenso(c.valor_mensal)})`;
@@ -72,7 +73,7 @@ export function montarContrato(c: DadosContrato): Documento {
       ["Modalidade", comMotorista ? "Com motorista/operador fornecido pela LOCADORA — cláusula 8" : "Sem motorista: condução e operação pela LOCATÁRIA — cláusula 8"],
       ["Início da locação", `${formatData(c.data_inicio)} — cláusula 2`],
       ["Prazo", `${prazoDias != null ? `${prazoDias} dias` : "Indeterminado"} — cláusula 2`],
-      [diaria ? "Valor da diária" : "Valor mensal", `${formatBRL(c.valor_mensal)} por veículo/equipamento — cláusula 3`],
+      [diaria ? "Valor da diária" : hora ? "Valor da hora" : "Valor mensal", `${formatBRL(c.valor_mensal)} por veículo/equipamento — cláusula 3`],
       ["Mobilização/desmobilização", `Retirada e devolução em ${local} — cláusula 3`],
       ["Pagamento", `${c.prazo_pagamento_dias} dias após emissão da fatura, mediante medição mensal — cláusula 4`],
       ["Foro", `Comarca de ${local} — cláusula 24`],
@@ -97,7 +98,9 @@ export function montarContrato(c: DadosContrato): Documento {
     ]),
 
     ...clausula(3, "Do preço da locação", [
-      diaria
+      hora
+        ? `A LOCATÁRIA pagará à LOCADORA o valor de ${valorTexto} por hora, por veículo/equipamento locado, multiplicado pelas horas trabalhadas apuradas na medição.`
+        : diaria
         ? `A LOCATÁRIA pagará à LOCADORA o valor de ${valorTexto} por diária, por veículo/equipamento locado, multiplicado pelos dias de disponibilização apurados na medição.`
         : `A LOCATÁRIA pagará à LOCADORA o valor de ${valorTexto} por mês, por veículo/equipamento locado.`,
       "Nas contratações futuras, o valor poderá ser definido na Ordem de Serviço/Ordem de Locação ou proposta comercial correspondente, desde que expressamente aceita pela LOCATÁRIA.",

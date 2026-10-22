@@ -5,6 +5,7 @@ import {
   calcularDiasCorridos,
   proximoPeriodo,
   calcularValorMedicao,
+  calcularHoraExtra,
   calcularVencimento,
   derivarStatusMedicao,
   periodoContendo,
@@ -204,5 +205,18 @@ describe("contrato por diária", () => {
   it("dias corridos de um período livre", () => {
     expect(calcularDiasCorridos({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2025-01-01" })).toBe(31);
     expect(calcularDiasCorridos({ periodo: { inicio: "2026-01-15", fim: "2026-02-14" }, dataInicioContrato: "2026-03-01" })).toBe(0);
+  });
+});
+
+describe("calcularHoraExtra", () => {
+  it("hora R$ 180 (diária R$ 1.800): 12 h = 2 h extras a R$ 198", () => {
+    expect(calcularHoraExtra(1800, 1, 12)).toEqual({ horas: 2, valorHora: 198, total: 396 });
+  });
+  it("até 10 h por diária não tem hora extra", () => {
+    expect(calcularHoraExtra(1800, 1, 10).total).toBe(0);
+    expect(calcularHoraExtra(1800, 2, 19).total).toBe(0);
+  });
+  it("aceita meia hora", () => {
+    expect(calcularHoraExtra(400, 1, 10.5)).toEqual({ horas: 0.5, valorHora: 44, total: 22 });
   });
 });

@@ -42,7 +42,7 @@ export default function ContratoDetalhePage() {
         cliente_id: c.cliente_id,
         obra_id: c.obra_id,
         veiculo_id: c.veiculo_id,
-        tipo_cobranca: c.tipo_cobranca as "mensal" | "diaria",
+        tipo_cobranca: c.tipo_cobranca as "mensal" | "diaria" | "hora",
         valor_mensal: c.valor_mensal,
         valor_repasse_mensal: c.valor_repasse_mensal,
         dia_corte_inicio: c.dia_corte_inicio,

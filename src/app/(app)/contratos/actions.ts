@@ -2,16 +2,20 @@
 import { z } from "zod";
 import { salvarRegistro } from "@/lib/crud";
 import { resolverClienteNovo } from "@/lib/clientes";
-import { enviarAoFaturamento } from "../medicoes/actions";
+import { enviarAoFaturamento, faturarDiaria } from "../medicoes/actions";
 import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
-import { contratoSchema, desmobilizarSchema } from "@/lib/schemas/operacao";
+import { contratoSchema, desmobilizarSchema, renovacaoSchema } from "@/lib/schemas/operacao";
+import { cobrancaAvulsa } from "@/lib/calculos";
 
 export async function salvarContrato(id: string | null, dados: unknown) {
   const cliente = await resolverClienteNovo(dados, "contratos");
   if (!cliente.ok) return cliente;
-  const r = await salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados: cliente.dados, schema: contratoSchema, revalidar: ["/contratos", "/medicoes", "/dashboard"] });
+  // diária / hora vale um dia só: o último dia do contrato é o próprio início (mais dias = renovar)
+  const form = cliente.dados as { tipo_cobranca?: string; data_inicio?: string | null; data_fim?: string | null };
+  const valores = !id && cobrancaAvulsa(form.tipo_cobranca) ? { ...form, data_fim: form.data_inicio } : form;
+  const r = await salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados: valores, schema: contratoSchema, revalidar: ["/contratos", "/medicoes", "/dashboard"] });
   if (!r.ok || id) return r;
   // contrato novo já entra no faturamento; se falhar, o contrato fica salvo e a fatura sai pelo "Gerar faturas do período"
   const f = await enviarAoFaturamento(r.dados.id);
@@ -47,7 +51,31 @@ export async function desmobilizarContrato(dados: unknown) {
     await exigirEscrita("contratos");
     const d = desmobilizarSchema.parse(dados);
     const supabase = await createClient();
+    const c = checar(await supabase.from("contratos").select("tipo_cobranca").eq("id", d.contrato_id).maybeSingle());
+    // diária / hora: cada dia já tem a sua fatura, então só encerra (o trigger devolve o veículo)
+    if (cobrancaAvulsa(c?.tipo_cobranca)) {
+      checar(await supabase.from("contratos").update({ status: "encerrado", data_desmobilizacao: d.data }).eq("id", d.contrato_id));
+      return { medicaoId: null };
+    }
     const medicaoId = checar(await supabase.rpc("fn_desmobilizar_contrato", { p_contrato: d.contrato_id, p_data: d.data }));
     return { medicaoId };
-  }, ["/contratos", "/medicoes", "/dashboard", "/cadastros/veiculos"], "Contrato desmobilizado — medição final gerada");
+  }, ["/contratos", "/medicoes", "/dashboard", "/cadastros/veiculos"], "Contrato desmobilizado");
+}
+
+/** Diária / hora: mais um dia de locação — estende o contrato e manda a fatura do dia ao faturamento. */
+export async function renovarContrato(dados: unknown) {
+  return executar(async () => {
+    await exigirEscrita("contratos");
+    const d = renovacaoSchema.parse(dados);
+    const supabase = await createClient();
+    const c = checar(await supabase.from("contratos").select("tipo_cobranca, status, data_inicio, data_fim").eq("id", d.contrato_id).maybeSingle());
+    if (!c) throw new Error("Contrato não encontrado ou sem permissão");
+    if (!cobrancaAvulsa(c.tipo_cobranca)) throw new Error("Só contrato por diária ou por hora é renovado");
+    if (c.status !== "ativo") throw new Error("Só contrato ativo pode ser renovado");
+    if (d.data <= (c.data_fim ?? c.data_inicio)) throw new Error("Escolha um dia depois do último dia do contrato");
+    const f = await faturarDiaria(d.contrato_id, d.data);
+    if (!f.ok) throw new Error(f.erro);
+    checar(await supabase.from("contratos").update({ data_fim: d.data }).eq("id", d.contrato_id));
+    return null;
+  }, ["/contratos", "/medicoes", "/dashboard"], "Contrato renovado — fatura do dia enviada ao faturamento");
 }

@@ -4,7 +4,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { edicaoMedicaoSchema, lancamentoMedicaoSchema } from "@/lib/schemas/operacao";
-import { diffDias, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
+import { cobrancaAvulsa, diffDias, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
 
 const REVALIDAR = ["/medicoes", "/receber", "/repasses", "/dashboard"];
 const competencia = z.string().regex(/^\d{4}-\d{2}$/, "Competência inválida");
@@ -37,7 +37,7 @@ export async function previaMedicoes(comp: string) {
     const mapa = new Map((contratos ?? []).map((k) => [k.id, k]));
     return linhas.map((l): LinhaPrevia => {
       const k = mapa.get(l.contrato_id);
-      const diaria = k?.tipo_cobranca === "diaria";
+      const diaria = cobrancaAvulsa(k?.tipo_cobranca);
       return {
         contrato_id: l.contrato_id, placa: k?.veiculos?.placa ?? "", cliente: k?.clientes?.nome_fantasia ?? k?.clientes?.razao_social ?? "",
         obra: k?.obras?.nome ?? null, empresa: k?.empresas?.apelido ?? "", periodo_inicio: l.periodo_inicio, periodo_fim: l.periodo_fim,
@@ -64,7 +64,7 @@ export async function gerarMedicoes(comp: string, contratos?: string[]) {
 async function zerarDiasDiaria(supabase: Awaited<ReturnType<typeof createClient>>, medicaoIds: string[]) {
   if (!medicaoIds.length) return;
   const { data: meds } = await supabase.from("medicoes").select("id, contrato_id").in("id", medicaoIds);
-  const { data: diaria } = await supabase.from("contratos").select("id").in("id", [...new Set((meds ?? []).map((m) => m.contrato_id))]).eq("tipo_cobranca", "diaria");
+  const { data: diaria } = await supabase.from("contratos").select("id").in("id", [...new Set((meds ?? []).map((m) => m.contrato_id))]).in("tipo_cobranca", ["diaria", "hora"]);
   const contratosDiaria = new Set((diaria ?? []).map((c) => c.id));
   const diarias = (meds ?? []).filter((m) => contratosDiaria.has(m.contrato_id)).map((m) => m.id);
   if (diarias.length) checar(await supabase.from("medicoes").update({ dias: 0 }).in("id", diarias));
@@ -80,9 +80,33 @@ function competenciaDaData(data: string, diaCorte: number): string {
 /** Contrato novo vai direto para o faturamento: cria a fatura do período em que ele começa. */
 export async function enviarAoFaturamento(contratoId: string) {
   const supabase = await createClient();
-  const { data: c } = await supabase.from("contratos").select("data_inicio, dia_corte_inicio, status").eq("id", contratoId).maybeSingle();
+  const { data: c } = await supabase.from("contratos").select("data_inicio, dia_corte_inicio, status, tipo_cobranca").eq("id", contratoId).maybeSingle();
   if (!c || c.status !== "ativo") return { ok: true as const, dados: { geradas: 0 } };
+  if (cobrancaAvulsa(c.tipo_cobranca)) {
+    const r = await faturarDiaria(contratoId, c.data_inicio);
+    return r.ok ? { ...r, dados: { geradas: 1 } } : r;
+  }
   return gerarMedicoes(competenciaDaData(c.data_inicio, c.dia_corte_inicio), [contratoId]);
+}
+
+/** Diária / hora: cada fatura cobre um dia só — o dia do contrato ou o de uma renovação.
+ *  Diária nasce com 1 diária; hora nasce com 0 horas (as horas trabalhadas são digitadas na fatura). */
+export async function faturarDiaria(contratoId: string, data: string) {
+  return executar(async () => {
+    await exigirEscrita("medicoes");
+    const id = z.string().uuid().parse(contratoId);
+    const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida").parse(data);
+    const supabase = await createClient();
+    const { data: c } = await supabase.from("contratos").select("id, empresa_id, valor_mensal, tipo_cobranca").eq("id", id).maybeSingle();
+    if (!c) throw new Error("Contrato não encontrado");
+    const { data: conflito } = await supabase.from("medicoes").select("id").eq("contrato_id", id).neq("status", "cancelado")
+      .lte("periodo_inicio", dia).gte("periodo_fim", dia).limit(1).maybeSingle();
+    if (conflito) throw new Error(`Já existe fatura deste contrato para ${dia.split("-").reverse().join("/")}`);
+    const nova = checar(await supabase.from("medicoes").insert({
+      contrato_id: id, empresa_id: c.empresa_id, periodo_inicio: dia, periodo_fim: dia, dias: c.tipo_cobranca === "hora" ? 0 : 1, valor_mensal: c.valor_mensal,
+    }).select("id").single());
+    return { id: nova!.id };
+  }, REVALIDAR);
 }
 
 export interface ContratoLancamento {
@@ -139,6 +163,7 @@ export async function lancarMedicao(dados: unknown) {
       contrato_id: c.id, empresa_id: c.empresa_id, periodo_inicio: d.periodo_inicio, periodo_fim: d.periodo_fim, dias: d.dias,
       valor_mensal: c.valor_mensal, acrescimos: d.acrescimos, descontos: d.descontos, observacoes: d.observacoes ?? null,
       acrescimos_itens: d.acrescimos > 0 ? [{ descricao: "Acréscimos", valor: d.acrescimos }] : [],
+      descontos_itens: d.descontos > 0 ? [{ descricao: "Descontos", valor: d.descontos }] : [],
       forma_pagamento: d.forma_pagamento,
       final: !!c.data_desmobilizacao && c.data_desmobilizacao >= d.periodo_inicio && c.data_desmobilizacao <= d.periodo_fim,
     }).select("id").single());
@@ -158,6 +183,7 @@ export async function salvarMedicoes(edicoes: unknown) {
       if (atual.status === "cancelado" || atual.status === "recebido") throw new Error("Faturas recebidas ou canceladas não podem ser editadas");
       if (atual.status !== "a_faturar" && campos.dias !== undefined) delete campos.dias;
       if (campos.acrescimos_itens) campos.acrescimos = somar(campos.acrescimos_itens.map((i) => i.valor));
+      if (campos.descontos_itens) campos.descontos = somar(campos.descontos_itens.map((i) => i.valor));
       checar(await supabase.from("medicoes").update(campos).eq("id", id));
     }
     return { salvas: lista.length };

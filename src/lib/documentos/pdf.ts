@@ -241,12 +241,15 @@ export async function renderizarPDF(d: Documento, imgLogo: string | null): Promi
     doc.setFillColor(...AMARELO);
     doc.rect(MARGEM, 29.5, util, 1.2, "F");
 
-    doc.setDrawColor(200);
-    doc.setLineWidth(0.2);
-    doc.line(MARGEM, alt - 17, larg - MARGEM, alt - 17);
+    // rodapé vazio (fatura): sem linha nem dados da empresa; numeração só se tiver mais de uma página
+    if (d.rodape.length) {
+      doc.setDrawColor(200);
+      doc.setLineWidth(0.2);
+      doc.line(MARGEM, alt - 17, larg - MARGEM, alt - 17);
+    }
     fonte("normal", 7.5, CINZA);
     d.rodape.forEach((l, i) => doc.text(limparTexto(l), larg / 2, alt - 13 + 3.6 * i, { align: "center" }));
-    doc.text(`Página ${p} de ${total}`, larg - MARGEM, alt - 6, { align: "right" });
+    if (d.rodape.length || total > 1) doc.text(`Página ${p} de ${total}`, larg - MARGEM, alt - 6, { align: "right" });
   }
   return doc;
 }

@@ -7,8 +7,8 @@ const contratoBase = z.object({
   obra_id: uuidOpc,
   veiculo_id: uuidObr("o veículo"),
   numero: textoOpc,
-  /** diária: valor_mensal / valor_repasse_mensal guardam o valor POR DIA */
-  tipo_cobranca: z.enum(["mensal", "diaria"]).default("mensal"),
+  /** diária / hora: valor_mensal e valor_repasse_mensal guardam o valor POR DIA / POR HORA */
+  tipo_cobranca: z.enum(["mensal", "diaria", "hora"]).default("mensal"),
   valor_mensal: moedaObr("o valor").refine((v) => v > 0, "Informe o valor"),
   valor_repasse_mensal: moedaOpc,
   dia_corte_inicio: z.coerce.number().refine((v) => v === 1 || v === 21, "Corte deve ser dia 1 ou 21"),
@@ -40,6 +40,18 @@ export const desmobilizarSchema = z.object({
   data: dataObr("a data de desmobilização"),
 });
 
+/** Renovação de contrato por diária ou hora: mais um dia, com fatura própria. */
+export const renovacaoSchema = z.object({
+  contrato_id: z.string().uuid(),
+  data: dataObr("o dia da renovação"),
+});
+
+/** linhas de acréscimo/desconto da fatura: descrição + valor */
+const itensFatura = (nome: string) => z.array(z.object({
+  descricao: z.string().trim().min(1, `Descreva o ${nome}`).max(200),
+  valor: z.number().positive(`Valor do ${nome} deve ser maior que zero`),
+})).max(50);
+
 /** Edição na grade de medições (estilo planilha) */
 export const edicaoMedicaoSchema = z.object({
   id: z.string().uuid(),
@@ -53,13 +65,11 @@ export const edicaoMedicaoSchema = z.object({
   data_vencimento: dataOpc.optional(),
   observacoes: z.string().trim().max(1000).nullable().optional(),
   forma_pagamento: z.enum(["boleto", "pix"]).optional(),
-  /** acréscimos discriminados; quando vem, o total (acrescimos) é a soma deles */
-  acrescimos_itens: z.array(z.object({
-    descricao: z.string().trim().min(1, "Descreva o acréscimo").max(200),
-    valor: z.number().positive("Valor do acréscimo deve ser maior que zero"),
-  })).max(50).optional(),
+  /** acréscimos e descontos discriminados; quando vêm, o total (acrescimos / descontos) é a soma deles */
+  acrescimos_itens: itensFatura("acréscimo").optional(),
+  descontos_itens: itensFatura("desconto").optional(),
 });
-export type ItemAcrescimo = NonNullable<z.infer<typeof edicaoMedicaoSchema>["acrescimos_itens"]>[number];
+export type ItemFatura = { descricao: string; valor: number };
 export type EdicaoMedicao = z.infer<typeof edicaoMedicaoSchema>;
 
 /** Condição de pagamento da fatura */
