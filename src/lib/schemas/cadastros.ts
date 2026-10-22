@@ -123,7 +123,7 @@ export type FornecedorForm = z.infer<typeof fornecedorSchema>;
 
 export const categoriaSchema = z.object({
   nome: textoObr("Nome"),
-  tipo: z.enum(["fixa", "veiculo"]),
+  tipo: z.enum(["fixa", "variavel", "veiculo"]),
   ativo: z.boolean().default(true),
 });
 export type CategoriaForm = z.infer<typeof categoriaSchema>;
@@ -155,7 +155,7 @@ export const ROTULOS = {
   tipoVeiculo: { caminhao: "Caminhão", guindaste: "Guindaste", trator: "Trator", munck: "Munck", outro: "Outro" },
   proprietario: { proprio: "Frota própria", locador: "Sublocado (locador)" },
   tipoChavePix: { cpf: "CPF", cnpj: "CNPJ", email: "E-mail", telefone: "Telefone", aleatoria: "Aleatória" },
-  tipoDespesa: { fixa: "Fixa", veiculo: "Veículo" },
+  tipoDespesa: { fixa: "Fixa", variavel: "Variável", veiculo: "Veículo" },
   formaPagamento: { boleto: "Boleto", debito_automatico: "Débito automático", cartao: "Cartão", pix: "PIX", transferencia: "Transferência" },
   tipoOS: { preventiva: "Preventiva", corretiva: "Corretiva", pneu: "Pneu", inspecao: "Inspeção" },
   tipoDocumento: { licenciamento: "Licenciamento", seguro: "Seguro", tacografo: "Tacógrafo", inspecao_icamento: "Inspeção de içamento", antt: "ANTT", outro: "Outro" },

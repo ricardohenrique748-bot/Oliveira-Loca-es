@@ -7,7 +7,7 @@ import type { Campo } from "@/components/app/formulario";
 import { categoriaSchema, opcoesDe, ROTULOS, type CategoriaForm } from "@/lib/schemas/cadastros";
 import { salvarCategoria, excluirCategoria } from "../actions";
 
-type Linha = { id: string; nome: string; tipo: "fixa" | "veiculo"; ativo: boolean };
+type Linha = { id: string; nome: string; tipo: "fixa" | "variavel" | "veiculo"; ativo: boolean };
 
 const colunas: ColumnDef<Linha, unknown>[] = [
   { accessorKey: "nome", header: "Nome", meta: { tituloMobile: true } },

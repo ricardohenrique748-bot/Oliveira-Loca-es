@@ -76,7 +76,7 @@ export default function RelatoriosPage() {
       if (emp) q = q.eq("empresa_id", emp);
       const { data: res } = await q;
       linhas = agrupar((res ?? []).map((x) => ({ ...x, pago: x.pago_em ? x.valor_pago ?? x.valor : 0, aberto: x.pago_em ? 0 : x.valor, descontado: x.descontar_locador ? x.valor : 0 })),
-        (x) => `${x.categoria_nome ?? "Sem categoria"}|${x.tipo}`, ["valor", "pago", "aberto", "descontado"], (x) => ({ categoria: x.categoria_nome ?? "Sem categoria", tipo: x.tipo === "veiculo" ? "Veículo" : "Fixa" }))
+        (x) => `${x.categoria_nome ?? "Sem categoria"}|${x.tipo}`, ["valor", "pago", "aberto", "descontado"], (x) => ({ categoria: x.categoria_nome ?? "Sem categoria", tipo: x.tipo === "veiculo" ? "Veículo" : x.tipo === "variavel" ? "Variável" : "Fixa" }))
         .sort((a, b) => Number(b.valor) - Number(a.valor));
     } else if (r === "manutencao") {
       let q = supabase.from("ordens_servico").select("numero, tipo, data_abertura, data_fechamento, descricao_problema, custo_total, horas_parado, status, veiculos(placa), fornecedores(nome)")

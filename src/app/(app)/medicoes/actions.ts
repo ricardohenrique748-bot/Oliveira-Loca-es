@@ -4,7 +4,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { edicaoMedicaoSchema, lancamentoMedicaoSchema } from "@/lib/schemas/operacao";
-import { cobrancaAvulsa, diffDias, horasEntre, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
+import { addDias, cobrancaAvulsa, diffDias, horasEntre, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
 
 const REVALIDAR = ["/medicoes", "/receber", "/repasses", "/dashboard"];
 const competencia = z.string().regex(/^\d{4}-\d{2}$/, "Competência inválida");
@@ -133,7 +133,8 @@ export interface ContratoLancamento {
   sugestao: Periodo;
 }
 
-/** Dados do contrato para o lançamento manual, com o próximo período sugerido (mês seguinte à última medição). */
+/** Dados do contrato para o lançamento manual, com o próximo período sugerido (mês seguinte à última medição;
+ *  diária / hora: o dia seguinte à última fatura). */
 export async function dadosLancamento(contratoId: string) {
   return executar(async () => {
     const id = z.string().uuid().parse(contratoId);
@@ -145,11 +146,15 @@ export async function dadosLancamento(contratoId: string) {
     const { data: ultima } = await supabase.from("medicoes").select("periodo_inicio, periodo_fim")
       .eq("contrato_id", id).neq("status", "cancelado").order("periodo_fim", { ascending: false }).limit(1).maybeSingle();
     const ultimo = ultima ? { inicio: ultima.periodo_inicio, fim: ultima.periodo_fim } : null;
+    const avulsa = cobrancaAvulsa(c.tipo_cobranca);
+    const proximoDia = ultimo ? addDias(ultimo.fim, 1) : c.data_inicio;
     return {
       id: c.id, placa: c.veiculos?.placa ?? "", cliente: c.clientes?.nome_fantasia ?? c.clientes?.razao_social ?? "", obra: c.obras?.nome ?? null,
-      tipo_cobranca: c.tipo_cobranca as TipoCobranca, valor_mensal: Number(c.valor_mensal), data_inicio: c.data_inicio, data_fim_efetiva: minData(c.data_fim, c.data_desmobilizacao),
+      tipo_cobranca: c.tipo_cobranca as TipoCobranca, valor_mensal: Number(c.valor_mensal), data_inicio: c.data_inicio,
+      // diária / hora: lançar um dia depois do último estende o contrato (é uma renovação), então só a desmobilização limita
+      data_fim_efetiva: avulsa ? c.data_desmobilizacao : minData(c.data_fim, c.data_desmobilizacao),
       ultimo_periodo: ultimo,
-      sugestao: ultimo ? proximoPeriodo(ultimo.fim) : periodoContendo(c.dia_corte_inicio as DiaCorte, c.data_inicio),
+      sugestao: avulsa ? { inicio: proximoDia, fim: proximoDia } : ultimo ? proximoPeriodo(ultimo.fim) : periodoContendo(c.dia_corte_inicio as DiaCorte, c.data_inicio),
     } satisfies ContratoLancamento;
   });
 }
@@ -161,10 +166,12 @@ export async function lancarMedicao(dados: unknown) {
     const d = lancamentoMedicaoSchema.parse(dados);
     if (diffDias(d.periodo_inicio, d.periodo_fim) > 31) throw new Error("O período pode ter no máximo um mês");
     const supabase = await createClient();
-    const { data: c } = await supabase.from("contratos").select("id, empresa_id, valor_mensal, data_inicio, data_fim, data_desmobilizacao")
+    const { data: c } = await supabase.from("contratos").select("id, empresa_id, valor_mensal, tipo_cobranca, data_inicio, data_fim, data_desmobilizacao")
       .eq("id", d.contrato_id).maybeSingle();
     if (!c) throw new Error("Contrato não encontrado");
-    const fimEfetivo = minData(c.data_fim, c.data_desmobilizacao);
+    const avulsa = cobrancaAvulsa(c.tipo_cobranca);
+    if (avulsa && d.periodo_fim !== d.periodo_inicio) throw new Error("Contrato por diária ou hora: cada fatura é de um dia só");
+    const fimEfetivo = avulsa ? c.data_desmobilizacao : minData(c.data_fim, c.data_desmobilizacao);
     if (d.periodo_fim < c.data_inicio || (fimEfetivo && d.periodo_inicio > fimEfetivo)) throw new Error("O período está fora da vigência do contrato");
     const { data: conflito } = await supabase.from("medicoes").select("periodo_inicio, periodo_fim").eq("contrato_id", c.id).neq("status", "cancelado")
       .lte("periodo_inicio", d.periodo_fim).gte("periodo_fim", d.periodo_inicio).limit(1).maybeSingle();
@@ -177,6 +184,8 @@ export async function lancarMedicao(dados: unknown) {
       forma_pagamento: d.forma_pagamento,
       final: !!c.data_desmobilizacao && c.data_desmobilizacao >= d.periodo_inicio && c.data_desmobilizacao <= d.periodo_fim,
     }).select("id").single());
+    // diária / hora depois do último dia: o contrato passa a ir até esse dia (igual a renovar)
+    if (avulsa && (!c.data_fim || d.periodo_fim > c.data_fim)) checar(await supabase.from("contratos").update({ data_fim: d.periodo_fim }).eq("id", c.id));
     return { id: nova!.id, competencia: d.periodo_fim.slice(0, 7) };
   }, REVALIDAR, "Fatura lançada");
 }

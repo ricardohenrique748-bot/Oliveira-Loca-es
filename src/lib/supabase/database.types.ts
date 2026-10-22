@@ -2389,7 +2389,7 @@ export type Database = {
       status_repasse: "previsto" | "liberado" | "pago" | "cancelado"
       status_veiculo: "disponivel" | "locado" | "manutencao" | "parado" | "vendido"
       tipo_chave_pix: "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
-      tipo_despesa: "fixa" | "veiculo"
+      tipo_despesa: "fixa" | "variavel" | "veiculo"
       tipo_documento: "licenciamento" | "seguro" | "tacografo" | "inspecao_icamento" | "antt" | "outro"
       tipo_item_os: "peca" | "servico"
       tipo_os: "preventiva" | "corretiva" | "pneu" | "inspecao"
@@ -2425,7 +2425,7 @@ export const Constants = {
       status_repasse: ["previsto", "liberado", "pago", "cancelado"],
       status_veiculo: ["disponivel", "locado", "manutencao", "parado", "vendido"],
       tipo_chave_pix: ["cpf", "cnpj", "email", "telefone", "aleatoria"],
-      tipo_despesa: ["fixa", "veiculo"],
+      tipo_despesa: ["fixa", "variavel", "veiculo"],
       tipo_documento: ["licenciamento", "seguro", "tacografo", "inspecao_icamento", "antt", "outro"],
       tipo_item_os: ["peca", "servico"],
       tipo_os: ["preventiva", "corretiva", "pneu", "inspecao"],

@@ -6,7 +6,7 @@ const base = {
   fornecedor_id: uuidOpc,
   descricao: textoObr("Descrição"),
   categoria_id: uuidOpc,
-  tipo: z.enum(["fixa", "veiculo"]),
+  tipo: z.enum(["fixa", "variavel", "veiculo"]),
   veiculo_id: uuidOpc,
   vencimento: dataObr("o vencimento"),
   valor: moedaObr("o valor").refine((v) => v > 0, "Informe o valor"),

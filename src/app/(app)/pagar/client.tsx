@@ -26,7 +26,7 @@ import { baixarContas, criarContaPagar, editarContaPagar, encerrarRecorrencia, e
 
 export type LinhaConta = {
   id: string; empresa_id: string; empresa_apelido: string; fornecedor_id: string | null; fornecedor_nome: string | null; descricao: string;
-  categoria_id: string | null; categoria_nome: string | null; tipo: "fixa" | "veiculo"; veiculo_id: string | null; placa: string | null;
+  categoria_id: string | null; categoria_nome: string | null; tipo: "fixa" | "variavel" | "veiculo"; veiculo_id: string | null; placa: string | null;
   vencimento: string; valor: number; parcela_num: number | null; parcela_total: number | null; grupo_parcela_id: string | null; recorrente: boolean;
   forma_pagamento: keyof typeof FORMAS; conta_bancaria_id: string | null; banco: string | null; conta_apelido: string | null;
   descontar_locador: boolean; repasse_id: string | null; ordem_servico_id: string | null; pago_em: string | null; valor_pago: number | null;
@@ -46,7 +46,7 @@ function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opc
   const lista: Campo<ContaPagarNovaForm>[] = [
     { nome: "descricao", rotulo: "Descrição", obrigatorio: true, col: 4, placeholder: "Ex.: Silcar Pneus" },
     { nome: "empresa_id", rotulo: "Empresa", tipo: "select", opcoes: o.empresas, obrigatorio: true, col: 2 },
-    { nome: "tipo", rotulo: "Lançamento", tipo: "select", opcoes: [{ value: "fixa", label: "Despesa fixa" }, { value: "veiculo", label: "Despesa de veículo" }], col: 2 },
+    { nome: "tipo", rotulo: "Lançamento", tipo: "select", opcoes: [{ value: "fixa", label: "Despesa fixa" }, { value: "variavel", label: "Despesa variável" }, { value: "veiculo", label: "Despesa de veículo" }], col: 2 },
     { nome: "veiculo_id", rotulo: "Placa", tipo: "select", vazio: "—", opcoes: (v) => o.veiculos.filter((x) => x.empresa_id === v.empresa_id), col: 2, visivel: (v) => v.tipo === "veiculo", obrigatorio: true },
     { nome: "categoria_id", rotulo: "Categoria", tipo: "select", vazio: "—", opcoes: (v) => o.categorias.filter((c) => c.tipo === v.tipo), col: 2 },
     { nome: "fornecedor_id", rotulo: "Fornecedor", tipo: "select", vazio: "—", opcoes: o.fornecedores, col: 3 },
@@ -158,7 +158,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
           </div>
         </div>
         <FiltroSelectUrl param="status" rotulo="Status" opcoes={[{ value: "a_vencer", label: "A vencer" }, { value: "vencido", label: "Vencidas (todas)" }, { value: "pago", label: "Pagas" }]} />
-        <FiltroSelectUrl param="tipo" rotulo="Tipo" opcoes={[{ value: "fixa", label: "Fixas" }, { value: "veiculo", label: "Veículo" }]} />
+        <FiltroSelectUrl param="tipo" rotulo="Tipo" opcoes={[{ value: "fixa", label: "Fixas" }, { value: "variavel", label: "Variáveis" }, { value: "veiculo", label: "Veículo" }]} />
         <FiltroSelectUrl param="categoria_id" rotulo="Categoria" vazio="Todas" opcoes={opcoes.categorias} />
         <FiltroSelectUrl param="veiculo_id" rotulo="Placa" vazio="Todas" opcoes={opcoes.veiculos} />
         <FiltroSelectUrl param="banco" rotulo="Banco" opcoes={["Bradesco", "Sicredi", "Inter", "Outro"].map((b) => ({ value: b, label: b }))} />

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { Moeda } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
-import { baseCobranca, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde } from "@/lib/calculos";
+import { baseCobranca, cobrancaAvulsa, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde } from "@/lib/calculos";
 import { formatPeriodo, formatPlaca } from "@/lib/format";
 import { FORMAS_FATURA, type FormaFatura } from "@/lib/schemas/operacao";
 import { dadosLancamento, lancarMedicao, type ContratoLancamento } from "./actions";
@@ -62,10 +62,12 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   React.useEffect(() => {
     if (!info || diasManual || !inicio || !fim || fim < inicio) return;
     const entrada = { periodo: { inicio, fim }, dataInicioContrato: info.data_inicio, dataFimEfetiva: info.data_fim_efetiva, baseDias };
-    setDias(info.tipo_cobranca === "diaria" ? calcularDiasCorridos(entrada) : calcularDiasPeriodoLivre(entrada));
+    // por hora: as horas trabalhadas são digitadas
+    setDias(info.tipo_cobranca === "hora" ? 0 : info.tipo_cobranca === "diaria" ? calcularDiasCorridos(entrada) : calcularDiasPeriodoLivre(entrada));
   }, [info, inicio, fim, diasManual, baseDias]);
 
   const valor = info ? calcularValorMedicao({ valorMensal: info.valor_mensal, dias, acrescimos, descontos, baseDias: baseCobranca(info.tipo_cobranca, baseDias) }).valorFinal : 0;
+  const avulsa = cobrancaAvulsa(info?.tipo_cobranca);
   const invalido = !info || !inicio || !fim || fim < inicio || dias < 1;
 
   const lancar = async () => {
@@ -102,17 +104,25 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              {avulsa ? (
+                // diária / hora: a fatura é de um dia só
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="lancar-inicio">Dia</Label>
+                  <Input id="lancar-inicio" type="date" value={inicio} onChange={(e) => { setInicio(e.target.value); setFim(e.target.value); setDiasManual(false); }} />
+                </div>
+              ) : <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="lancar-inicio">Início do período</Label>
+                  {/* mudar o início ajusta o fim para um mês depois */}
+                  <Input id="lancar-inicio" type="date" value={inicio} onChange={(e) => { setInicio(e.target.value); if (e.target.value) setFim(periodoMensalDesde(e.target.value).fim); setDiasManual(false); }} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="lancar-fim">Fim do período</Label>
+                  <Input id="lancar-fim" type="date" value={fim} min={inicio} onChange={(e) => { setFim(e.target.value); setDiasManual(false); }} />
+                </div>
+              </>}
               <div className="space-y-1.5">
-                <Label htmlFor="lancar-inicio">Início do período</Label>
-                {/* mudar o início ajusta o fim para um mês depois */}
-                <Input id="lancar-inicio" type="date" value={inicio} onChange={(e) => { setInicio(e.target.value); if (e.target.value) setFim(periodoMensalDesde(e.target.value).fim); setDiasManual(false); }} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="lancar-fim">Fim do período</Label>
-                <Input id="lancar-fim" type="date" value={fim} min={inicio} onChange={(e) => { setFim(e.target.value); setDiasManual(false); }} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="lancar-dias">Dias</Label>
+                <Label htmlFor="lancar-dias">{info.tipo_cobranca === "hora" ? "Horas trabalhadas" : info.tipo_cobranca === "diaria" ? "Diárias" : "Dias"}</Label>
                 <InputNumero id="lancar-dias" value={dias} onChange={(v) => { setDias(Math.min(31, v ?? 0)); setDiasManual(true); }} />
               </div>
               <div className="space-y-1.5">
@@ -137,9 +147,9 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
               <Input id="lancar-obs" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
             </div>
             <p className="text-xs text-muted-foreground">{info.tipo_cobranca === "hora"
-              ? <>Por hora: digite as horas trabalhadas no campo Dias. Valor = hora × horas + acréscimos − descontos.</>
+              ? <>Por hora: fatura de um dia. Valor = hora × horas + acréscimos − descontos. Dia depois do último estende o contrato.</>
               : info.tipo_cobranca === "diaria"
-              ? <>Diária: conta os dias corridos. Valor = diária × dias + acréscimos − descontos.</>
+              ? <>Diária: fatura de um dia. Valor = diária × diárias + acréscimos − descontos. Dia depois do último estende o contrato.</>
               : <>Mês cheio conta {baseDias} dias. Valor = (mensal ÷ {baseDias}) × dias + acréscimos − descontos.</>}</p>
           </>}
         </div>
