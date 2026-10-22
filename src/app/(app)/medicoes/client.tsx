@@ -432,20 +432,23 @@ function comHoraExtra(itens: ItemFatura[], valorDiaria: number, diarias: number,
 const preenchidos = (itens: ItemFatura[]) => itens.filter((i) => i.descricao.trim() || i.valor);
 
 /** Lista editável de acréscimos ou descontos: descrição + valor, quantas linhas quiser. */
-function ListaItensFatura({ titulo, nome, exemplo, itens, total, editavel, onChange }: {
+function ListaItensFatura({ titulo, nome, exemplo, itens, total, editavel, onChange, negativo }: {
   titulo: string; nome: string; exemplo: string; itens: ItemFatura[]; total: number; editavel: boolean; onChange: (itens: ItemFatura[]) => void;
+  /** descontos: mostra o valor com sinal de menos (digita-se positivo) */
+  negativo?: boolean;
 }) {
   const editar = (i: number, campo: Partial<ItemFatura>) => onChange(itens.map((it, j) => (j === i ? { ...it, ...campo } : it)));
   return (
     <TableRow><TableCell colSpan={2} className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span>{titulo}</span>
-        <span className="text-right"><Moeda valor={total} /></span>
+        <span className="text-right"><Moeda valor={negativo && total ? -total : total} sinal /></span>
       </div>
       {itens.map((it, i) => (
         <div key={i} className="flex items-center gap-2">
           <Input aria-label={`Descrição do ${nome} ${i + 1}`} className="h-8 flex-1" placeholder={exemplo} maxLength={200}
             disabled={!editavel} value={it.descricao} onChange={(e) => editar(i, { descricao: e.target.value })} />
+          {negativo && <span className="shrink-0 text-status-critico" aria-hidden>−</span>}
           <div className="w-36 shrink-0"><InputMoeda aria-label={`Valor do ${nome} ${i + 1}`} className="h-8" disabled={!editavel} value={it.valor || null}
             onChange={(v) => editar(i, { valor: v ?? 0 })} /></div>
           {editavel && <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label={`Remover ${nome} ${i + 1}`}
@@ -527,7 +530,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
                 </TableCell></TableRow>
                 <ListaItensFatura titulo="Acréscimos" nome="acréscimo" exemplo="Ex.: hora extra do operador, frete, pedágio…" itens={ajuste.acrescimos} total={acrescimos}
                   editavel={ed} onChange={(itens) => setAjuste((a) => ({ ...a, acrescimos: itens }))} />
-                <ListaItensFatura titulo="Descontos" nome="desconto" exemplo="Ex.: dia parado por chuva, abatimento combinado…" itens={ajuste.descontos} total={descontos}
+                <ListaItensFatura titulo="Descontos" nome="desconto" exemplo="Ex.: dia parado por chuva, abatimento combinado…" itens={ajuste.descontos} total={descontos} negativo
                   editavel={ed} onChange={(itens) => setAjuste((a) => ({ ...a, descontos: itens }))} />
               </TableBody>
               <TableFooter><TableRow><TableCell>Total da fatura</TableCell><TableCell className="text-right"><Moeda valor={total} /></TableCell></TableRow></TableFooter>

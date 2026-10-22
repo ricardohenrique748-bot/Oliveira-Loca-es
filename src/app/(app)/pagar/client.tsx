@@ -41,19 +41,25 @@ type Opcoes = {
   contas: (Opcao & { banco: string; empresa_id: string })[];
 };
 
+/** A empresa não aparece no formulário: vem da placa (despesa de veículo), senão da conta bancária, senão fica a atual. */
+function comEmpresa<V extends { empresa_id: string; tipo: string; veiculo_id?: string | null; conta_bancaria_id?: string | null }>(v: V, o: Opcoes): V {
+  const daPlaca = v.tipo === "veiculo" ? o.veiculos.find((x) => x.value === v.veiculo_id)?.empresa_id : undefined;
+  const daConta = o.contas.find((c) => c.value === v.conta_bancaria_id)?.empresa_id;
+  return { ...v, empresa_id: daPlaca ?? daConta ?? v.empresa_id };
+}
+
 function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opcoes, novo: boolean): Campo<V>[] {
   const ehLocador = (v: V) => !!o.veiculos.find((x) => x.value === v.veiculo_id)?.locador;
   const lista: Campo<ContaPagarNovaForm>[] = [
-    { nome: "descricao", rotulo: "Descrição", obrigatorio: true, col: 4, placeholder: "Ex.: Silcar Pneus" },
-    { nome: "empresa_id", rotulo: "Empresa", tipo: "select", opcoes: o.empresas, obrigatorio: true, col: 2 },
+    { nome: "descricao", rotulo: "Descrição", obrigatorio: true, col: 6, placeholder: "Ex.: Silcar Pneus" },
     { nome: "tipo", rotulo: "Lançamento", tipo: "select", opcoes: [{ value: "fixa", label: "Despesa fixa" }, { value: "variavel", label: "Despesa variável" }, { value: "veiculo", label: "Despesa de veículo" }], col: 2 },
-    { nome: "veiculo_id", rotulo: "Placa", tipo: "select", vazio: "—", opcoes: (v) => o.veiculos.filter((x) => x.empresa_id === v.empresa_id), col: 2, visivel: (v) => v.tipo === "veiculo", obrigatorio: true },
+    { nome: "veiculo_id", rotulo: "Placa", tipo: "select", vazio: "—", opcoes: o.veiculos, col: 2, visivel: (v) => v.tipo === "veiculo", obrigatorio: true },
     { nome: "categoria_id", rotulo: "Categoria", tipo: "select", vazio: "—", opcoes: (v) => o.categorias.filter((c) => c.tipo === v.tipo), col: 2 },
     { nome: "fornecedor_id", rotulo: "Fornecedor", tipo: "select", vazio: "—", opcoes: o.fornecedores, col: 3 },
     { nome: "vencimento", rotulo: novo ? "1º vencimento" : "Vencimento", tipo: "data", obrigatorio: true, col: 3 },
     { nome: "valor", rotulo: "Valor", tipo: "moeda", obrigatorio: true, col: 2 },
     { nome: "forma_pagamento", rotulo: "Forma", tipo: "select", opcoes: opcoesDe(FORMAS), col: 2 },
-    { nome: "conta_bancaria_id", rotulo: "Banco / conta", tipo: "select", vazio: "—", opcoes: (v) => o.contas.filter((c) => c.empresa_id === v.empresa_id), col: 2 },
+    { nome: "conta_bancaria_id", rotulo: "Banco / conta", tipo: "select", vazio: "—", opcoes: o.contas, col: 2 },
     { nome: "descontar_locador", rotulo: "Descontar do locador (abate no próximo repasse)", tipo: "checkbox", col: 6, visivel: (v) => v.tipo === "veiculo" && ehLocador(v as V) },
   ];
   if (novo) {
@@ -214,7 +220,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
                 vencimento: hojeSP(), valor: undefined, forma_pagamento: "boleto", conta_bancaria_id: null, descontar_locador: false, anexo_url: null, observacoes: null,
                 repeticao: "unica", parcelas: null, parcela_inicial: 1, modo_valor: "parcela" }}
               extra={(v) => <PreviaParcelas v={v} />}
-              onSalvar={async (v) => { const r = await criarContaPagar(v); return r.ok ? { ok: true, mensagem: `${r.dados.criadas} lançamento(s) criado(s)` } : r; }}
+              onSalvar={async (v) => { const r = await criarContaPagar(comEmpresa(v, opcoes)); return r.ok ? { ok: true, mensagem: `${r.dados.criadas} lançamento(s) criado(s)` } : r; }}
               onSucesso={() => { setNovo(false); router.refresh(); }} />
           )}
         </DialogContent>
@@ -270,7 +276,7 @@ function DialogoEditar({ conta: c, opcoes, onOpenChange, onFeito }: { conta: Lin
               valores={{ empresa_id: c.empresa_id, fornecedor_id: c.fornecedor_id, descricao: c.descricao, categoria_id: c.categoria_id, tipo: c.tipo, veiculo_id: c.veiculo_id,
                 vencimento: c.vencimento, valor: c.valor, forma_pagamento: c.forma_pagamento, conta_bancaria_id: c.conta_bancaria_id, descontar_locador: c.descontar_locador,
                 anexo_url: c.anexo_url, observacoes: c.observacoes, escopo: "esta" }}
-              onSalvar={async (v) => { const r = await editarContaPagar(c.id, { ...v, anexo_url: anexo }); return r.ok ? { ok: true, mensagem: `${r.dados.alteradas} lançamento(s) atualizado(s)` } : r; }}
+              onSalvar={async (v) => { const r = await editarContaPagar(c.id, { ...comEmpresa(v, opcoes), anexo_url: anexo }); return r.ok ? { ok: true, mensagem: `${r.dados.alteradas} lançamento(s) atualizado(s)` } : r; }}
               onSucesso={() => { onOpenChange(false); onFeito(); }} />
           </>
         )}
