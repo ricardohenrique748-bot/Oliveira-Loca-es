@@ -22,7 +22,7 @@ import type { OpcoesContrato } from "./dados";
 export type LinhaContrato = {
   id: string; numero: string | null; empresa_id: string; cliente_id: string; obra_id: string | null; veiculo_id: string;
   tipo_cobranca: "mensal" | "diaria"; valor_mensal: number; valor_repasse_mensal: number | null; dia_corte_inicio: number; prazo_pagamento_dias: number;
-  data_inicio: string; data_fim: string | null; data_desmobilizacao: string | null; status: "ativo" | "encerrado" | "suspenso"; observacoes: string | null;
+  data_inicio: string; data_fim: string | null; data_desmobilizacao: string | null; status: "ativo" | "encerrado" | "suspenso"; observacoes: string | null; anexo_url: string | null;
   empresa: string; cliente: string; obra: string | null; placa: string; modelo: string | null; proprietario: "proprio" | "locador";
 };
 
@@ -36,6 +36,8 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
   const mensal = (v: ContratoFormTela) => !diaria(v);
   const clienteNovo = (v: ContratoFormTela) => v.cliente_id === CLIENTE_NOVO;
   return [
+    { nome: "anexo_url", rotulo: "Contrato do cliente (PDF)", tipo: "anexo", bucket: "anexos", pasta: "contratos", col: 6,
+      ajuda: "Recebeu o contrato assinado pelo cliente? Anexe aqui: fica salvo no sistema para abrir quando precisar." },
     { nome: "tipo_cobranca", rotulo: "Tipo de cobrança", tipo: "select", col: 2, opcoes: [{ value: "mensal", label: "Mensal" }, { value: "diaria", label: "Diária" }] },
     { nome: "empresa_id", rotulo: "Empresa emissora", tipo: "select", opcoes: empresas, obrigatorio: true, col: 2 },
     { nome: "numero", rotulo: "Nº do contrato", col: 2, visivel: mensal, placeholder: "Automático", ajuda: "Deixe vazio para gerar (ex.: OL-012/26)" },
@@ -66,7 +68,7 @@ export function valoresContrato(c: LinhaContrato): ContratoFormTela {
   return {
     sublocado: c.proprietario === "locador" ? "sim" : "nao", tipo_cobranca: c.tipo_cobranca, empresa_id: c.empresa_id, cliente_id: c.cliente_id, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
     valor_mensal: c.valor_mensal, valor_repasse_mensal: c.valor_repasse_mensal, dia_corte_inicio: c.dia_corte_inicio as never,
-    prazo_pagamento_dias: c.prazo_pagamento_dias, data_inicio: c.data_inicio, data_fim: c.data_fim, status: c.status, observacoes: c.observacoes,
+    prazo_pagamento_dias: c.prazo_pagamento_dias, data_inicio: c.data_inicio, data_fim: c.data_fim, status: c.status, observacoes: c.observacoes, anexo_url: c.anexo_url,
   };
 }
 
@@ -141,7 +143,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
           <FiltroSelectUrl param="corte" rotulo="Período" opcoes={[{ value: "1", label: "01 → fim" }, { value: "21", label: "21 → 20" }]} />
         </>}
-        novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null }}
+        novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio: hojeSP(), data_fim: null, status: "ativo", observacoes: null, anexo_url: null }}
         paraForm={(c) => ({ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never })}
         salvar={salvarContrato} excluir={excluirContrato} podeEditar={podeEditar}
         avisoExcluir={(c) => <>O contrato <strong className="font-mono">{c.numero ?? formatPlaca(c.placa)}</strong> ({c.cliente}) será apagado <strong>junto com todas as medições dele</strong>, inclusive recebimentos, boletos e repasses. Esta ação não pode ser desfeita. Se o contrato só terminou, use <strong>Desmobilizar</strong>.</>}

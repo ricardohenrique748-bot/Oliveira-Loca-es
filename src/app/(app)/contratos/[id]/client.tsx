@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { Opcao } from "@/components/ui/select";
 import { Cabecalho, Moeda, StatusBadge } from "@/components/app/comuns";
 import { KpiCard } from "@/components/app/kpi";
+import { LinkAnexo } from "@/components/app/anexo";
 import { DataTable } from "@/components/app/data-table";
 import { FormularioDialog } from "@/components/app/formulario";
 import { contratoFormSchema } from "@/lib/schemas/operacao";
@@ -79,6 +80,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
             <div><dt className="text-xs text-muted-foreground">{c.data_desmobilizacao ? "Desmobilização" : "Término previsto"}</dt><dd>{formatData(c.data_desmobilizacao ?? c.data_fim)}</dd></div>
             <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Veículo</dt>
               <dd><Link className="underline" href={`/cadastros/veiculos/${c.veiculo_id}`}>{formatPlaca(c.placa)} {c.modelo}</Link>{c.proprietario === "locador" ? " (sublocado · sem motorista)" : " (frota própria · com motorista)"}</dd></div>
+            {c.anexo_url && <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Contrato do cliente</dt><dd><LinkAnexo referencia={c.anexo_url} /></dd></div>}
             {c.observacoes && <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Observações</dt><dd className="whitespace-pre-wrap">{c.observacoes}</dd></div>}
           </dl>
         </CardContent>

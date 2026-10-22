@@ -211,10 +211,11 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
 
       {/* grade desktop: largura fixa por coluna, cabe na tela sem rolagem horizontal */}
       <Card className={cn("hidden overflow-hidden md:block", url.pendente && "opacity-60")}>
-        <Table ref={tabela} onKeyDown={navegar} className="table-fixed text-xs [&_td]:px-1.5 [&_td]:py-1.5 [&_th]:h-10 [&_th]:px-1.5 [&_th]:text-xs">
+        <Table ref={tabela} onKeyDown={navegar} className="min-w-[1080px] table-fixed text-xs [&_td]:px-1.5 [&_td]:py-1.5 [&_th]:h-10 [&_th]:px-1.5 [&_th]:text-xs">
           <colgroup>
-            <col className="w-[3%]" /><col className="w-[22%]" /><col className="w-[10%]" /><col className="w-[12%]" />
-            <col className="w-[8%]" /><col className="w-[10.5%]" /><col className="w-[10.5%]" /><col className="w-[8.5%]" /><col className="w-[12%]" /><col className="w-[3.5%]" />
+            {/* datas com folga para o texto + ícone do calendário não cortarem */}
+            <col className="w-[3%]" /><col className="w-[18%]" /><col className="w-[10%]" /><col className="w-[12%]" />
+            <col className="w-[8%]" /><col className="w-[13%]" /><col className="w-[13%]" /><col className="w-[8.5%]" /><col className="w-[11%]" /><col className="w-[3.5%]" />
           </colgroup>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -242,7 +243,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
               const { valorFinal } = calc(m);
               const mudou = alterados.includes(m.id);
               const campo = "h-8 w-full min-w-0 px-1.5 text-xs";
-              const data = cn(campo, "[&::-webkit-calendar-picker-indicator]:m-0 [&::-webkit-calendar-picker-indicator]:w-3");
+              const data = cn(campo, "pr-1 [&::-webkit-calendar-picker-indicator]:m-0 [&::-webkit-calendar-picker-indicator]:w-3 [&::-webkit-calendar-picker-indicator]:shrink-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer");
               return (
                 <TableRow key={m.id} data-state={selecao.has(m.id) ? "selected" : undefined} className={cn(mudou && "bg-accent/50", m.status_exibicao === "vencido" && "border-l-2 border-l-status-critico")}>
                   <TableCell><Checkbox aria-label={`Selecionar ${m.placa}`} checked={selecao.has(m.id)} onCheckedChange={() => alternar(m.id)} /></TableCell>

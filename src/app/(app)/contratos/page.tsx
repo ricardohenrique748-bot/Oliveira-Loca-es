@@ -19,7 +19,7 @@ export default function ContratosPage() {
     const supabase = createClient();
     let q = supabase.from("contratos")
       .select(`id, numero, empresa_id, cliente_id, obra_id, veiculo_id, tipo_cobranca, valor_mensal, valor_repasse_mensal, dia_corte_inicio, prazo_pagamento_dias,
-        data_inicio, data_fim, data_desmobilizacao, status, observacoes,
+        data_inicio, data_fim, data_desmobilizacao, status, observacoes, anexo_url,
         empresas(apelido), clientes(razao_social, nome_fantasia), obras(nome), veiculos!inner(placa, modelo, proprietario)`, { count: "exact" });
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     const status = p.get("status") ?? "ativo";
@@ -51,6 +51,7 @@ export default function ContratosPage() {
         data_desmobilizacao: c.data_desmobilizacao,
         status: c.status,
         observacoes: c.observacoes,
+        anexo_url: c.anexo_url,
         empresa: c.empresas?.apelido ?? "",
         cliente: c.clientes?.nome_fantasia ?? c.clientes?.razao_social ?? "",
         obra: c.obras?.nome ?? null,

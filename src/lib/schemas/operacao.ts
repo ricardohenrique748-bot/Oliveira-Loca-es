@@ -17,6 +17,8 @@ const contratoBase = z.object({
   data_fim: dataOpc,
   status: z.enum(["ativo", "encerrado", "suspenso"]),
   observacoes: textoOpc,
+  /** PDF do contrato enviado pelo cliente: "anexos/contratos/..." */
+  anexo_url: textoOpc,
 });
 
 const validarDatas = (c: { data_inicio: string; data_fim: string | null }, ctx: z.RefinementCtx) => {

@@ -549,6 +549,7 @@ export type Database = {
       }
       contratos: {
         Row: {
+          anexo_url: string | null
           cliente_id: string
           created_at: string
           created_by: string | null
@@ -570,6 +571,7 @@ export type Database = {
           veiculo_id: string
         }
         Insert: {
+          anexo_url?: string | null
           cliente_id: string
           created_at?: string
           created_by?: string | null
@@ -591,6 +593,7 @@ export type Database = {
           veiculo_id: string
         }
         Update: {
+          anexo_url?: string | null
           cliente_id?: string
           created_at?: string
           created_by?: string | null
