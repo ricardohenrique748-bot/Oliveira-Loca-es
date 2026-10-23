@@ -70,7 +70,8 @@ export function montarFatura(d: DadosFatura): Documento {
   ];
 
   return {
-    arquivo: `fatura_${d.contrato_numero ?? formatPlaca(d.placa)}_${d.periodo_fim.slice(0, 7)}`,
+    // placa + mês da competência: "fatura_DWK9E10_outubro_2026"
+    arquivo: `fatura_${formatPlaca(d.placa)}_${competencia.replace(" de ", "_")}`,
     cabecalho: `Fatura${d.numero_nf ? ` · NF ${d.numero_nf}` : ""} · ${d.contrato_numero ?? formatPlaca(d.placa)}`,
     rodape: [], // fatura sem rodapé de empresa/contato
     blocos,

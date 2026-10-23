@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { montarContrato } from "./contrato";
 import { contrato, propostaCaminhao, propostaGuindaste } from "./fixtures";
 import { descricaoEquipamento, montarProposta } from "./proposta";
+import { montarFatura } from "./fatura";
 import type { Bloco, Documento } from "./pdf";
 
 /** todo o texto do documento, para buscar trechos */
@@ -125,5 +126,17 @@ describe("contrato de locação", () => {
     expect(t2).toContain("entre o dia 21 (vinte e um) de cada mês e o dia 20 (vinte) do mês seguinte");
     expect(t2).toContain("prazo indeterminado");
     expect(t2).toContain("Indeterminado — cláusula 2");
+  });
+});
+
+describe("fatura — nome do arquivo", () => {
+  it("sai com a placa e o mês da competência", () => {
+    const d = montarFatura({
+      contrato_numero: "TD-001/26", tipo_cobranca: "mensal", base_dias: 30, periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 15,
+      valor_mensal: 8500, valor_base: 4250, acrescimos: 0, descontos: 0, valor_final: 4250, numero_nf: null, data_emissao: "2026-10-23", data_vencimento: "2026-11-07",
+      forma_pagamento: "boleto", acrescimos_itens: [], descontos_itens: [], observacoes: null,
+      placa: "DWK9E10", veiculo_tipo: "caminhao", obra: null, empresa: propostaGuindaste.empresa, cliente: propostaGuindaste.cliente,
+    });
+    expect(d.arquivo).toBe("fatura_DWK9E10_outubro_2026");
   });
 });
