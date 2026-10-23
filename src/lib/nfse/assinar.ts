@@ -12,9 +12,11 @@ const INF_DPS = "//*[local-name(.)='infDPS']";
 export function lerCertificado(pfxBase64: string, senha: string): { chavePem: string; certPem: string } {
   let p12: forge.pkcs12.Pkcs12Pfx;
   try {
-    p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(forge.util.decode64(pfxBase64)), senha);
-  } catch {
-    throw new Error("Não foi possível abrir o certificado: confira o arquivo .pfx e a senha do certificado");
+    // senha colada em painel costuma vir com espaço ou quebra de linha no fim
+    p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(forge.util.decode64(pfxBase64.replace(/\s+/g, ""))), senha.trim());
+  } catch (e) {
+    // o motivo técnico (senha errada x criptografia não suportada) não expõe nada do certificado
+    throw new Error(`Não foi possível abrir o certificado: confira o arquivo .pfx e a senha do certificado (${e instanceof Error ? e.message : String(e)})`);
   }
   const chave = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0]?.key;
   const cert = p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag]?.[0]?.cert;

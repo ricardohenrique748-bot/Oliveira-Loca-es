@@ -55,7 +55,12 @@ describe("NFS-e — assinarDPS", () => {
     expect(v.checkSignature(adulterado)).toBe(false);
   });
 
-  it("senha errada dá erro claro", () => {
-    expect(() => assinarDPS(dps, pfx.base64, "errada")).toThrow(/senha do certificado/i);
+  it("senha errada dá erro claro, com o motivo técnico", () => {
+    expect(() => assinarDPS(dps, pfx.base64, "errada")).toThrow(/senha do certificado.*\(.+\)/i);
+  });
+
+  it("aceita o certificado colado com quebras de linha e espaços (cópia do PowerShell)", () => {
+    const colado = pfx.base64.replace(/(.{76})/g, "$1\r\n") + "\r\n ";
+    expect(assinarDPS(dps, colado, "123")).toContain("<SignatureValue>");
   });
 });
