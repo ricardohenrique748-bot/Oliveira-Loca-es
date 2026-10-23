@@ -37,8 +37,9 @@ describe("NFS-e — montarDPS", () => {
     expect(xml).toContain("<cLocEmi>3549805</cLocEmi>");
   });
 
-  it("prestador do Simples Nacional (ME/EPP), com IM", () => {
-    expect(xml).toContain("<prest><CNPJ>44889430000181</CNPJ><IM>3886940</IM>");
+  it("prestador do Simples Nacional (ME/EPP); IM só em produção (E0120 na homologação: CNC sem dados do município)", () => {
+    expect(xml).toContain("<prest><CNPJ>44889430000181</CNPJ><regTrib>");
+    expect(montarDPS({ ...base, ambiente: 1 })).toContain("<prest><CNPJ>44889430000181</CNPJ><IM>3886940</IM><regTrib>");
     expect(xml).toContain("<regTrib><opSimpNac>3</opSimpNac><regApTribSN>1</regApTribSN><regEspTrib>0</regEspTrib></regTrib>");
   });
 
