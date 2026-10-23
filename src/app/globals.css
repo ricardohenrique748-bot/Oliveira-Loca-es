@@ -48,6 +48,8 @@
   }
 
   .dark {
+    /* controles nativos (ícone do calendário, seletor de data, scrollbar) no tema escuro */
+    color-scheme: dark;
     --background: 0 0% 7%;
     --foreground: 0 0% 100%;
     --card: 0 0% 11%;
