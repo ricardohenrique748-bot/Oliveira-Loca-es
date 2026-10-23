@@ -13,8 +13,12 @@ import { corpoEnvio, lerResposta, SEFIN } from "../../src/lib/nfse/envio.js";
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: { medicaoId?: string } };
 type Res = { status: (n: number) => { json: (b: unknown) => void } };
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hbhuofkpjcnmqnbuefrz.supabase.co";
-const SUPABASE_ANON = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_BwcOrx8hekJrl8-pJ1HsrA_miohLgiP";
+// mesma regra de src/lib/supabase/env.ts: sem variável ou apontando para o projeto legado, usa o projeto atual (onde o usuário loga)
+const envUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const envAnon = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const legado = !envUrl || !envAnon || envUrl.includes("yvloohupcjaczotbhxos");
+const SUPABASE_URL = legado ? "https://hbhuofkpjcnmqnbuefrz.supabase.co" : envUrl;
+const SUPABASE_ANON = legado ? "sb_publishable_BwcOrx8hekJrl8-pJ1HsrA_miohLgiP" : envAnon;
 
 /** POST com o certificado na conexão (mTLS) */
 function postComCertificado(url: string, corpo: unknown, pfx: Buffer, senha: string): Promise<{ status: number; json: unknown }> {
@@ -51,8 +55,8 @@ export default async function handler(req: Req, res: Res) {
   const ambiente = process.env.NFSE_AMBIENTE === "producao" ? "producao" : "homologacao";
 
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } });
-  const { data: usuario } = await sb.auth.getUser(token);
-  if (!usuario.user) return res.status(401).json({ erro: "Sessão expirada: faça login novamente" });
+  const { data: usuario, error: errUser } = await sb.auth.getUser(token);
+  if (!usuario.user) return res.status(401).json({ erro: `Login não reconhecido (${errUser?.message ?? "sem usuário"}): saia e entre de novo no sistema` });
 
   const { data: m, error } = await sb.from("medicoes")
     .select(`id, empresa_id, status, valor_final, periodo_inicio, periodo_fim, nfse_chave, nfse_ambiente,
