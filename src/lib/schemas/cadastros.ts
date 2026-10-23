@@ -54,6 +54,7 @@ export const empresaSchema = z.object({
   codigo_ibge: textoOpc.refine((v) => !v || /^\d{7}$/.test(v), "Código IBGE tem 7 dígitos"),
   nfse_codigo_servico: textoOpc,
   nfse_aliquota_iss: z.number().min(0).max(100).nullish().transform((v) => v ?? null),
+  nfse_texto_complementar: z.string().trim().max(1000).nullish().transform((v) => (v ? v : null)),
 });
 export type EmpresaForm = z.infer<typeof empresaSchema>;
 

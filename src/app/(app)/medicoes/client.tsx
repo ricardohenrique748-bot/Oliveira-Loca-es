@@ -3,6 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 import { Ban, CalendarPlus, CheckCheck, Eye, FileDown, FileSpreadsheet, FileText, History, Loader2, Plus, Save, Trash2, Undo2, Wand2 } from "lucide-react";
 import { Badge, Card, Checkbox, Label, Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
@@ -466,6 +467,26 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
   medicao: LinhaMedicao | null; baseDias: number; podeEditar: boolean; onOpenChange: (v: boolean) => void; onSalvo: () => void;
 }) {
   const [gerando, setGerando] = React.useState(false);
+  const [emitindo, setEmitindo] = React.useState(false);
+  /** NFS-e no Emissor Nacional pela função da Vercel (certificado fica lá); por enquanto só homologação */
+  const emitirNota = async () => {
+    if (!m) return;
+    setEmitindo(true);
+    try {
+      const { data } = await createClient().auth.getSession();
+      const r = await fetch("/api/nfse/emitir", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+        body: JSON.stringify({ medicaoId: m.id }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; erro?: string; chave?: string; numero?: string; ambiente?: string };
+      if (j.ok) toast.success(`NFS-e ${j.numero ?? ""} emitida (${j.ambiente}) · chave ${j.chave}`, { duration: 15_000 });
+      else toast.error(`NFS-e não emitida${j.ambiente ? ` (${j.ambiente})` : ""}: ${j.erro ?? `HTTP ${r.status}`}`, { duration: 30_000 });
+    } catch (e) {
+      toast.error(`Falha ao chamar a emissão: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setEmitindo(false);
+    }
+  };
   // dias, acréscimos e descontos saíram da grade: ajustam-se aqui
   const [ajuste, setAjuste] = React.useState({ dias: 0, forma: "boleto" as FormaFatura, acrescimos: [] as ItemFatura[], descontos: [] as ItemFatura[] });
   const [salvando, setSalvando] = React.useState(false);
@@ -554,6 +575,11 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
             {ed && <Button variant="outline" disabled={!mudou || salvando} onClick={salvarAjuste}>{salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar ajustes</Button>}
+            {podeEditar && m.status !== "cancelado" && (
+              <Button variant="outline" disabled={emitindo || mudou} title={mudou ? "Salve os ajustes antes de emitir" : "Teste no ambiente de homologação (não vale como nota real)"} onClick={emitirNota}>
+                {emitindo ? <Loader2 className="animate-spin" /> : <FileText />} Emitir NF (homologação)
+              </Button>
+            )}
             <Button disabled={gerando} title={mudou ? "Salve os ajustes antes: o PDF usa os valores salvos" : undefined}
               onClick={async () => { setGerando(true); try { await baixarFaturaPDF(m.id, baseDias); } finally { setGerando(false); } }}>
               {gerando ? <Loader2 className="animate-spin" /> : <FileDown />} Gerar fatura (PDF)

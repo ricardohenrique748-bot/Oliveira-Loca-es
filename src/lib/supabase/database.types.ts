@@ -705,6 +705,7 @@ export type Database = {
           codigo_ibge: string | null
           nfse_codigo_servico: string | null
           nfse_aliquota_iss: number | null
+          nfse_texto_complementar: string | null
           apelido: string
           ativo: boolean
           cidade: string | null
@@ -726,6 +727,7 @@ export type Database = {
           codigo_ibge?: string | null
           nfse_codigo_servico?: string | null
           nfse_aliquota_iss?: number | null
+          nfse_texto_complementar?: string | null
           apelido: string
           ativo?: boolean
           cidade?: string | null
@@ -747,6 +749,7 @@ export type Database = {
           codigo_ibge?: string | null
           nfse_codigo_servico?: string | null
           nfse_aliquota_iss?: number | null
+          nfse_texto_complementar?: string | null
           apelido?: string
           ativo?: boolean
           cidade?: string | null
