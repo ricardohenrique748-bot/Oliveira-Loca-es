@@ -22,7 +22,7 @@ function pfxDeTeste(senha: string) {
 
 const dps = montarDPS({
   ambiente: 2, serie: 1, numero: 1, emissao: new Date("2026-10-23T14:30:00Z"),
-  prestador: { cnpj: "44889430000181", im: "3886940", codigoIbge: "3549805", regime: "simples_nacional", codigoServico: "16.02.01.000", aliquotaIss: 3 },
+  prestador: { cnpj: "44889430000181", codigoIbge: "3549805", regime: "simples_nacional", codigoServico: "16.02.01.000", aliquotaIss: 3 },
   tomador: { documento: "15370280000105", nome: "RIO PRETO POSTES PADRAO LTDA" },
   servico: { descricao: "SERVIÇOS PRESTADOS", inicio: "2026-10-01", complemento: "Dados Bancários: PIX" },
   valor: 4098,

@@ -11,7 +11,7 @@ export interface DadosDPS {
   numero: number;
   emissao: Date;
   prestador: {
-    cnpj: string; im: string | null; codigoIbge: string;
+    cnpj: string; codigoIbge: string;
     regime: "mei" | "simples_nacional" | "normal";
     /** código de tributação: 6 dígitos (nacional) ou 9 (nacional + municipal, ex.: 16.02.01.000) */
     codigoServico: string;
@@ -62,8 +62,8 @@ export function montarDPS(d: DadosDPS): string {
     `<serie>${d.serie}</serie><nDPS>${d.numero}</nDPS><dCompet>${d.servico.inicio}</dCompet>` +
     // finNFSe (0 = regular): exigido pelo XSD da homologação de 20/10/2026; o de produção (09/02/2026) ainda não tem o campo
     `<tpEmit>1</tpEmit>${d.ambiente === 2 ? "<finNFSe>0</finNFSe>" : ""}<cLocEmi>${d.prestador.codigoIbge}</cLocEmi>` +
-    // IM só em produção: o cadastro (CNC) da homologação não tem os dados do município e rejeita a IM (E0120)
-    `<prest><CNPJ>${digitos(d.prestador.cnpj)}</CNPJ>${d.prestador.im && d.ambiente === 1 ? `<IM>${esc(d.prestador.im)}</IM>` : ""}${regTrib}</prest>` +
+    // sem IM: Rio Preto não tem informações complementares no CNC NFS-e e a Sefin rejeita a IM (E0120, homologação e produção)
+    `<prest><CNPJ>${digitos(d.prestador.cnpj)}</CNPJ>${regTrib}</prest>` +
     `<toma><${doc.length === 14 ? "CNPJ" : "CPF"}>${doc}</${doc.length === 14 ? "CNPJ" : "CPF"}><xNome>${esc(d.tomador.nome)}</xNome></toma>` +
     `<serv><locPrest><cLocPrestacao>${d.prestador.codigoIbge}</cLocPrestacao></locPrest>` +
     `<cServ><cTribNac>${cTribNac}</cTribNac>${cTribMun}<xDescServ>${esc(discriminacao.slice(0, 2000))}</xDescServ></cServ></serv>` +

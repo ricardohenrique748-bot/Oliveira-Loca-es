@@ -3,7 +3,7 @@ import { idDPS, montarDPS, type DadosDPS } from "./dps";
 
 const base: DadosDPS = {
   ambiente: 2, serie: 1, numero: 1, emissao: new Date("2026-10-23T14:30:00Z"),
-  prestador: { cnpj: "44.889.430/0001-81", im: "3886940", codigoIbge: "3549805", regime: "simples_nacional", codigoServico: "16.02.01", aliquotaIss: 3 },
+  prestador: { cnpj: "44.889.430/0001-81", codigoIbge: "3549805", regime: "simples_nacional", codigoServico: "16.02.01", aliquotaIss: 3 },
   tomador: { documento: "11.222.333/0001-81", nome: "Construtora Caramuru Ltda" },
   servico: { descricao: "Locação de munck placa CVP-0414 — 23/10/2026", inicio: "2026-10-23" },
   valor: 1800,
@@ -37,9 +37,9 @@ describe("NFS-e — montarDPS", () => {
     expect(xml).toContain("<cLocEmi>3549805</cLocEmi>");
   });
 
-  it("prestador do Simples Nacional (ME/EPP); IM só em produção (E0120 na homologação: CNC sem dados do município)", () => {
+  it("prestador do Simples Nacional (ME/EPP), sem IM (E0120: Rio Preto sem dados complementares no CNC)", () => {
     expect(xml).toContain("<prest><CNPJ>44889430000181</CNPJ><regTrib>");
-    expect(montarDPS({ ...base, ambiente: 1 })).toContain("<prest><CNPJ>44889430000181</CNPJ><IM>3886940</IM><regTrib>");
+    expect(montarDPS({ ...base, ambiente: 1 })).toContain("<prest><CNPJ>44889430000181</CNPJ><regTrib>");
     expect(xml).toContain("<regTrib><opSimpNac>3</opSimpNac><regApTribSN>1</regApTribSN><regEspTrib>0</regEspTrib></regTrib>");
   });
 

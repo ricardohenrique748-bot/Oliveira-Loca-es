@@ -60,14 +60,14 @@ export default async function handler(req: Req, res: Res) {
 
   const { data: m, error } = await sb.from("medicoes")
     .select(`id, empresa_id, status, valor_final, periodo_inicio, periodo_fim, nfse_chave, nfse_ambiente,
-      empresas(cnpj, inscricao_municipal, regime_tributario, codigo_ibge, nfse_codigo_servico, nfse_aliquota_iss, nfse_texto_complementar),
+      empresas(cnpj, regime_tributario, codigo_ibge, nfse_codigo_servico, nfse_aliquota_iss, nfse_texto_complementar),
       contratos(numero, clientes(razao_social, cnpj), veiculos(placa, tipo))`)
     .eq("id", medicaoId).maybeSingle();
   if (error || !m) return res.status(404).json({ erro: "Fatura não encontrada ou sem permissão" });
   if (m.status === "cancelado") return res.status(400).json({ erro: "Fatura cancelada não emite nota" });
   if (m.nfse_chave && m.nfse_ambiente === ambiente) return res.status(409).json({ erro: "Esta fatura já tem nota emitida", chave: m.nfse_chave });
 
-  const e = m.empresas as unknown as { cnpj: string | null; inscricao_municipal: string | null; regime_tributario: "mei" | "simples_nacional" | "normal" | null;
+  const e = m.empresas as unknown as { cnpj: string | null; regime_tributario: "mei" | "simples_nacional" | "normal" | null;
     codigo_ibge: string | null; nfse_codigo_servico: string | null; nfse_aliquota_iss: number | null; nfse_texto_complementar: string | null } | null;
   const c = m.contratos as unknown as { numero: string | null; clientes: { razao_social: string; cnpj: string | null } | null; veiculos: { placa: string; tipo: string } | null } | null;
   if (!e?.cnpj || !e.codigo_ibge || !e.regime_tributario || !e.nfse_codigo_servico || e.nfse_aliquota_iss == null)
@@ -80,7 +80,7 @@ export default async function handler(req: Req, res: Res) {
 
     const xml = montarDPS({
       ambiente: ambiente === "producao" ? 1 : 2, serie: 1, numero, emissao: new Date(),
-      prestador: { cnpj: e.cnpj, im: e.inscricao_municipal, codigoIbge: e.codigo_ibge, regime: e.regime_tributario,
+      prestador: { cnpj: e.cnpj, codigoIbge: e.codigo_ibge, regime: e.regime_tributario,
         codigoServico: e.nfse_codigo_servico, aliquotaIss: Number(e.nfse_aliquota_iss) },
       tomador: { documento: c.clientes.cnpj, nome: c.clientes.razao_social },
       servico: {

@@ -468,7 +468,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
 }) {
   const [gerando, setGerando] = React.useState(false);
   const [emitindo, setEmitindo] = React.useState(false);
-  /** NFS-e no Emissor Nacional pela função da Vercel (certificado fica lá); por enquanto só homologação */
+  /** NFS-e no Emissor Nacional pela função da Vercel (certificado fica lá); o ambiente é o da variável NFSE_AMBIENTE */
   const emitirNota = async () => {
     if (!m) return;
     setEmitindo(true);
@@ -576,8 +576,8 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
             {ed && <Button variant="outline" disabled={!mudou || salvando} onClick={salvarAjuste}>{salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar ajustes</Button>}
             {podeEditar && m.status !== "cancelado" && (
-              <Button variant="outline" disabled={emitindo || mudou} title={mudou ? "Salve os ajustes antes de emitir" : "Teste no ambiente de homologação (não vale como nota real)"} onClick={emitirNota}>
-                {emitindo ? <Loader2 className="animate-spin" /> : <FileText />} Emitir NF (homologação)
+              <Button variant="outline" disabled={emitindo || mudou} title={mudou ? "Salve os ajustes antes de emitir" : "Emite a NFS-e no Emissor Nacional"} onClick={emitirNota}>
+                {emitindo ? <Loader2 className="animate-spin" /> : <FileText />} Emitir NF
               </Button>
             )}
             <Button disabled={gerando} title={mudou ? "Salve os ajustes antes: o PDF usa os valores salvos" : undefined}
