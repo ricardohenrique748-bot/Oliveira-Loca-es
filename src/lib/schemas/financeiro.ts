@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { dataObr, dataOpc, moedaObr, textoObr, textoOpc, uuidObr, uuidOpc } from "./cadastros";
 
+/** Anexos podem ser vários, um por linha (ver CampoAnexo multiplo). */
+const anexosOpc = z.string().trim().max(5000).nullish().transform((v) => (v ? v : null));
+
 const base = {
   empresa_id: uuidObr("a empresa"),
   fornecedor_id: uuidOpc,
@@ -13,7 +16,7 @@ const base = {
   forma_pagamento: z.enum(["boleto", "debito_automatico", "cartao", "pix", "transferencia"]),
   conta_bancaria_id: uuidOpc,
   descontar_locador: z.boolean().default(false),
-  anexo_url: textoOpc,
+  anexo_url: anexosOpc,
   observacoes: textoOpc,
 };
 
@@ -47,7 +50,7 @@ export const baixaContaSchema = z.object({
   /** só para baixa individual; em lote usa o valor de cada conta */
   valor_pago: z.number().positive().nullish(),
   conta_bancaria_id: uuidOpc,
-  anexo_url: textoOpc,
+  anexo_url: anexosOpc,
 });
 
 export const estornoContaSchema = z.object({ ids: z.array(z.string().uuid()).min(1) });

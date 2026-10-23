@@ -92,7 +92,8 @@ export async function baixarContas(dados: unknown) {
         pago_em: b.pago_em,
         valor_pago: b.ids.length === 1 && b.valor_pago ? b.valor_pago : c.valor,
         conta_bancaria_id: b.conta_bancaria_id ?? c.conta_bancaria_id,
-        anexo_url: b.anexo_url ?? c.anexo_url,
+        // comprovantes somam aos anexos que a conta já tinha (boleto), um por linha
+        anexo_url: [c.anexo_url, b.anexo_url].filter(Boolean).join("\n") || null,
       }).eq("id", c.id));
     }
     return { baixadas: contas?.length ?? 0 };

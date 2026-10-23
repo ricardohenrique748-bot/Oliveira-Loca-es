@@ -271,7 +271,7 @@ function DialogoEditar({ conta: c, opcoes, onOpenChange, onFeito }: { conta: Lin
         </DialogHeader>
         {c && (
           <>
-            <div className="flex items-center gap-2"><Label>Boleto / recibo:</Label><CampoAnexo bucket="anexos" pasta="contas" valor={anexo} onChange={setAnexo} /></div>
+            <div className="flex items-center gap-2"><Label>Boleto / recibo:</Label><CampoAnexo bucket="anexos" pasta="contas" valor={anexo} onChange={setAnexo} multiplo /></div>
             <Formulario<ContaPagarEdicaoForm> campos={campos} schema={contaPagarEdicaoSchema as never}
               valores={{ empresa_id: c.empresa_id, fornecedor_id: c.fornecedor_id, descricao: c.descricao, categoria_id: c.categoria_id, tipo: c.tipo, veiculo_id: c.veiculo_id,
                 vencimento: c.vencimento, valor: c.valor, forma_pagamento: c.forma_pagamento, conta_bancaria_id: c.conta_bancaria_id, descontar_locador: c.descontar_locador,
@@ -310,7 +310,7 @@ function DialogoBaixa({ contas, opcoes, onOpenChange, onFeito }: { contas: Linha
         {unica && <div className="space-y-1.5"><Label htmlFor="bx-valor">Valor pago</Label><InputMoeda id="bx-valor" value={valor} onChange={setValor} /></div>}
         <div className="col-span-2 space-y-1.5"><Label>Conta (opcional, mantém a da conta se vazio)</Label>
           <SelectSimples value={conta} onChange={setConta} vazio="Manter" opcoes={opcoes.contas.filter((c) => empresas.size === 1 && empresas.has(c.empresa_id))} /></div>
-        <div className="col-span-2 space-y-1.5"><Label>Comprovante</Label><CampoAnexo bucket="comprovantes" pasta="pagamentos" valor={anexo} onChange={setAnexo} /></div>
+        <div className="col-span-2 space-y-1.5"><Label>Comprovante</Label><CampoAnexo bucket="comprovantes" pasta="pagamentos" valor={anexo} onChange={setAnexo} multiplo /></div>
       </div>
     </Confirmar>
   );
