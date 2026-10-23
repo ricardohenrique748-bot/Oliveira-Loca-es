@@ -55,7 +55,7 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", obrigatorio: true, col: 4, opcoes: (v) => opcoes.veiculos.filter((x) =>
       (!v.empresa_id || x.empresa_id === v.empresa_id) && (!v.sublocado || (x.proprietario === "locador") === (v.sublocado === "sim"))) },
     { nome: "valor_mensal", rotulo: "Valor mensal (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: mensal },
-    { nome: "valor_mensal", rotulo: "Valor da diária (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: diaria, ajuda: "Diária = 10 horas (ex.: hora R$ 180 → diária R$ 1.800). Hora extra: hora + 10%" },
+    { nome: "valor_mensal", rotulo: "Valor da diária (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: diaria, ajuda: "Diária = 10 horas. Hora extra = 10% da diária (ex.: diária R$ 1.800 → hora extra R$ 180)" },
     { nome: "valor_mensal", rotulo: "Valor da hora (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: hora, ajuda: "Fatura = horas trabalhadas × valor da hora" },
     { nome: "valor_repasse_mensal", rotulo: "Repasse mensal (locador)", tipo: "moeda", col: 3, visivel: (v) => mensal(v) && locador(v), ajuda: "Valor fixo mensal pago ao dono do veículo" },
     { nome: "valor_repasse_mensal", rotulo: "Repasse por dia (locador)", tipo: "moeda", col: 3, visivel: (v) => diaria(v) && locador(v), ajuda: "Valor por dia pago ao dono do veículo" },

@@ -126,13 +126,12 @@ export function calcularValorMedicao({ valorMensal, dias, acrescimos = 0, descon
   return { valorBase: deCentavos(baseCent), valorFinal: deCentavos(finalCent) };
 }
 
-/** Diária = 10 horas; a hora além disso custa a hora normal (diária ÷ 10) com 10% a mais. */
+/** Diária = 10 horas; cada hora além disso custa 10% da diária (diária ÷ 10). */
 export const HORAS_DIARIA = 10;
-export const ADICIONAL_HORA_EXTRA = 0.1;
 
 export function calcularHoraExtra(valorDiaria: number, diarias: number, horasTrabalhadas: number) {
   const horas = Math.max(0, horasTrabalhadas - HORAS_DIARIA * diarias);
-  const valorHora = deCentavos(Math.round((paraCentavos(valorDiaria) / HORAS_DIARIA) * (1 + ADICIONAL_HORA_EXTRA)));
+  const valorHora = deCentavos(Math.round(paraCentavos(valorDiaria) / HORAS_DIARIA));
   return { horas, valorHora, total: deCentavos(Math.round(paraCentavos(valorHora) * horas)) };
 }
 

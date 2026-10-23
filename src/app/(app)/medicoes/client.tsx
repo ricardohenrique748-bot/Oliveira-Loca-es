@@ -519,8 +519,8 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             <Table>
               <TableBody>
                 <TableRow><TableCell>{m.tipo_cobranca === "diaria" ? "Valor da diária (10 h)" : rotuloValorCobranca(m.tipo_cobranca)}</TableCell><TableCell className="text-right"><Moeda valor={m.valor_mensal} /></TableCell></TableRow>
-                {/* diária = 10 h; o que passar vira o item "Hora extra" dos acréscimos (hora + 10%) */}
-                {m.tipo_cobranca === "diaria" && <TableRow><TableCell>Horas trabalhadas <span className="text-xs text-muted-foreground">(passou de 10 h por diária = hora extra +10%)</span></TableCell><TableCell className="text-right">
+                {/* diária = 10 h; o que passar vira o item "Hora extra" dos acréscimos (10% da diária por hora) */}
+                {m.tipo_cobranca === "diaria" && <TableRow><TableCell>Horas trabalhadas <span className="text-xs text-muted-foreground">(passou de 10 h por diária = hora extra, 10% da diária cada)</span></TableCell><TableCell className="text-right">
                   <InputNumero aria-label="Horas trabalhadas" className="ml-auto h-8 w-20 text-right" casas={1} value={horas} placeholder="h" disabled={!ed}
                     onChange={(v) => { setHoras(v); if (v != null) setAjuste((a) => ({ ...a, acrescimos: comHoraExtra(a.acrescimos, m.valor_mensal, a.dias, v) })); }} />
                 </TableCell></TableRow>}

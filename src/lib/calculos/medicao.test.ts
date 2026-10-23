@@ -210,15 +210,15 @@ describe("contrato por diária", () => {
 });
 
 describe("calcularHoraExtra", () => {
-  it("hora R$ 180 (diária R$ 1.800): 12 h = 2 h extras a R$ 198", () => {
-    expect(calcularHoraExtra(1800, 1, 12)).toEqual({ horas: 2, valorHora: 198, total: 396 });
+  it("diária R$ 1.800: hora extra = 10% da diária = R$ 180; 15 h = 5 h extras = R$ 900", () => {
+    expect(calcularHoraExtra(1800, 1, 15)).toEqual({ horas: 5, valorHora: 180, total: 900 });
   });
   it("até 10 h por diária não tem hora extra", () => {
     expect(calcularHoraExtra(1800, 1, 10).total).toBe(0);
     expect(calcularHoraExtra(1800, 2, 19).total).toBe(0);
   });
   it("aceita meia hora", () => {
-    expect(calcularHoraExtra(400, 1, 10.5)).toEqual({ horas: 0.5, valorHora: 44, total: 22 });
+    expect(calcularHoraExtra(400, 1, 10.5)).toEqual({ horas: 0.5, valorHora: 40, total: 20 });
   });
 });
 
