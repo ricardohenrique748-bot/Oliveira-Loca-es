@@ -25,6 +25,11 @@ describe("NFS-e — montarDPS", () => {
     expect(xml).toContain('<infDPS Id="DPS354980524488943000018100001000000000000001">');
   });
 
+  it("homologação (XSD de 20/10/2026) exige finNFSe = 0 depois do tpEmit; produção (XSD de 09/02/2026) não tem o campo", () => {
+    expect(xml).toContain("<tpEmit>1</tpEmit><finNFSe>0</finNFSe><cLocEmi>");
+    expect(montarDPS({ ...base, ambiente: 1 })).toContain("<tpEmit>1</tpEmit><cLocEmi>");
+  });
+
   it("ambiente, emissão no horário de Brasília, série, número e competência", () => {
     expect(xml).toContain("<tpAmb>2</tpAmb>");
     expect(xml).toContain("<dhEmi>2026-10-23T11:30:00-03:00</dhEmi>");
