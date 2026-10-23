@@ -107,9 +107,6 @@ export async function faturarDiaria(contratoId: string, data: string, horario?: 
     const fracao = Math.round((horas - inteiras) * 60);
     const valorFracao = Math.round(Number(c.valor_mensal) * (fracao / 60) * 100) / 100;
     const itensFracao = fracao > 0 ? [{ descricao: `Fração de hora (${fracao} min)`, valor: valorFracao }] : [];
-    const { data: conflito } = await supabase.from("medicoes").select("id").eq("contrato_id", id).neq("status", "cancelado")
-      .lte("periodo_inicio", dia).gte("periodo_fim", dia).limit(1).maybeSingle();
-    if (conflito) throw new Error(`Já existe fatura deste contrato para ${dia.split("-").reverse().join("/")}`);
     const nova = checar(await supabase.from("medicoes").insert({
       contrato_id: id, empresa_id: c.empresa_id, periodo_inicio: dia, periodo_fim: dia, dias: c.tipo_cobranca === "hora" ? inteiras : 1, valor_mensal: c.valor_mensal,
       acrescimos: itensFracao.length ? valorFracao : 0, acrescimos_itens: itensFracao,
@@ -173,9 +170,6 @@ export async function lancarMedicao(dados: unknown) {
     if (avulsa && d.periodo_fim !== d.periodo_inicio) throw new Error("Contrato por diária ou hora: cada fatura é de um dia só");
     const fimEfetivo = avulsa ? c.data_desmobilizacao : minData(c.data_fim, c.data_desmobilizacao);
     if (d.periodo_fim < c.data_inicio || (fimEfetivo && d.periodo_inicio > fimEfetivo)) throw new Error("O período está fora da vigência do contrato");
-    const { data: conflito } = await supabase.from("medicoes").select("periodo_inicio, periodo_fim").eq("contrato_id", c.id).neq("status", "cancelado")
-      .lte("periodo_inicio", d.periodo_fim).gte("periodo_fim", d.periodo_inicio).limit(1).maybeSingle();
-    if (conflito) throw new Error(`Já existe medição deste contrato que cobre parte desse período (${conflito.periodo_inicio.split("-").reverse().join("/")} a ${conflito.periodo_fim.split("-").reverse().join("/")})`);
     const nova = checar(await supabase.from("medicoes").insert({
       contrato_id: c.id, empresa_id: c.empresa_id, periodo_inicio: d.periodo_inicio, periodo_fim: d.periodo_fim, dias: d.dias,
       valor_mensal: c.valor_mensal, acrescimos: d.acrescimos, descontos: d.descontos, observacoes: d.observacoes ?? null,

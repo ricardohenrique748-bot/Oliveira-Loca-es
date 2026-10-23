@@ -3,10 +3,10 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
   type TooltipContentProps,
 } from "recharts";
-import { formatBRL, formatCompetencia, formatData } from "@/lib/format";
+import { formatBRL, formatCompetencia } from "@/lib/format";
 import { Painel, Seta, TituloPainel } from "./cartoes";
 import type { DadosDashboard } from "./dados";
 
@@ -148,35 +148,6 @@ export function GraficoAging({ dados: d }: { dados: DadosDashboard }) {
           </li>
         ))}
       </ul>
-    </Painel>
-  );
-}
-
-export function GraficoFluxo({ dados: d }: { dados: DadosDashboard }) {
-  const router = useRouter();
-  const fluxoMin = Math.min(0, ...d.fluxo90.map((x) => x.saldo));
-  return (
-    <Painel>
-      <TituloPainel titulo="Fluxo de caixa projetado — 90 dias"
-        descricao={`Medições a receber − contas a pagar − repasses (sem saldo inicial). Já vencidos: ${formatBRL(d.atrasado.entrada)} a receber e ${formatBRL(d.atrasado.saida)} a pagar.`}
-        acao={<Seta href="/pagar" rotulo="Abrir contas a pagar" />} />
-      <Quadro altura={260}>
-        <AreaChart data={d.fluxo90} margin={{ left: 0, right: 16, top: 8 }} onClick={() => router.push("/pagar")}>
-          <defs>
-            <linearGradient id="dash-fluxo" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={S1} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={S1} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          {grade}
-          <XAxis dataKey="data" {...eixo} tickFormatter={(x: string) => formatData(x).slice(0, 5)} minTickGap={24} />
-          <YAxis {...eixo} tickFormatter={compacto} width={56} domain={[fluxoMin, "auto"]} />
-          <ReferenceLine y={0} stroke="var(--chart-axis)" strokeDasharray="4 4" />
-          <Tooltip cursor={{ stroke: "var(--chart-axis)", strokeDasharray: "3 3" }} content={<Dica rotulo={(l) => formatData(l)} />} />
-          <Area type="monotone" dataKey="saldo" name="Saldo projetado" stroke={S1} strokeWidth={2.5} fill="url(#dash-fluxo)" dot={false}
-            activeDot={{ r: 5, stroke: "var(--chart-surface)", strokeWidth: 2 }} />
-        </AreaChart>
-      </Quadro>
     </Painel>
   );
 }

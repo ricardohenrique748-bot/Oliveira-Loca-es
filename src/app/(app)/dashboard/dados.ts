@@ -41,7 +41,7 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
   const vazio = Promise.resolve({ data: [] as never[] });
 
   const [
-    medicoes12, abertas, recebimentos, repasses, contas, veiculos, preventivas, osAbertas, docs, fluxo,
+    medicoes12, abertas, recebimentos, repasses, contas, veiculos, preventivas, osAbertas, docs,
   ] = await Promise.all([
     f.veReceita ? med(sb.from("medicoes_v").select("data_emissao, valor_final, status").gte("data_emissao", ini12).lte("data_emissao", fim).neq("status", "cancelado")) : vazio,
     f.veReceita ? med(sb.from("medicoes_v").select("id, placa, cliente_fantasia, periodo_fim, valor_final, saldo, status, status_exibicao, data_vencimento, numero_nf").in("status", ["a_faturar", "faturado", "recebido_parcial"])) : vazio,
@@ -58,7 +58,6 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
     emp(sb.from("vw_preventivas_status").select("plano_id, placa, servico, status")),
     emp(sb.from("ordens_servico").select("id, numero, data_abertura, descricao_problema, status, veiculos(placa)").in("status", ["aberta", "em_execucao", "aguardando_peca"])),
     sb.from("documentos_veiculo").select("id, tipo, validade, veiculos!inner(placa, empresa_id)").lte("validade", addDias(f.hoje, 30)).order("validade"),
-    f.veReceita ? emp(sb.from("vw_fluxo_caixa_projetado").select("data, tipo, valor").gte("data", f.hoje).lte("data", addDias(f.hoje, 90))) : vazio,
   ]);
 
   // ----- KPIs -----
@@ -144,20 +143,7 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
 
   const statusFrota = ["locado", "disponivel", "manutencao", "parado"].map((s) => ({ status: s, qtd: veics.filter((v) => v.status === s).length }));
 
-  const fl = (fluxo.data ?? []) as { data: string; tipo: string; valor: number }[];
-  let saldo = 0;
-  const fluxo90 = Array.from({ length: 91 }, (_, i) => {
-    const d = addDias(f.hoje, i);
-    const entradas = somar(fl.filter((x) => x.data === d && x.tipo === "entrada").map((x) => x.valor));
-    const saidas = somar(fl.filter((x) => x.data === d && x.tipo === "saida").map((x) => x.valor));
-    saldo = Math.round((saldo + entradas - saidas) * 100) / 100;
-    return { data: d, entradas, saidas, saldo };
-  });
-  // vencidos (antes de hoje) entram no 1º dia como pendência
-  const atrasadoEntrada = somar(vencidas.map((m) => m.saldo));
-  const atrasadoSaida = somar(cts.filter((c) => c.vencimento < f.hoje).map((c) => c.valor));
-
-  return { kpis, hoje, faturamento12, aging, statusFrota, fluxo90, atrasado: { entrada: atrasadoEntrada, saida: atrasadoSaida } };
+  return { kpis, hoje, faturamento12, aging, statusFrota };
 }
 
 export type DadosDashboard = Awaited<ReturnType<typeof carregarDashboard>>;
