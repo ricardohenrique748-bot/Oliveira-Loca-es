@@ -700,6 +700,11 @@ export type Database = {
       }
       empresas: {
         Row: {
+          inscricao_municipal: string | null
+          regime_tributario: string | null
+          codigo_ibge: string | null
+          nfse_codigo_servico: string | null
+          nfse_aliquota_iss: number | null
           apelido: string
           ativo: boolean
           cidade: string | null
@@ -716,6 +721,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          inscricao_municipal?: string | null
+          regime_tributario?: string | null
+          codigo_ibge?: string | null
+          nfse_codigo_servico?: string | null
+          nfse_aliquota_iss?: number | null
           apelido: string
           ativo?: boolean
           cidade?: string | null
@@ -732,6 +742,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          inscricao_municipal?: string | null
+          regime_tributario?: string | null
+          codigo_ibge?: string | null
+          nfse_codigo_servico?: string | null
+          nfse_aliquota_iss?: number | null
           apelido?: string
           ativo?: boolean
           cidade?: string | null

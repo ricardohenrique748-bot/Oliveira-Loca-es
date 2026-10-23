@@ -48,6 +48,12 @@ export const empresaSchema = z.object({
   telefone: telefoneOpc,
   email: emailOpc,
   ativo: z.boolean().default(true),
+  // nota fiscal de serviço (NFS-e)
+  inscricao_municipal: textoOpc,
+  regime_tributario: z.enum(["mei", "simples_nacional", "normal"]).nullish().transform((v) => v ?? null),
+  codigo_ibge: textoOpc.refine((v) => !v || /^\d{7}$/.test(v), "Código IBGE tem 7 dígitos"),
+  nfse_codigo_servico: textoOpc,
+  nfse_aliquota_iss: z.number().min(0).max(100).nullish().transform((v) => v ?? null),
 });
 export type EmpresaForm = z.infer<typeof empresaSchema>;
 
