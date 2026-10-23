@@ -67,9 +67,14 @@ describe("NFS-e — montarDPS", () => {
     expect(x).toContain("<xDescServ>Locação de munck placa CVP-0414 — 23/10/2026\nDados Bancários: PIX.: 44.889.430/0001-81</xDescServ>");
   });
 
-  it("código de 9 dígitos (Rio Preto): 6 nacionais + 3 municipais", () => {
+  it("código de 9 dígitos: 6 nacionais + 3 municipais", () => {
+    const x = montarDPS({ ...base, prestador: { ...base.prestador, codigoServico: "16.02.01.001" } });
+    expect(x).toContain("<cServ><cTribNac>160201</cTribNac><cTribMun>001</cTribMun><xDescServ>");
+  });
+
+  it("parte municipal 000 não vai (E0315 da Sefin: não é permitido informar 000)", () => {
     const x = montarDPS({ ...base, prestador: { ...base.prestador, codigoServico: "16.02.01.000" } });
-    expect(x).toContain("<cServ><cTribNac>160201</cTribNac><cTribMun>000</cTribMun><xDescServ>");
+    expect(x).toContain("<cServ><cTribNac>160201</cTribNac><xDescServ>");
   });
 
   it("recusa código de serviço que não tem 6 ou 9 dígitos e tomador sem CPF/CNPJ", () => {

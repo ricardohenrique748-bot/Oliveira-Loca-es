@@ -45,7 +45,9 @@ export function montarDPS(d: DadosDPS): string {
   const codigo = digitos(d.prestador.codigoServico);
   if (codigo.length !== 6 && codigo.length !== 9) throw new Error("Código do serviço precisa ter 6 ou 9 dígitos (ex.: 16.02.01.000)");
   const cTribNac = codigo.slice(0, 6);
-  const cTribMun = codigo.length === 9 ? `<cTribMun>${codigo.slice(6)}</cTribMun>` : "";
+  // a Sefin não aceita cTribMun "000" (E0315): nesse caso o campo opcional não vai
+  const mun = codigo.slice(6);
+  const cTribMun = codigo.length === 9 && mun !== "000" ? `<cTribMun>${mun}</cTribMun>` : "";
   const doc = digitos(d.tomador.documento);
   if (doc.length !== 11 && doc.length !== 14) throw new Error("Cliente sem CPF ou CNPJ: complete o cadastro antes de emitir a nota");
 
