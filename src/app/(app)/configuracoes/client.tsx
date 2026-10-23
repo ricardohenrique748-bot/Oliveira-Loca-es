@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { Loader2, Play, Plus, Save, Settings, Users, Workflow } from "lucide-react";
+import { Loader2, Play, Plus, RefreshCw, Save, Settings, Users, Workflow } from "lucide-react";
 import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, Checkbox, Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
@@ -121,14 +121,24 @@ export function ConfiguracoesCliente({ parametros, usuarios, erroUsuarios, empre
   );
 }
 
+/** Senha inicial aleatória: 10 caracteres sem os ambíguos (0/O, 1/l/I), sempre com letra e número. */
+function gerarSenha() {
+  const letras = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+  const todos = letras + "23456789";
+  for (;;) {
+    const s = Array.from(crypto.getRandomValues(new Uint32Array(10)), (n) => todos[n % todos.length]).join("");
+    if (/\d/.test(s) && /[A-Za-z]/.test(s)) return s;
+  }
+}
+
 function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario: Usuario | "novo" | null; empresas: Opcao[]; onOpenChange: (v: boolean) => void; onFeito: () => void }) {
   const u = usuario === "novo" ? null : usuario;
-  const [f, setF] = React.useState({ nome: "", email: "", senha: "123456", perfil: "consulta" as Perfil, ativo: true, empresas: [] as string[] });
+  const [f, setF] = React.useState({ nome: "", email: "", senha: "", perfil: "consulta" as Perfil, ativo: true, empresas: [] as string[] });
   const [salvando, setSalvando] = React.useState(false);
   React.useEffect(() => {
     setF(u 
       ? { nome: u.nome, email: u.email, senha: "", perfil: u.perfil, ativo: u.ativo, empresas: u.empresas } 
-      : { nome: "", email: "", senha: "123456", perfil: "consulta", ativo: true, empresas: empresas.map((e) => e.value) });
+      : { nome: "", email: "", senha: gerarSenha(), perfil: "consulta", ativo: true, empresas: empresas.map((e) => e.value) });
   }, [usuario, u, empresas]);
   return (
     <Dialog open={!!usuario} onOpenChange={onOpenChange}>
@@ -139,8 +149,11 @@ function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario:
           <div className="space-y-1.5"><Label htmlFor="u-email">E-mail</Label><Input id="u-email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
           <div className="space-y-1.5">
             <Label htmlFor="u-senha">{u ? "Nova senha (opcional)" : "Senha inicial temporária"}</Label>
-            <Input id="u-senha" type="text" value={f.senha} placeholder={u ? "Manter a mesma" : "123456"} onChange={(e) => setF({ ...f, senha: e.target.value })} />
-            {!u && <p className="text-[11px] text-muted-foreground">Senha temporária: <strong>123456</strong> (para o usuário trocar após entrar).</p>}
+            <div className="flex gap-2">
+              <Input id="u-senha" type="text" value={f.senha} placeholder={u ? "Manter a mesma" : ""} onChange={(e) => setF({ ...f, senha: e.target.value })} />
+              <Button type="button" variant="outline" size="icon" aria-label="Gerar senha" title="Gerar senha" onClick={() => setF({ ...f, senha: gerarSenha() })}><RefreshCw /></Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Mínimo 8 caracteres, com letras e números.{!u && " Anote e passe ao usuário."}</p>
           </div>
           <div className="space-y-1.5"><Label>Perfil</Label><SelectSimples value={f.perfil} onChange={(v) => setF({ ...f, perfil: (v as Perfil) ?? "consulta" })} opcoes={PERFIS.map((x) => ({ value: x.valor, label: x.rotulo }))} /></div>
           <fieldset className="space-y-2 sm:col-span-2">

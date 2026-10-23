@@ -29,6 +29,10 @@ begin
     insert into auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
     values (gen_random_uuid(), u.id, jsonb_build_object('sub', u.id::text, 'email', u.email, 'email_verified', true),
       'email', u.id::text, now(), now(), now());
+    -- o trigger do Auth cria todo usuário como 'consulta' inativo; o perfil é definido aqui
+    insert into public.usuarios_perfil (user_id, nome, perfil, ativo)
+    values (u.id, u.nome, u.perfil::public.perfil_usuario, true)
+    on conflict (user_id) do update set nome = excluded.nome, perfil = excluded.perfil, ativo = true;
   end loop;
 end $$;
 
