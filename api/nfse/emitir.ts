@@ -7,7 +7,7 @@
 import { request } from "node:https";
 import { createClient } from "@supabase/supabase-js";
 import { montarDPS } from "../../src/lib/nfse/dps.js";
-import { assinarDPS } from "../../src/lib/nfse/assinar.js";
+import { assinarDPS, lerCertificado } from "../../src/lib/nfse/assinar.js";
 import { corpoEnvio, lerResposta, SEFIN } from "../../src/lib/nfse/envio.js";
 
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: { medicaoId?: string } };
@@ -20,11 +20,11 @@ const legado = !envUrl || !envAnon || envUrl.includes("yvloohupcjaczotbhxos");
 const SUPABASE_URL = legado ? "https://hbhuofkpjcnmqnbuefrz.supabase.co" : envUrl;
 const SUPABASE_ANON = legado ? "sb_publishable_BwcOrx8hekJrl8-pJ1HsrA_miohLgiP" : envAnon;
 
-/** POST com o certificado na conexão (mTLS) */
-function postComCertificado(url: string, corpo: unknown, pfx: Buffer, senha: string): Promise<{ status: number; json: unknown }> {
+/** POST com o certificado na conexão (mTLS). Usa chave e certificado já abertos (PEM): o Node não lê .pfx com criptografia antiga ("Unsupported PKCS12 PFX data") */
+function postComCertificado(url: string, corpo: unknown, cert: { chavePem: string; certPem: string }): Promise<{ status: number; json: unknown }> {
   const dados = JSON.stringify(corpo);
   return new Promise((resolve, reject) => {
-    const r = request(url, { method: "POST", pfx, passphrase: senha, timeout: 50_000,
+    const r = request(url, { method: "POST", key: cert.chavePem, cert: cert.certPem, timeout: 50_000,
       headers: { "Content-Type": "application/json", Accept: "application/json", "Content-Length": Buffer.byteLength(dados) } }, (res) => {
       let txt = "";
       res.setEncoding("utf8");
@@ -89,7 +89,7 @@ export default async function handler(req: Req, res: Res) {
       },
       valor: Number(m.valor_final),
     });
-    const r = await postComCertificado(SEFIN[ambiente], corpoEnvio(assinarDPS(xml, pfx, senha)), Buffer.from(pfx, "base64"), senha);
+    const r = await postComCertificado(SEFIN[ambiente], corpoEnvio(assinarDPS(xml, pfx, senha)), lerCertificado(pfx, senha));
     const resp = lerResposta(r.status, r.json);
 
     await sb.from("medicoes").update(resp.ok
