@@ -22,6 +22,7 @@ import { formatBRL, formatCompetencia, formatData, formatPlaca } from "@/lib/for
 import { contaPagarEdicaoSchema, contaPagarNovaSchema, FORMAS, type ContaPagarEdicaoForm, type ContaPagarNovaForm } from "@/lib/schemas/financeiro";
 import { opcoesDe } from "@/lib/schemas/cadastros";
 import { cn } from "@/lib/utils";
+import { salvarCategoria } from "../cadastros/actions";
 import { baixarContas, criarContaPagar, editarContaPagar, encerrarRecorrencia, estornarContas, excluirContas } from "./actions";
 
 export type LinhaConta = {
@@ -54,7 +55,8 @@ function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opc
     { nome: "descricao", rotulo: "Descrição", obrigatorio: true, col: 6, placeholder: "Ex.: Silcar Pneus" },
     { nome: "tipo", rotulo: "Lançamento", tipo: "select", opcoes: [{ value: "fixa", label: "Despesa fixa" }, { value: "variavel", label: "Despesa variável" }, { value: "veiculo", label: "Despesa de veículo" }], col: 2 },
     { nome: "veiculo_id", rotulo: "Placa", tipo: "select", vazio: "—", opcoes: o.veiculos, col: 2, visivel: (v) => v.tipo === "veiculo", obrigatorio: true },
-    { nome: "categoria_id", rotulo: "Categoria", tipo: "select", vazio: "—", opcoes: (v) => o.categorias.filter((c) => c.tipo === v.tipo), col: 2 },
+    { nome: "categoria_id", rotulo: "Categoria", tipo: "select", vazio: "—", opcoes: (v) => o.categorias.filter((c) => c.tipo === v.tipo), col: 2,
+      criar: { rotulo: "Nova categoria", salvar: (nome, v) => salvarCategoria(null, { nome, tipo: v.tipo, ativo: true }) } },
     { nome: "fornecedor_id", rotulo: "Fornecedor", tipo: "select", vazio: "—", opcoes: o.fornecedores, col: 3 },
     { nome: "vencimento", rotulo: novo ? "1º vencimento" : "Vencimento", tipo: "data", obrigatorio: true, col: 3 },
     { nome: "valor", rotulo: "Valor", tipo: "moeda", obrigatorio: true, col: 2 },

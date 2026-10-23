@@ -57,6 +57,8 @@ SelectItem.displayName = "SelectItem";
 
 /** Valor especial para "nenhum/todos" (Radix não aceita value="") */
 export const VAZIO = "__vazio__";
+/** Valor especial da opção "+ Novo…" (não vira valor do campo) */
+const NOVO = "__novo__";
 
 export interface Opcao {
   value: string;
@@ -65,7 +67,7 @@ export interface Opcao {
 
 /** Select simples controlado por string (com opção vazia opcional). */
 export function SelectSimples({
-  value, onChange, opcoes, placeholder = "Selecione…", vazio, className, disabled, id, "aria-invalid": invalido, "aria-label": ariaLabel,
+  value, onChange, opcoes, placeholder = "Selecione…", vazio, className, disabled, id, "aria-invalid": invalido, "aria-label": ariaLabel, novo,
 }: {
   value: string | null | undefined;
   onChange: (v: string | null) => void;
@@ -78,9 +80,12 @@ export function SelectSimples({
   id?: string;
   "aria-invalid"?: boolean;
   "aria-label"?: string;
+  /** opção no fim da lista para cadastrar um item novo (ex.: "+ Nova categoria") */
+  novo?: { rotulo: string; onNovo: () => void };
 }) {
   return (
-    <Select value={value || (vazio ? VAZIO : undefined)} onValueChange={(v) => onChange(v === VAZIO ? null : v)} disabled={disabled}>
+    <Select value={value || (vazio ? VAZIO : undefined)} disabled={disabled}
+      onValueChange={(v) => (v === NOVO ? novo?.onNovo() : onChange(v === VAZIO ? null : v))}>
       <SelectTrigger id={id} className={className} aria-invalid={invalido} aria-label={ariaLabel}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
@@ -89,6 +94,7 @@ export function SelectSimples({
         {opcoes.map((o) => (
           <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
         ))}
+        {novo && <SelectItem value={NOVO} className="font-medium text-primary">+ {novo.rotulo}</SelectItem>}
       </SelectContent>
     </Select>
   );

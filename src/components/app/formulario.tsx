@@ -3,7 +3,7 @@ import * as React from "react";
 import { useForm, Controller, type FieldValues, type DefaultValues, type Path, type Control, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ZodType, ZodTypeDef } from "zod";
-import { ChevronDown, Loader2, Save } from "lucide-react";
+import { Check, ChevronDown, Loader2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/overlays";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ export interface Campo<V extends FieldValues> {
   autoCnpj?: (d: DadosCnpj) => Partial<Record<Path<V>, unknown>>;
   /** fica na seção recolhida "Mais detalhes" (abre sozinha se tiver erro) */
   avancado?: boolean;
+  /** tipo "select": opção "+ rótulo" que cadastra um item pelo nome e já o seleciona */
+  criar?: { rotulo: string; salvar: (nome: string, valores: V) => Promise<{ ok: true; dados: { id: string } } | { ok: false; erro: string }> };
 }
 
 const COL: Record<number, string> = {
@@ -93,6 +95,48 @@ function CampoCnpj<V extends FieldValues>({ campo, comum, value, onChange, form 
   );
 }
 
+/** Select com "+ Novo…": troca por um campo de nome, cadastra e seleciona o item criado. */
+function SelectComCriar<V extends FieldValues>({ campo, comum, value, onChange, opcoes, valores }: {
+  campo: Campo<V>; comum: Record<string, unknown>; value: string | null; onChange: (v: string | null) => void; opcoes: Opcao[]; valores: V;
+}) {
+  const [nome, setNome] = React.useState<string | null>(null);
+  const [salvando, setSalvando] = React.useState(false);
+  const [criadas, setCriadas] = React.useState<Opcao[]>([]);
+  const lista = [...opcoes, ...criadas.filter((c) => !opcoes.some((o) => o.value === c.value))];
+
+  const salvar = async () => {
+    const n = nome?.trim();
+    if (!n || !campo.criar) return;
+    setSalvando(true);
+    try {
+      const r = await campo.criar.salvar(n, valores);
+      if (!r.ok) return void toast.error(r.erro);
+      setCriadas((cs) => [...cs, { value: r.dados.id, label: n }]);
+      onChange(r.dados.id);
+      setNome(null);
+      toast.success(`"${n}" cadastrada`);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  if (nome === null) {
+    return <SelectSimples {...comum} value={value} onChange={onChange} opcoes={lista} vazio={campo.vazio} placeholder={campo.placeholder}
+      novo={campo.criar && { rotulo: campo.criar.rotulo, onNovo: () => setNome("") }} />;
+  }
+  return (
+    <div className="flex gap-1">
+      <Input autoFocus placeholder={campo.criar?.rotulo} value={nome} disabled={salvando} onChange={(e) => setNome(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); salvar(); }
+          if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setNome(null); }
+        }} />
+      <Button type="button" size="icon" aria-label="Salvar" disabled={salvando || !nome.trim()} onClick={salvar}>{salvando ? <Loader2 className="animate-spin" /> : <Check />}</Button>
+      <Button type="button" variant="ghost" size="icon" aria-label="Cancelar" disabled={salvando} onClick={() => setNome(null)}><X /></Button>
+    </div>
+  );
+}
+
 export function CampoControlado<V extends FieldValues>({ campo, control, valores, erro, form }: {
   campo: Campo<V>; control: Control<V>; valores: V; erro?: string; form?: UseFormReturn<V>;
 }) {
@@ -126,6 +170,8 @@ export function CampoControlado<V extends FieldValues>({ campo, control, valores
             case "mes":
               return <Input {...comum} type="month" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value || null)} />;
             case "select":
+              if (campo.criar) return <SelectComCriar campo={campo} comum={comum} value={field.value} onChange={field.onChange} valores={valores}
+                opcoes={(typeof campo.opcoes === "function" ? campo.opcoes(valores) : campo.opcoes) ?? []} />;
               return <SelectSimples {...comum} value={field.value} onChange={field.onChange} opcoes={(typeof campo.opcoes === "function" ? campo.opcoes(valores) : campo.opcoes) ?? []} vazio={campo.vazio} placeholder={campo.placeholder} />;
             case "checkbox":
               return (
