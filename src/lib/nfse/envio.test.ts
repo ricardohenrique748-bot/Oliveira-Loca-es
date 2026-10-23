@@ -6,7 +6,12 @@ describe("NFS-e — corpo do envio", () => {
   it("XML assinado compactado (gzip) em base64 no campo dpsXmlGZipB64", () => {
     const xml = "<DPS>ção</DPS>";
     const { dpsXmlGZipB64 } = corpoEnvio(xml);
-    expect(gunzipSync(Buffer.from(dpsXmlGZipB64, "base64")).toString("utf8")).toBe(xml);
+    expect(gunzipSync(Buffer.from(dpsXmlGZipB64, "base64")).toString("utf8")).toBe(`<?xml version="1.0" encoding="UTF-8"?>${xml}`);
+  });
+
+  it("declara UTF-8 uma vez só (E1229 da Sefin sem a declaração)", () => {
+    const xml = '<?xml version="1.0" encoding="UTF-8"?><DPS/>';
+    expect(gunzipSync(Buffer.from(corpoEnvio(xml).dpsXmlGZipB64, "base64")).toString("utf8")).toBe(xml);
   });
 });
 
