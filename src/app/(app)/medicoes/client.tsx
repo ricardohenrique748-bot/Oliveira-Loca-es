@@ -480,9 +480,11 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
         body: JSON.stringify({ medicaoId: m.id }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; erro?: string; chave?: string; numero?: string; ambiente?: string };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; erro?: string; chave?: string; numero?: string; ambiente?: string; aviso?: string };
       if (j.ok) toast.success(`NFS-e ${j.numero ?? ""} emitida (${j.ambiente}) · chave ${j.chave}`, { duration: 15_000 });
       else toast.error(`NFS-e não emitida${j.ambiente ? ` (${j.ambiente})` : ""}: ${j.erro ?? `HTTP ${r.status}`}`, { duration: 30_000 });
+      // o envio aconteceu mas o histórico (nfse_tentativas) não gravou: avisar, senão a evidência some sem ninguém saber
+      if (j.aviso) toast.warning(j.aviso, { duration: 30_000 });
     } catch (e) {
       toast.error(`Falha ao chamar a emissão: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
