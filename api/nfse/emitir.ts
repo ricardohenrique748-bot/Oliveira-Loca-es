@@ -3,12 +3,14 @@
  * POST { medicaoId } com o token do usuário logado. As leituras e gravações usam o token dele (RLS do Supabase).
  * Certificado A1: secrets NFSE_CERT_PFX_BASE64 e NFSE_CERT_SENHA (só aqui, nunca no navegador).
  * Ambiente: homologação, a não ser que NFSE_AMBIENTE=producao.
+ * Cada envio fica em nfse_tentativas (XML exato enviado + status/corpo bruto da resposta, ou erro de conexão),
+ * para diagnóstico. Nunca registrar certificado, senha, chave privada nem token. Nada disto vai para log.
  */
 import { request } from "node:https";
 import { createClient } from "@supabase/supabase-js";
 import { montarDPS } from "../../src/lib/nfse/dps.js";
 import { assinarDPS, lerCertificado } from "../../src/lib/nfse/assinar.js";
-import { corpoEnvio, lerResposta, SEFIN } from "../../src/lib/nfse/envio.js";
+import { corpoEnvio, lerResposta, SEFIN, xmlParaEnvio } from "../../src/lib/nfse/envio.js";
 
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: { medicaoId?: string } };
 type Res = { status: (n: number) => { json: (b: unknown) => void } };
@@ -21,7 +23,7 @@ const SUPABASE_URL = legado ? "https://hbhuofkpjcnmqnbuefrz.supabase.co" : envUr
 const SUPABASE_ANON = legado ? "sb_publishable_BwcOrx8hekJrl8-pJ1HsrA_miohLgiP" : envAnon;
 
 /** POST com o certificado na conexão (mTLS). Usa chave e certificado já abertos (PEM): o Node não lê .pfx com criptografia antiga ("Unsupported PKCS12 PFX data") */
-function postComCertificado(url: string, corpo: unknown, cert: { chavePem: string; certPem: string }): Promise<{ status: number; json: unknown }> {
+function postComCertificado(url: string, corpo: unknown, cert: { chavePem: string; certPem: string }): Promise<{ status: number; texto: string; json: unknown }> {
   const dados = JSON.stringify(corpo);
   return new Promise((resolve, reject) => {
     const r = request(url, { method: "POST", key: cert.chavePem, cert: cert.certPem, timeout: 50_000,
@@ -32,7 +34,7 @@ function postComCertificado(url: string, corpo: unknown, cert: { chavePem: strin
       res.on("end", () => {
         let json: unknown = null;
         try { json = txt ? JSON.parse(txt) : null; } catch { json = null; }
-        resolve({ status: res.statusCode ?? 0, json });
+        resolve({ status: res.statusCode ?? 0, texto: txt, json });
       });
     });
     r.on("timeout", () => r.destroy(new Error("A Sefin Nacional não respondeu a tempo")));
@@ -74,8 +76,22 @@ export default async function handler(req: Req, res: Res) {
     return res.status(400).json({ erro: "Complete os dados fiscais da empresa em Cadastros → Empresas" });
   if (!c?.clientes) return res.status(400).json({ erro: "Fatura sem cliente" });
 
+  let numero: number | null = null;
+  let xmlEnviado: string | null = null;
+  let registrada = false; // um envio = uma tentativa, mesmo se algo falhar depois de gravar
+  /** grava a tentativa (só inclusão); devolve o id, ou null se o banco recusar — o envio já aconteceu, então não falha por isso */
+  const registrar = async (resultado: { http_status: number; resposta_corpo: string } | { erro: string }) => {
+    registrada = true;
+    const { data, error: errReg } = await sb.from("nfse_tentativas")
+      .insert({ medicao_id: m.id, ambiente, numero_dps: numero, xml_enviado: xmlEnviado, ...resultado }).select("id").single();
+    return errReg ? null : (data as { id: string }).id;
+  };
+  const comRegistro = (corpo: Record<string, unknown>, tentativa: string | null) =>
+    ({ ...corpo, tentativa, ...(tentativa ? {} : { aviso: "A tentativa não pôde ser registrada no histórico" }) });
+
   try {
-    const { data: numero, error: errNum } = await sb.rpc("fn_nfse_reservar_dps", { p_empresa: m.empresa_id });
+    const { data: numeroReservado, error: errNum } = await sb.rpc("fn_nfse_reservar_dps", { p_empresa: m.empresa_id });
+    numero = numeroReservado;
     if (errNum || !numero) throw new Error(errNum?.message ?? "Não foi possível reservar o número da nota");
 
     const xml = montarDPS({
@@ -89,7 +105,9 @@ export default async function handler(req: Req, res: Res) {
       },
       valor: Number(m.valor_final),
     });
-    const r = await postComCertificado(SEFIN[ambiente], corpoEnvio(assinarDPS(xml, pfx, senha)), lerCertificado(pfx, senha));
+    xmlEnviado = xmlParaEnvio(assinarDPS(xml, pfx, senha));
+    const r = await postComCertificado(SEFIN[ambiente], corpoEnvio(xmlEnviado), lerCertificado(pfx, senha));
+    const tentativa = await registrar({ http_status: r.status, resposta_corpo: r.texto });
     const resp = lerResposta(r.status, r.json);
 
     await sb.from("medicoes").update(resp.ok
@@ -98,9 +116,12 @@ export default async function handler(req: Req, res: Res) {
       : { nfse_ambiente: ambiente, nfse_dps: numero, nfse_erro: resp.erro }).eq("id", m.id);
 
     return resp.ok
-      ? res.status(200).json({ ok: true, ambiente, chave: resp.chave, numero: resp.numero })
-      : res.status(422).json({ erro: resp.erro, ambiente });
+      ? res.status(200).json(comRegistro({ ok: true, ambiente, chave: resp.chave, numero: resp.numero }, tentativa))
+      : res.status(422).json(comRegistro({ erro: resp.erro, ambiente }, tentativa));
   } catch (err) {
-    return res.status(500).json({ erro: err instanceof Error ? err.message : String(err), ambiente });
+    const msg = err instanceof Error ? err.message : String(err);
+    // só registra se o XML chegou a ser montado e assinado (houve tentativa de envio)
+    const tentativa = xmlEnviado && !registrada ? await registrar({ erro: msg }) : null;
+    return res.status(500).json(tentativa ? comRegistro({ erro: msg, ambiente }, tentativa) : { erro: msg, ambiente });
   }
 }

@@ -1088,6 +1088,53 @@ export type Database = {
           },
         ]
       }
+      nfse_tentativas: {
+        Row: {
+          ambiente: string
+          criado_em: string
+          criado_por: string
+          erro: string | null
+          http_status: number | null
+          id: string
+          medicao_id: string
+          numero_dps: number | null
+          resposta_corpo: string | null
+          xml_enviado: string
+        }
+        Insert: {
+          ambiente: string
+          criado_em?: string
+          criado_por?: string
+          erro?: string | null
+          http_status?: number | null
+          id?: string
+          medicao_id: string
+          numero_dps?: number | null
+          resposta_corpo?: string | null
+          xml_enviado: string
+        }
+        Update: {
+          ambiente?: string
+          criado_em?: string
+          criado_por?: string
+          erro?: string | null
+          http_status?: number | null
+          id?: string
+          medicao_id?: string
+          numero_dps?: number | null
+          resposta_corpo?: string | null
+          xml_enviado?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfse_tentativas_medicao_id_fkey"
+            columns: ["medicao_id"]
+            isOneToOne: false
+            referencedRelation: "medicoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       obras: {
         Row: {
           ativo: boolean

@@ -25,6 +25,7 @@ import {
   type EventoHistorico, type LinhaLembrete, type LinhaPrevia,
 } from "./actions";
 import { DialogoLancarMedicao } from "./lancar";
+import { DialogoTentativasNFSe } from "./tentativas-nfse";
 
 export type LinhaMedicao = {
   id: string; contrato_id: string; empresa_id: string; empresa_apelido: string; periodo_inicio: string; periodo_fim: string; competencia: string;
@@ -468,6 +469,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
 }) {
   const [gerando, setGerando] = React.useState(false);
   const [emitindo, setEmitindo] = React.useState(false);
+  const [verEnvios, setVerEnvios] = React.useState(false);
   /** NFS-e no Emissor Nacional pela função da Vercel (certificado fica lá); o ambiente é o da variável NFSE_AMBIENTE */
   const emitirNota = async () => {
     if (!m) return;
@@ -580,11 +582,13 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
                 {emitindo ? <Loader2 className="animate-spin" /> : <FileText />} Emitir NF
               </Button>
             )}
+            {podeEditar && <Button variant="outline" onClick={() => setVerEnvios(true)}><History /> Ver último envio</Button>}
             <Button disabled={gerando} title={mudou ? "Salve os ajustes antes: o PDF usa os valores salvos" : undefined}
               onClick={async () => { setGerando(true); try { await baixarFaturaPDF(m.id, baseDias); } finally { setGerando(false); } }}>
               {gerando ? <Loader2 className="animate-spin" /> : <FileDown />} Gerar fatura (PDF)
             </Button>
           </DialogFooter>
+          <DialogoTentativasNFSe medicaoId={m.id} rotulo={String(m.contrato_numero ?? formatPlaca(m.placa))} aberto={verEnvios} onOpenChange={setVerEnvios} />
         </>}
       </DialogContent>
     </Dialog>

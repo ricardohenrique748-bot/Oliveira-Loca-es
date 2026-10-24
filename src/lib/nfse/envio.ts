@@ -12,10 +12,14 @@ export const SEFIN = {
 
 const DECL_UTF8 = '<?xml version="1.0" encoding="UTF-8"?>';
 
+/** XML exatamente como vai compactado para a Sefin (é o que fica registrado na tentativa).
+ *  Sem a declaração a Sefin rejeita com E1229 ("Xml não está utilizando codificação UTF-8"); fica fora do trecho assinado. */
+export function xmlParaEnvio(xmlAssinado: string): string {
+  return xmlAssinado.startsWith("<?xml") ? xmlAssinado : DECL_UTF8 + xmlAssinado;
+}
+
 export function corpoEnvio(xmlAssinado: string) {
-  // sem a declaração a Sefin rejeita com E1229 ("Xml não está utilizando codificação UTF-8"); fica fora do trecho assinado
-  const xml = xmlAssinado.startsWith("<?xml") ? xmlAssinado : DECL_UTF8 + xmlAssinado;
-  return { dpsXmlGZipB64: gzipSync(Buffer.from(xml, "utf8")).toString("base64") };
+  return { dpsXmlGZipB64: gzipSync(Buffer.from(xmlParaEnvio(xmlAssinado), "utf8")).toString("base64") };
 }
 
 export type RespostaNFSe = { ok: true; chave: string; numero: string | null; xml: string } | { ok: false; erro: string };

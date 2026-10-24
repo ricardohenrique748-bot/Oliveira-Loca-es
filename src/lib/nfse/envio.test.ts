@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { corpoEnvio, lerResposta } from "./envio";
+import { corpoEnvio, lerResposta, xmlParaEnvio } from "./envio";
 
 describe("NFS-e — corpo do envio", () => {
   it("XML assinado compactado (gzip) em base64 no campo dpsXmlGZipB64", () => {
     const xml = "<DPS>ção</DPS>";
     const { dpsXmlGZipB64 } = corpoEnvio(xml);
     expect(gunzipSync(Buffer.from(dpsXmlGZipB64, "base64")).toString("utf8")).toBe(`<?xml version="1.0" encoding="UTF-8"?>${xml}`);
+  });
+
+  it("xmlParaEnvio é exatamente o que vai compactado no corpo (o que fica registrado na tentativa)", () => {
+    const xml = "<DPS>ção</DPS>";
+    expect(gunzipSync(Buffer.from(corpoEnvio(xml).dpsXmlGZipB64, "base64")).toString("utf8")).toBe(xmlParaEnvio(xml));
   });
 
   it("declara UTF-8 uma vez só (E1229 da Sefin sem a declaração)", () => {
