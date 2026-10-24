@@ -521,7 +521,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
   );
   return (
     <Dialog open={!!m} onOpenChange={onOpenChange}>
-      <DialogContent tamanho="lg">
+      <DialogContent tamanho="xl">
         {m && <>
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2">
@@ -574,7 +574,8 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
           {m.observacoes && <div className="rounded-md bg-muted p-3 text-sm"><p className="text-xs text-muted-foreground">Observações</p>{m.observacoes}</div>}
           <HistoricoMedicao id={m.id} />
           <p className="text-xs text-muted-foreground">Valores salvos. Edições não salvas na grade não aparecem aqui nem no PDF.{m.status === "faturado" && " Dias só mudam enquanto a fatura está “a faturar”."}</p>
-          <DialogFooter>
+          {/* rodapé grudado embaixo: os botões ficam à vista sem rolar; quebram linha em vez de alargar a janela */}
+          <DialogFooter className="sticky bottom-0 -mx-5 -mb-5 border-t bg-background px-5 py-3 sm:flex-wrap">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
             {ed && <Button variant="outline" disabled={!mudou || salvando} onClick={salvarAjuste}>{salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar ajustes</Button>}
             {podeEditar && m.status !== "cancelado" && (
