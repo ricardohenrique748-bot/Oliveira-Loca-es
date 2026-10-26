@@ -61,6 +61,8 @@ export async function editarContaPagar(id: string, dados: unknown) {
       }));
       const alvo = lista.find((g) => g.id === id)!;
       const ehParcelada = atual.parcela_total != null;
+      // anexo só se propaga quando foi alterado, para não sobrescrever o boleto próprio de cada parcela
+      const anexoMudou = (c.anexo_url ?? null) !== (atual.anexo_url ?? null);
       const plano = planejarEdicaoParcelas(lista, alvo.parcelaNum, {
         valor: c.valor !== atual.valor ? c.valor : undefined,
         vencimento: c.vencimento !== atual.vencimento ? c.vencimento : undefined,
@@ -71,7 +73,7 @@ export async function editarContaPagar(id: string, dados: unknown) {
         if (p.alteracoes.valor !== undefined) alt.valor = p.alteracoes.valor;
         if (p.alteracoes.vencimento) alt.vencimento = p.alteracoes.vencimento;
         if (p.alteracoes.descricao) alt.descricao = ehParcelada ? p.alteracoes.descricao : c.descricao;
-        if (p.id === id) alt.anexo_url = c.anexo_url;
+        if (p.id === id || anexoMudou) alt.anexo_url = c.anexo_url;
         checar(await supabase.from("contas_pagar").update(alt).eq("id", p.id));
       }
       return { alteradas: plano.length };
