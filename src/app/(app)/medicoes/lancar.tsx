@@ -7,11 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/overlays";
 import { SelectSimples, type Opcao } from "@/components/ui/select";
+import { SelectBusca } from "@/components/ui/select-busca";
 import { Moeda } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { baseCobranca, cobrancaAvulsa, diffDias, hojeSP, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde, somar } from "@/lib/calculos";
 import { formatPeriodo, formatPlaca } from "@/lib/format";
 import { FORMAS_FATURA, UNIDADES_AVULSA, type FormaFatura, type UnidadeAvulsa } from "@/lib/schemas/operacao";
+import { clienteSchema } from "@/lib/schemas/cadastros";
+import { FormularioDialog } from "@/components/app/formulario";
+import { salvarCliente } from "../cadastros/actions";
+import { CAMPOS_CLIENTE, CLIENTE_NOVO } from "../cadastros/clientes/campos";
 import { dadosLancamento, lancarFaturaAvulsa, lancarMedicao, type ContratoLancamento } from "./actions";
 
 const OPCOES_FORMA: Opcao[] = Object.entries(FORMAS_FATURA).map(([value, label]) => ({ value, label }));
@@ -54,6 +59,12 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   const [empresa, setEmpresa] = React.useState<string | null>(null);
   const [cliente, setCliente] = React.useState<string | null>(null);
   const [itens, setItens] = React.useState<ItemTela[]>([ITEM_NOVO]);
+  // "+ Novo cliente": cadastra sem sair do lançamento; o novo entra na lista e já fica escolhido
+  const [novoCliente, setNovoCliente] = React.useState(false);
+  const [clientesNovos, setClientesNovos] = React.useState<Opcao[]>([]);
+  const opcoesCliente = React.useMemo(
+    () => [...(clientes ?? []), ...clientesNovos.filter((n) => !clientes?.some((c) => c.value === n.value))].sort((a, b) => a.label.localeCompare(b.label, "pt-BR")),
+    [clientes, clientesNovos]);
   const [vencimento, setVencimento] = React.useState("");
   const [contrato, setContrato] = React.useState<string | null>(contratoId ?? null);
   const [info, setInfo] = React.useState<ContratoLancamento | null>(null);
@@ -146,7 +157,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     });
     setCarregando(false);
     if (!r.ok) return toast.error(r.erro);
-    toast.success(`Fatura avulsa lançada (${clientes?.find((c) => c.value === cliente)?.label ?? ""})`);
+    toast.success(`Fatura avulsa lançada (${opcoesCliente.find((c) => c.value === cliente)?.label ?? ""})`);
     onOpenChange(false);
     onLancado(r.dados.competencia);
   };
@@ -178,7 +189,8 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
               )}
               <div className="col-span-2 space-y-1.5">
                 <Label htmlFor="avulsa-cliente">Cliente</Label>
-                <SelectSimples id="avulsa-cliente" value={cliente} onChange={setCliente} opcoes={clientes ?? []} placeholder="Selecione o cliente…" />
+                <SelectBusca id="avulsa-cliente" busca="Buscar cliente…" value={cliente} onChange={setCliente} opcoes={opcoesCliente} placeholder="Selecione o cliente…"
+                  novo={{ rotulo: "Novo cliente", onNovo: () => setNovoCliente(true) }} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="avulsa-inicio">Início</Label>
@@ -206,7 +218,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1.3fr_1fr_auto] sm:items-end">
                     <div className="space-y-1">
                       <Label htmlFor={`avulsa-placa-${k}`} className="text-xs">Placa <span className="font-normal text-muted-foreground">(opcional)</span></Label>
-                      <SelectSimples id={`avulsa-placa-${k}`} value={it.veiculo} onChange={(v) => editarItem(k, { veiculo: v })} opcoes={veiculos ?? []} vazio="Sem placa" />
+                      <SelectBusca id={`avulsa-placa-${k}`} busca="Buscar placa…" value={it.veiculo} onChange={(v) => editarItem(k, { veiculo: v })} opcoes={veiculos ?? []} vazio="Sem placa" />
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor={`avulsa-qtd-${k}`} className="text-xs">Quantidade</Label>
@@ -328,6 +340,17 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
           <Button disabled={bloqueado || carregando} onClick={lancar}>{carregando && (info || semContrato) ? <Loader2 className="animate-spin" /> : <Plus />} Lançar fatura</Button>
         </DialogFooter>
       </DialogContent>
+      <FormularioDialog aberto={novoCliente} onOpenChange={setNovoCliente} titulo="Novo cliente" tamanho="lg"
+        descricao="Cadastra o cliente e já escolhe na fatura. Obras e contatos de faturamento se completam depois em Cadastros → Clientes."
+        campos={CAMPOS_CLIENTE} schema={clienteSchema} valores={CLIENTE_NOVO} rotuloSalvar="Cadastrar cliente"
+        onSalvar={async (v) => {
+          const r = await salvarCliente(null, v);
+          if (r.ok) {
+            setClientesNovos((l) => [...l, { value: r.dados.id, label: v.nome_fantasia || v.razao_social }]);
+            setCliente(r.dados.id);
+          }
+          return r;
+        }} />
     </Dialog>
   );
 }

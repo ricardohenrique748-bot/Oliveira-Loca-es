@@ -73,7 +73,8 @@ export type ContaBancariaForm = z.infer<typeof contaBancariaSchema>;
 export const clienteSchema = z.object({
   razao_social: textoObr("Razão social"),
   nome_fantasia: textoOpc,
-  cnpj: cnpjOpc,
+  /** CNPJ ou CPF (pessoa física); a coluna continua se chamando cnpj */
+  cnpj: cpfCnpjOpc,
   email: emailOpc,
   whatsapp: telefoneOpc,
   cep: textoOpc.transform((v) => (v ? soDig(v) : null)).refine((v) => !v || v.length === 8, "CEP com 8 dígitos"),

@@ -118,7 +118,7 @@ async function pagadorDoCliente(usuario: SupabaseClient, admin: SupabaseClient, 
   const { data: c } = await usuario.from("clientes").select("id, razao_social, cnpj, email, whatsapp, cep, endereco, cidade, uf").eq("id", clienteId).single();
   if (!c) throw new ErroUso("Cliente não encontrado.");
   const documento = digitos(c.cnpj);
-  if (documento.length !== 14 && documento.length !== 11) throw new ErroUso(`Cadastre o CNPJ do cliente ${c.razao_social} para gerar o boleto.`);
+  if (documento.length !== 14 && documento.length !== 11) throw new ErroUso(`Cadastre o CPF ou CNPJ do cliente ${c.razao_social} para gerar o boleto.`);
 
   let end = { cep: digitos(c.cep), endereco: c.endereco, cidade: c.cidade, uf: c.uf };
   if ((!end.cep || !end.endereco || !end.cidade || !end.uf) && documento.length === 14) {

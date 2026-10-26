@@ -12,7 +12,7 @@ import { Checkbox, Label } from "@/components/ui/basicos";
 import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { consultarCnpj, type DadosCnpj } from "@/lib/cnpj";
-import { validarCNPJ } from "@/lib/format";
+import { validarCNPJ, validarCPF } from "@/lib/format";
 import { InputCpfCnpj, InputMoeda, InputNumero, InputPlaca, InputTelefone } from "./campos";
 import { CampoAnexo, type Bucket } from "./anexo";
 
@@ -88,7 +88,17 @@ function CampoCnpj<V extends FieldValues>({ campo, comum, value, onChange, form 
       <InputCpfCnpj {...comum} value={value} onChange={(v) => {
         onChange(v);
         const dig = (v ?? "").replace(/\D/g, "");
-        if (dig.length === 14 && validarCNPJ(dig) && dig !== ultimo.current) { ultimo.current = dig; consultar(dig); }
+        if (dig.length < 11) ultimo.current = null;
+        if (dig === ultimo.current) return;
+        // completou o número: CNPJ válido consulta a Receita; dígito verificador errado avisa na hora (antes ficava em silêncio)
+        if (dig.length === 14) {
+          ultimo.current = dig;
+          if (validarCNPJ(dig)) consultar(dig);
+          else toast.error("CNPJ inválido: confira os números (o dígito verificador não bate)");
+        } else if (dig.length === 11 && !validarCPF(dig)) {
+          ultimo.current = dig;
+          toast.error("CPF inválido: confira os números");
+        }
       }} />
       {consultando && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-label="Consultando CNPJ" />}
     </div>

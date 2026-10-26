@@ -80,7 +80,7 @@ export function SelectSimples({
   id?: string;
   "aria-invalid"?: boolean;
   "aria-label"?: string;
-  /** opção no fim da lista para cadastrar um item novo (ex.: "+ Nova categoria") */
+  /** opção no topo da lista para cadastrar um item novo (ex.: "+ Nova categoria") */
   novo?: { rotulo: string; onNovo: () => void };
 }) {
   return (
@@ -90,11 +90,11 @@ export function SelectSimples({
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
+        {novo && <SelectItem value={NOVO} className="font-medium text-primary">+ {novo.rotulo}</SelectItem>}
         {vazio && <SelectItem value={VAZIO}>{vazio}</SelectItem>}
         {opcoes.map((o) => (
           <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
         ))}
-        {novo && <SelectItem value={NOVO} className="font-medium text-primary">+ {novo.rotulo}</SelectItem>}
       </SelectContent>
     </Select>
   );
