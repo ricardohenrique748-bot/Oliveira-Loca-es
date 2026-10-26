@@ -119,7 +119,7 @@ export function formatQuantidadeAvulsa(qtd: number, unidade: string | null | und
   }
 }
 
-/** Item da fatura avulsa: descrição, placa opcional, quantidade × valor unitário (espelho de medicoes.itens) */
+/** Item da fatura avulsa: descrição, placa opcional, período, quantidade × valor unitário (espelho de medicoes.itens) */
 export const itemAvulsoSchema = z.object({
   descricao: z.string({ required_error: "Descreva o serviço" }).trim().min(1, "Descreva o serviço de cada item").max(500),
   /** placa opcional (sem repasse) */
@@ -128,24 +128,26 @@ export const itemAvulsoSchema = z.object({
   quantidade: z.number().positive("Informe a quantidade").max(99_999).refine((q) => Math.round(q * 100) === q * 100, "Quantidade com no máximo 2 casas"),
   unidade: z.enum(["mes", "semana", "dia", "hora"], { required_error: "Escolha a unidade" }),
   valor_unitario: z.number({ invalid_type_error: "Informe o valor" }).positive("Informe o valor de cada item").max(999_999_999),
-});
+  /** cada item tem o seu período; o da fatura vai do primeiro início ao último fim */
+  periodo_inicio: dataObr("o início de cada item"),
+  periodo_fim: dataObr("o fim de cada item"),
+}).refine((i) => i.periodo_fim >= i.periodo_inicio, { message: "O fim do item deve ser depois do início", path: ["periodo_fim"] });
 export type ItemAvulso = z.infer<typeof itemAvulsoSchema>;
-/** como fica em medicoes.itens: com a placa copiada (para a fatura, a NF e a tela sem precisar do veículo) */
-export type ItemAvulsoSalvo = ItemAvulso & { placa: string | null };
+/** como fica em medicoes.itens: com a placa copiada (para a fatura, a NF e a tela sem precisar do veículo);
+ *  itens lançados antes do período por item não têm as datas (valem as da fatura) */
+export type ItemAvulsoSalvo = Omit<ItemAvulso, "periodo_inicio" | "periodo_fim"> & { placa: string | null; periodo_inicio?: string; periodo_fim?: string };
 
 /** Fatura avulsa: sem contrato, direto para o cliente; valor = soma (valor unitário × quantidade) dos itens + acréscimos − descontos. */
 export const lancamentoAvulsoSchema = z.object({
   empresa_id: uuidObr("a empresa"),
   cliente_id: uuidObr("o cliente"),
   itens: z.array(itemAvulsoSchema).min(1, "Inclua ao menos um item").max(50),
-  periodo_inicio: dataObr("a data"),
-  periodo_fim: dataObr("o fim do período"),
   acrescimos: z.number().min(0).default(0),
   descontos: z.number().min(0).default(0),
   data_vencimento: dataOpc,
   forma_pagamento: z.enum(["boleto", "pix"]).default("boleto"),
   observacoes: z.string().trim().max(1000).nullable().optional(),
-}).refine((d) => d.periodo_fim >= d.periodo_inicio, { message: "O fim do período deve ser depois do início", path: ["periodo_fim"] });
+});
 export type LancamentoAvulso = z.input<typeof lancamentoAvulsoSchema>;
 
 export const recebimentoSchema = z.object({

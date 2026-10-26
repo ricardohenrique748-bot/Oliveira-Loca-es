@@ -48,9 +48,9 @@ const moedaBR = (v: number) => v.toLocaleString("pt-BR", { style: "currency", cu
 
 /** Fatura avulsa: a descrição digitada; com vários itens, um por um ("Frete (2 × R$ 500,00); Munck placa ABC1D23 (8 × R$ 150,00)") */
 function descricaoAvulsa(descricao: string | null, placa: string | null | undefined, itens: unknown): string {
-  const lista = (Array.isArray(itens) ? itens : []) as { descricao: string; placa: string | null; quantidade: number; valor_unitario: number }[];
+  const lista = (Array.isArray(itens) ? itens : []) as { descricao: string; placa: string | null; quantidade: number; valor_unitario: number; periodo_inicio?: string; periodo_fim?: string }[];
   if (!lista.length) return `${descricao ?? "Serviço"}${placa ? ` – placa ${placa}` : ""}`;
-  return lista.map((i) => `${i.descricao}${i.placa ? ` placa ${i.placa}` : ""} (${Number(i.quantidade).toLocaleString("pt-BR")} × ${moedaBR(Number(i.valor_unitario))})`).join("; ");
+  return lista.map((i) => `${i.descricao}${i.placa ? ` placa ${i.placa}` : ""}${i.periodo_inicio && i.periodo_fim ? ` ${dataBR(i.periodo_inicio)}${i.periodo_fim !== i.periodo_inicio ? ` a ${dataBR(i.periodo_fim)}` : ""}` : ""} (${Number(i.quantidade).toLocaleString("pt-BR")} × ${moedaBR(Number(i.valor_unitario))})`).join("; ");
 }
 
 export default async function handler(req: Req, res: Res) {

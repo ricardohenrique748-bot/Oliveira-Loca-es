@@ -562,7 +562,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
                 {/* vários itens: cada um com quantidade × valor; a fatura soma (quantidade fixa em 1) */}
                 {temItens(m) ? m.itens!.map((it, k) => (
                   <TableRow key={k}><TableCell>{it.descricao}{it.placa && <span className="font-mono"> · {formatPlaca(it.placa)}</span>}
-                    <span className="block text-xs text-muted-foreground">{formatQuantidadeAvulsa(it.quantidade, it.unidade)} × <Moeda valor={it.valor_unitario} /></span></TableCell>
+                    <span className="block text-xs text-muted-foreground">{it.periodo_inicio && it.periodo_fim ? `${formatPeriodo(it.periodo_inicio, it.periodo_fim)} · ` : ""}{formatQuantidadeAvulsa(it.quantidade, it.unidade)} × <Moeda valor={it.valor_unitario} /></span></TableCell>
                     <TableCell className="text-right"><Moeda valor={Math.round(it.quantidade * it.valor_unitario * 100) / 100} /></TableCell></TableRow>
                 ))
                 : <TableRow><TableCell>{m.tipo_cobranca === "diaria" ? "Valor da diária (10 h)" : rotuloValorCobranca(m.tipo_cobranca)}</TableCell><TableCell className="text-right"><Moeda valor={m.valor_mensal} /></TableCell></TableRow>}

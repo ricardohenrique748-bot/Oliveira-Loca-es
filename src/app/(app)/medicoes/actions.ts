@@ -194,6 +194,9 @@ export async function lancarFaturaAvulsa(dados: unknown) {
     // (medicoes.dias é inteiro): ficam em itens e a fatura vale 1 × a soma
     const [primeiro] = d.itens;
     const varios = d.itens.length > 1 || !Number.isInteger(primeiro.quantidade);
+    // período da fatura: do primeiro início ao último fim dos itens
+    const periodoInicio = d.itens.map((i) => i.periodo_inicio).sort()[0];
+    const periodoFim = d.itens.map((i) => i.periodo_fim).sort().at(-1)!;
     const placas = new Set(d.itens.map((i) => i.veiculo_id ?? null));
     const ids = [...placas].filter((x): x is string => !!x);
     const { data: veics } = ids.length ? await supabase.from("veiculos").select("id, placa").in("id", ids) : { data: [] };
@@ -204,13 +207,13 @@ export async function lancarFaturaAvulsa(dados: unknown) {
       : { descricao: primeiro.descricao, veiculo_id: primeiro.veiculo_id ?? null, dias: primeiro.quantidade, unidade: primeiro.unidade, valor_mensal: primeiro.valor_unitario };
     const nova = checar(await supabase.from("medicoes").insert({
       contrato_id: null, cliente_id: d.cliente_id, empresa_id: d.empresa_id, ...cabecalho,
-      periodo_inicio: d.periodo_inicio, periodo_fim: d.periodo_fim,
+      periodo_inicio: periodoInicio, periodo_fim: periodoFim,
       acrescimos: d.acrescimos, descontos: d.descontos, observacoes: d.observacoes ?? null, data_vencimento: d.data_vencimento,
       acrescimos_itens: d.acrescimos > 0 ? [{ descricao: "Acréscimos", valor: d.acrescimos }] : [],
       descontos_itens: d.descontos > 0 ? [{ descricao: "Descontos", valor: d.descontos }] : [],
       forma_pagamento: d.forma_pagamento,
     }).select("id").single());
-    return { id: nova!.id, competencia: d.periodo_fim.slice(0, 7) };
+    return { id: nova!.id, competencia: periodoFim.slice(0, 7) };
   }, REVALIDAR, "Fatura lançada");
 }
 

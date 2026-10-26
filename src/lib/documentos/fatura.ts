@@ -42,7 +42,8 @@ export function montarFatura(d: DadosFatura): Documento {
 
   const periodo = formatPeriodo(d.periodo_inicio, d.periodo_fim);
   const itens: string[][] = d.itens?.length
-    ? d.itens.map((i) => [descricaoPadrao({ tipo_cobranca: "avulsa", descricao: i.descricao, placa: i.placa, veiculo_tipo: null }), periodo,
+    ? d.itens.map((i) => [descricaoPadrao({ tipo_cobranca: "avulsa", descricao: i.descricao, placa: i.placa, veiculo_tipo: null }),
+        i.periodo_inicio && i.periodo_fim ? formatPeriodo(i.periodo_inicio, i.periodo_fim) : periodo,
         formatQuantidadeAvulsa(i.quantidade, i.unidade), formatBRL(i.valor_unitario), formatBRL(Math.round(i.quantidade * i.valor_unitario * 100) / 100)])
     : [[descricaoPadrao(d), periodo, qtd, formatBRL(d.valor_mensal), formatBRL(d.valor_base)]];
   // cada acréscimo discriminado; fatura antiga só com o total sai numa linha "Acréscimos"
