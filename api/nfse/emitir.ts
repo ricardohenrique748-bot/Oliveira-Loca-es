@@ -50,7 +50,7 @@ const moedaBR = (v: number) => v.toLocaleString("pt-BR", { style: "currency", cu
 function descricaoAvulsa(descricao: string | null, placa: string | null | undefined, itens: unknown): string {
   const lista = (Array.isArray(itens) ? itens : []) as { descricao: string; placa: string | null; quantidade: number; valor_unitario: number }[];
   if (!lista.length) return `${descricao ?? "Serviço"}${placa ? ` – placa ${placa}` : ""}`;
-  return lista.map((i) => `${i.descricao}${i.placa ? ` placa ${i.placa}` : ""} (${i.quantidade} × ${moedaBR(Number(i.valor_unitario))})`).join("; ");
+  return lista.map((i) => `${i.descricao}${i.placa ? ` placa ${i.placa}` : ""} (${Number(i.quantidade).toLocaleString("pt-BR")} × ${moedaBR(Number(i.valor_unitario))})`).join("; ");
 }
 
 export default async function handler(req: Req, res: Res) {

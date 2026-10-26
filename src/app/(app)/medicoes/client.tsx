@@ -42,6 +42,8 @@ export type LinhaMedicao = {
 
 /** Fatura avulsa com vários itens: quantidade e valor vêm dos itens, não se editam na grade */
 const temItens = (m: LinhaMedicao) => (m.itens?.length ?? 0) > 0;
+/** "3 itens"; um item só (quantidade com fração) mostra a quantidade: "7,5 h" */
+const rotuloItens = (m: LinhaMedicao) => m.itens!.length === 1 ? formatQuantidadeAvulsa(m.itens![0].quantidade, m.itens![0].unidade) : `${m.itens!.length} itens`;
 
 type Editavel = Pick<LinhaMedicao, "dias" | "valor_mensal" | "acrescimos" | "descontos" | "numero_nf" | "data_emissao" | "data_vencimento" | "observacoes">;
 const COLS = ["dias", "valor_mensal", "acrescimos", "descontos", "numero_nf", "data_emissao", "data_vencimento", "observacoes"] as const;
@@ -269,14 +271,14 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                       <p className="text-[11px] text-status-alerta" title="Dias, acréscimos e descontos: abra a fatura para ajustar">{m.dias} dias{m.acrescimos > 0 ? " · +acr." : ""}{m.descontos > 0 ? " · −desc." : ""}</p>
                     )}
                     {cobrancaAvulsa(m.tipo_cobranca) && <p className="text-[11px] text-muted-foreground">{m.dias} {m.tipo_cobranca === "hora" ? "h" : "diárias"}</p>}
-                    {m.tipo_cobranca === "avulsa" && <p className="text-[11px] text-muted-foreground">{temItens(m) ? `${m.itens!.length} itens` : formatQuantidadeAvulsa(m.dias, m.unidade)}</p>}
+                    {m.tipo_cobranca === "avulsa" && <p className="text-[11px] text-muted-foreground">{temItens(m) ? rotuloItens(m) : formatQuantidadeAvulsa(m.dias, m.unidade)}</p>}
                   </TableCell>
                   <TableCell className="text-right leading-tight">
                     <span className="text-sm font-semibold"><Moeda valor={valorFinal} /></span><br />
                     {ed && !temItens(m)
                       ? <InputMoeda data-linha={i} data-col="valor_mensal" aria-label={rotuloValorCobranca(m.tipo_cobranca)} title={rotuloValorCobranca(m.tipo_cobranca)}
                           className="mt-0.5 h-6 w-28 pl-7 text-right text-[11px]" permitirVazio={false} value={valor(m, "valor_mensal")} onChange={(v) => editar(m, "valor_mensal", v ?? 0)} />
-                      : <span className="text-[11px] text-muted-foreground" title={rotuloValorCobranca(m.tipo_cobranca)}>{temItens(m) ? `${m.itens!.length} itens` : <>{m.tipo_cobranca === "avulsa" ? "unit." : "mensal"} <Moeda valor={m.valor_mensal} /></>}</span>}
+                      : <span className="text-[11px] text-muted-foreground" title={rotuloValorCobranca(m.tipo_cobranca)}>{temItens(m) ? rotuloItens(m) : <>{m.tipo_cobranca === "avulsa" ? "unit." : "mensal"} <Moeda valor={m.valor_mensal} /></>}</span>}
                   </TableCell>
                   <TableCell><Input data-linha={i} data-col="numero_nf" aria-label="Número da NF" className={campo} disabled={!ed} value={valor(m, "numero_nf") ?? ""} onChange={(e) => editar(m, "numero_nf", e.target.value || null)} /></TableCell>
                   <TableCell><Input data-linha={i} data-col="data_emissao" aria-label="Data de emissão" type="date" className={data} disabled={!ed} value={valor(m, "data_emissao") ?? ""} onChange={(e) => editar(m, "data_emissao", e.target.value || null)} /></TableCell>
@@ -550,7 +552,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             {item("Período", m.contrato_id ? `${formatPeriodo(m.periodo_inicio, m.periodo_fim)} (${m.dias} dias)` : formatPeriodo(m.periodo_inicio, m.periodo_fim))}
             {m.contrato_id
               ? item("Veículo", `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)
-              : temItens(m) ? item("Serviço", `${m.itens!.length} itens${m.placa ? ` · ${formatPlaca(m.placa)}` : ""}`)
+              : temItens(m) ? item("Serviço", `${m.itens!.length === 1 ? m.itens![0].descricao : `${m.itens!.length} itens`}${m.placa ? ` · ${formatPlaca(m.placa)}` : ""}`)
               : item("Serviço", `${m.descricao ?? ""}${m.placa ? ` · ${formatPlaca(m.placa)}${m.veiculo_tipo ? ` (${m.veiculo_tipo})` : ""}` : ""}`)}
             {m.contrato_id && item("Prazo de pagamento", `${m.prazo_pagamento_dias} dias`)}
           </div>

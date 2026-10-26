@@ -109,12 +109,13 @@ export type UnidadeAvulsa = keyof typeof UNIDADES_AVULSA;
 /** "3 meses", "1 semana", "8 h"; sem unidade (fatura antiga) só o número */
 export function formatQuantidadeAvulsa(qtd: number, unidade: string | null | undefined): string {
   const plural = qtd === 1 ? 0 : 1;
+  const n = qtd.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
   switch (unidade) {
-    case "mes": return `${qtd} ${["mês", "meses"][plural]}`;
-    case "semana": return `${qtd} ${["semana", "semanas"][plural]}`;
-    case "dia": return `${qtd} ${["diária", "diárias"][plural]}`;
-    case "hora": return `${qtd} h`;
-    default: return String(qtd);
+    case "mes": return `${n} ${["mês", "meses"][plural]}`;
+    case "semana": return `${n} ${["semana", "semanas"][plural]}`;
+    case "dia": return `${n} ${["diária", "diárias"][plural]}`;
+    case "hora": return `${n} h`;
+    default: return n;
   }
 }
 
@@ -123,7 +124,8 @@ export const itemAvulsoSchema = z.object({
   descricao: z.string({ required_error: "Descreva o serviço" }).trim().min(1, "Descreva o serviço de cada item").max(500),
   /** placa opcional (sem repasse) */
   veiculo_id: uuidOpc,
-  quantidade: z.number().int().min(1, "Quantidade deve ser ao menos 1").max(99_999),
+  /** pode ter fração (7,5 h), até 2 casas */
+  quantidade: z.number().positive("Informe a quantidade").max(99_999).refine((q) => Math.round(q * 100) === q * 100, "Quantidade com no máximo 2 casas"),
   unidade: z.enum(["mes", "semana", "dia", "hora"], { required_error: "Escolha a unidade" }),
   valor_unitario: z.number({ invalid_type_error: "Informe o valor" }).positive("Informe o valor de cada item").max(999_999_999),
 });

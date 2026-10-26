@@ -190,9 +190,10 @@ export async function lancarFaturaAvulsa(dados: unknown) {
     await exigirEscrita("medicoes");
     const d = lancamentoAvulsoSchema.parse(dados);
     const supabase = await createClient();
-    // um item: quantidade × unitário nas colunas da fatura (editável depois); vários: ficam em itens e a fatura vale 1 × a soma
+    // um item inteiro: quantidade × unitário nas colunas da fatura (editável depois); vários, ou quantidade com fração
+    // (medicoes.dias é inteiro): ficam em itens e a fatura vale 1 × a soma
     const [primeiro] = d.itens;
-    const varios = d.itens.length > 1;
+    const varios = d.itens.length > 1 || !Number.isInteger(primeiro.quantidade);
     const placas = new Set(d.itens.map((i) => i.veiculo_id ?? null));
     const ids = [...placas].filter((x): x is string => !!x);
     const { data: veics } = ids.length ? await supabase.from("veiculos").select("id, placa").in("id", ids) : { data: [] };

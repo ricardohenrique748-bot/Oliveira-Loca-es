@@ -22,3 +22,6 @@ supabase/functions/.env
 # app Android (build web do comercial; o projeto android/ é versionado)
 dist-comercial/
 dist-demo/
+
+.vercel
+.env*

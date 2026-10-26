@@ -131,7 +131,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   const totalItens = somar(itens.map(subtotal));
   const valorAvulsa = Math.max(0, somar([totalItens, acrescimos, -descontos]));
   const invalidoAvulsa = !empresa || !cliente || !inicio || !fim || fim < inicio
-    || itens.some((i) => !i.descricao.trim() || i.quantidade < 1 || i.valorUnitario <= 0);
+    || itens.some((i) => !i.descricao.trim() || i.quantidade <= 0 || i.valorUnitario <= 0);
   const valor = info ? calcularValorMedicao({ valorMensal: info.valor_mensal, dias, acrescimos, descontos, baseDias: baseCobranca(info.tipo_cobranca, baseDias) }).valorFinal : 0;
   const avulsa = cobrancaAvulsa(info?.tipo_cobranca);
   const invalido = !info || !inicio || !fim || fim < inicio || dias < 1;
@@ -223,8 +223,9 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
                     <div className="space-y-1">
                       <Label htmlFor={`avulsa-qtd-${k}`} className="text-xs">Quantidade</Label>
                       <div className="flex gap-2">
-                        <InputNumero id={`avulsa-qtd-${k}`} className="w-16 shrink-0" value={it.quantidade}
-                          onChange={(v) => editarItem(k, { quantidade: Math.max(0, Math.min(99_999, v ?? 0)), qtdManual: true })} />
+                        {/* aceita fração (7,5 h); apagado fica vazio em vez de virar 0 */}
+                        <InputNumero id={`avulsa-qtd-${k}`} className="w-20 shrink-0" casas={2} value={it.quantidade || null} placeholder={it.unidade === "hora" ? "h" : "0"}
+                          onChange={(v) => editarItem(k, { quantidade: Math.max(0, Math.min(99_999, Math.round((v ?? 0) * 100) / 100)), qtdManual: true })} />
                         <SelectSimples aria-label={`Unidade do item ${k + 1}`} className="min-w-0 flex-1" value={it.unidade}
                           onChange={(v) => editarItem(k, { unidade: (v as UnidadeAvulsa | null) ?? "mes", qtdManual: false })} opcoes={OPCOES_UNIDADE} />
                       </div>
