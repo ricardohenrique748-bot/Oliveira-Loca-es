@@ -8,6 +8,7 @@ import { getConfig } from "@/lib/config";
 import { addCompetencia, competenciaDe, hojeSP } from "@/lib/calculos";
 import { formatPlaca } from "@/lib/format";
 import { CarregandoPagina } from "@/components/app/carregando";
+import { Button } from "@/components/ui/button";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { MedicoesCliente, type LinhaMedicao } from "./client";
 
@@ -15,7 +16,7 @@ export default function MedicoesPage() {
   const { sessao } = useAuth();
   const [searchParams] = useSearchParams();
 
-  const { data, loading } = useAsyncPage(async () => {
+  const { data, loading, erro, recarregar } = useAsyncPage(async () => {
     const s = await exigirSessao("medicoes");
     const p = lerParams(searchParams, { tamanho: 200 });
     const supabase = createClient();
@@ -47,13 +48,15 @@ export default function MedicoesPage() {
     // placas para a fatura avulsa
     let qv = supabase.from("veiculos").select("id, placa, tipo").neq("status", "vendido").order("placa");
     if (s.empresaId) qv = qv.eq("empresa_id", s.empresaId);
-    const [{ data: linhas, count }, { data: clientes }, { data: contratos }, { data: placas }, { data: veiculos }] = await Promise.all([
+    const [{ data: linhas, count, error: erroLinhas }, { data: clientes }, { data: contratos }, { data: placas }, { data: veiculos }] = await Promise.all([
       (historico ? q.order("periodo_inicio", { ascending: false }).order("placa") : q.order("empresa_apelido").order("cliente_fantasia").order("placa").order("periodo_inicio")).range(p.de, p.ate),
       supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("ativo", true).order("nome_fantasia"),
       qc,
       qp,
       qv,
     ]);
+    // sem isso a falha (ex.: migration não aplicada) virava "nenhuma fatura" e parecia que as faturas sumiram
+    if (erroLinhas) throw new Error(`Não foi possível carregar as faturas: ${erroLinhas.message}`);
 
     return {
       linhas: (linhas ?? []) as LinhaMedicao[],
@@ -77,6 +80,14 @@ export default function MedicoesPage() {
     };
   }, [searchParams, sessao?.empresaId]);
 
+  // sem isso um erro deixava o esqueleto de carregamento na tela para sempre
+  if (erro && !data) return (
+    <div className="mx-auto max-w-xl space-y-3 rounded-md border border-status-critico/40 p-6 text-sm">
+      <p className="font-semibold">Não foi possível carregar o faturamento</p>
+      <p className="break-words text-muted-foreground">{erro.message}</p>
+      <Button size="sm" variant="outline" onClick={recarregar}>Tentar de novo</Button>
+    </div>
+  );
   if (loading || !data) return <CarregandoPagina />;
   return <MedicoesCliente {...data} />;
 }
