@@ -65,7 +65,7 @@ type Ctx = { usuario: SupabaseClient; admin: SupabaseClient; userId: string };
 // ---------- emitir ----------
 async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: string; conta_bancaria_id?: string; vencimento?: string }) {
   const { data: m } = await usuario.from("medicoes_v")
-    .select("id, empresa_id, cliente_id, status, saldo, data_vencimento, numero_nf, placa, periodo_inicio, periodo_fim")
+    .select("id, empresa_id, cliente_id, status, saldo, data_vencimento, numero_nf, placa, descricao, periodo_inicio, periodo_fim")
     .eq("id", corpo.medicao_id ?? "").maybeSingle();
   if (!m) throw new ErroUso("Medição não encontrada.", 404);
   if (!["faturado", "recebido_parcial"].includes(m.status)) throw new ErroUso("Só é possível gerar boleto de medição faturada e em aberto.");
@@ -85,7 +85,7 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
   const seuNumero = (digitos(m.numero_nf) || m.id.replace(/-/g, "").slice(0, 10)).slice(-10);
   const b = await criarBoleto(conta.beneficiario, {
     pagador, seuNumero, vencimento, valor,
-    mensagens: [`Locação ${m.placa ?? ""} · ${br(m.periodo_inicio)} a ${br(m.periodo_fim)}`, m.numero_nf ? `NF ${m.numero_nf}` : ""].filter(Boolean),
+    mensagens: [`${m.placa ? `Locação ${m.placa}` : m.descricao ?? "Serviço"} · ${br(m.periodo_inicio)} a ${br(m.periodo_fim)}`, m.numero_nf ? `NF ${m.numero_nf}` : ""].filter(Boolean),
   });
 
   const { data: boleto, error } = await admin.from("boletos").insert({

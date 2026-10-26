@@ -44,6 +44,14 @@ function postComCertificado(url: string, corpo: unknown, cert: { chavePem: strin
 }
 
 const dataBR = (d: string) => d.split("-").reverse().join("/");
+const moedaBR = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** Fatura avulsa: a descrição digitada; com vários itens, um por um ("Frete (2 × R$ 500,00); Munck placa ABC1D23 (8 × R$ 150,00)") */
+function descricaoAvulsa(descricao: string | null, placa: string | null | undefined, itens: unknown): string {
+  const lista = (Array.isArray(itens) ? itens : []) as { descricao: string; placa: string | null; quantidade: number; valor_unitario: number }[];
+  if (!lista.length) return `${descricao ?? "Serviço"}${placa ? ` – placa ${placa}` : ""}`;
+  return lista.map((i) => `${i.descricao}${i.placa ? ` placa ${i.placa}` : ""} (${i.quantidade} × ${moedaBR(Number(i.valor_unitario))})`).join("; ");
+}
 
 export default async function handler(req: Req, res: Res) {
   if (req.method !== "POST") return res.status(405).json({ erro: "Use POST" });
@@ -61,7 +69,8 @@ export default async function handler(req: Req, res: Res) {
   if (!usuario.user) return res.status(401).json({ erro: `Login não reconhecido (${errUser?.message ?? "sem usuário"}): saia e entre de novo no sistema` });
 
   const { data: m, error } = await sb.from("medicoes")
-    .select(`id, empresa_id, status, valor_final, periodo_inicio, periodo_fim, nfse_chave, nfse_ambiente,
+    .select(`id, empresa_id, status, valor_final, periodo_inicio, periodo_fim, nfse_chave, nfse_ambiente, descricao, itens,
+      clientes(razao_social, cnpj), veiculos(placa),
       empresas(cnpj, regime_tributario, codigo_ibge, nfse_codigo_servico, nfse_aliquota_iss, nfse_texto_complementar),
       contratos(numero, clientes(razao_social, cnpj), veiculos(placa, tipo))`)
     .eq("id", medicaoId).maybeSingle();
@@ -74,7 +83,9 @@ export default async function handler(req: Req, res: Res) {
   const c = m.contratos as unknown as { numero: string | null; clientes: { razao_social: string; cnpj: string | null } | null; veiculos: { placa: string; tipo: string } | null } | null;
   if (!e?.cnpj || !e.codigo_ibge || !e.regime_tributario || !e.nfse_codigo_servico || e.nfse_aliquota_iss == null)
     return res.status(400).json({ erro: "Complete os dados fiscais da empresa em Cadastros → Empresas" });
-  if (!c?.clientes) return res.status(400).json({ erro: "Fatura sem cliente" });
+  // fatura avulsa (sem contrato): cliente na própria fatura, descrição digitada no lançamento
+  const tomadorCliente = c?.clientes ?? (m.clientes as unknown as { razao_social: string; cnpj: string | null } | null);
+  if (!tomadorCliente) return res.status(400).json({ erro: "Fatura sem cliente" });
 
   let numero: number | null = null;
   let xmlEnviado: string | null = null;
@@ -98,9 +109,11 @@ export default async function handler(req: Req, res: Res) {
       ambiente: ambiente === "producao" ? 1 : 2, serie: 1, numero, emissao: new Date(),
       prestador: { cnpj: e.cnpj, codigoIbge: e.codigo_ibge, regime: e.regime_tributario,
         codigoServico: e.nfse_codigo_servico, aliquotaIss: Number(e.nfse_aliquota_iss) },
-      tomador: { documento: c.clientes.cnpj, nome: c.clientes.razao_social },
+      tomador: { documento: tomadorCliente.cnpj, nome: tomadorCliente.razao_social },
       servico: {
-        descricao: `Locação de ${c.veiculos?.tipo ?? "veículo"} placa ${c.veiculos?.placa ?? ""} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}${c.numero ? ` – contrato ${c.numero}` : ""}`,
+        descricao: c
+          ? `Locação de ${c.veiculos?.tipo ?? "veículo"} placa ${c.veiculos?.placa ?? ""} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}${c.numero ? ` – contrato ${c.numero}` : ""}`
+          : `${descricaoAvulsa(m.descricao, (m.veiculos as unknown as { placa: string } | null)?.placa, m.itens)} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}`,
         inicio: m.periodo_inicio, complemento: e.nfse_texto_complementar,
       },
       valor: Number(m.valor_final),

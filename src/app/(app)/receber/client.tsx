@@ -25,7 +25,7 @@ import {
 
 export type LinhaReceber = {
   id: string; empresa_id: string; empresa_apelido: string; cliente_id: string; cliente_fantasia: string; obra_id: string | null; obra_nome: string | null;
-  placa: string; periodo_inicio: string; periodo_fim: string; numero_nf: string | null; data_emissao: string | null; data_vencimento: string | null;
+  placa: string | null; periodo_inicio: string; periodo_fim: string; numero_nf: string | null; data_emissao: string | null; data_vencimento: string | null;
   valor_final: number; valor_recebido: number; saldo: number; status: string; status_exibicao: string; dias_atraso: number | null; data_ultimo_recebimento: string | null;
   boleto?: Boleto | null;
 };
@@ -72,7 +72,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
   const mensagem = React.useCallback((m: LinhaReceber, tpl: string, contato: string) => {
     const b = m.boleto?.status === "emitido" ? m.boleto : null;
     const texto = preencherTemplate(tpl, {
-      contato, nf: m.numero_nf ?? "", placa: formatPlaca(m.placa), periodo: formatPeriodo(m.periodo_inicio, m.periodo_fim),
+      contato, nf: m.numero_nf ?? "", placa: (m.placa ? formatPlaca(m.placa) : "Avulsa"), periodo: formatPeriodo(m.periodo_inicio, m.periodo_fim),
       valor: formatBRL(b ? b.valor : m.saldo), vencimento: formatData(b ? b.data_vencimento : m.data_vencimento),
       empresa: m.empresa_apelido === "TDTS" ? "TDTS & Oliveira Locações" : "Oliveira & Oliveira Locações",
     });
@@ -83,7 +83,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
   const colunas = React.useMemo<ColumnDef<LinhaReceber, unknown>[]>(() => [
     { id: "placa", header: "Placa / cliente", meta: { tituloMobile: true }, cell: ({ row: { original: m } }) => (
       <div className="max-w-[13rem]" title={`${m.cliente_fantasia}${m.obra_nome ? ` · ${m.obra_nome}` : ""}`}>
-        <span className="font-mono font-semibold">{formatPlaca(m.placa)}</span> <span className="text-xs text-muted-foreground">{m.empresa_apelido}</span>
+        <span className="font-mono font-semibold">{(m.placa ? formatPlaca(m.placa) : "Avulsa")}</span> <span className="text-xs text-muted-foreground">{m.empresa_apelido}</span>
         <p className="truncate text-xs text-muted-foreground">{m.cliente_fantasia}</p>
         {m.obra_nome && <p className="truncate text-xs text-muted-foreground">{m.obra_nome}</p>}
       </div>
@@ -113,7 +113,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
       const cs = contatosDe(m);
       const comEmail = cs.find((c) => c.email);
       const comZap = cs.find((c) => c.whatsapp);
-      const mail = comEmail && linkEmail(cs.filter((c) => c.email).map((c) => c.email).join(","), `Fatura ${m.numero_nf ?? ""} — ${formatPlaca(m.placa)}`, mensagem(m, templates.email, comEmail.nome));
+      const mail = comEmail && linkEmail(cs.filter((c) => c.email).map((c) => c.email).join(","), `Fatura ${m.numero_nf ?? ""} — ${(m.placa ? formatPlaca(m.placa) : "Avulsa")}`, mensagem(m, templates.email, comEmail.nome));
       const zap = comZap && linkWhatsApp(comZap.whatsapp, mensagem(m, templates.whatsapp, comZap.nome));
       return (
         <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
@@ -232,7 +232,7 @@ function DialogoLancar({ aberto, onOpenChange, onEscolher }: { aberto: boolean; 
                   <button type="button" onClick={() => onEscolher(m)}
                     className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm"><span className="font-mono font-semibold">{formatPlaca(m.placa)}</span> · NF {m.numero_nf ?? "—"} <span className="text-xs text-muted-foreground">{m.empresa_apelido}</span></p>
+                      <p className="truncate text-sm"><span className="font-mono font-semibold">{(m.placa ? formatPlaca(m.placa) : "Avulsa")}</span> · NF {m.numero_nf ?? "—"} <span className="text-xs text-muted-foreground">{m.empresa_apelido}</span></p>
                       <p className="truncate text-xs text-muted-foreground">{m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""} · venc. {formatData(m.data_vencimento)}</p>
                     </div>
                     {m.status_exibicao === "vencido" && <Badge variant="critico">{m.dias_atraso} d</Badge>}
@@ -286,7 +286,7 @@ function DialogoBaixa({ medicao: m, contas, podeEditar, onOpenChange, onFeito }:
       <DialogContent tamanho="md">
         <DialogHeader>
           <DialogTitle>Baixa de recebimento</DialogTitle>
-          <DialogDescription>{m && <>{formatPlaca(m.placa)} · {m.cliente_fantasia} · NF {m.numero_nf ?? "—"} · venc. {formatData(m.data_vencimento)}</>}</DialogDescription>
+          <DialogDescription>{m && <>{(m.placa ? formatPlaca(m.placa) : "Avulsa")} · {m.cliente_fantasia} · NF {m.numero_nf ?? "—"} · venc. {formatData(m.data_vencimento)}</>}</DialogDescription>
         </DialogHeader>
         {m && (
           <div className="space-y-4">
@@ -389,7 +389,7 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
       <DialogContent tamanho="md">
         <DialogHeader>
           <DialogTitle>{b ? "Boleto Sicredi" : "Gerar boleto Sicredi"}</DialogTitle>
-          <DialogDescription>{m && <>{formatPlaca(m.placa)} · {m.cliente_fantasia} · NF {m.numero_nf ?? "—"}</>}</DialogDescription>
+          <DialogDescription>{m && <>{(m.placa ? formatPlaca(m.placa) : "Avulsa")} · {m.cliente_fantasia} · NF {m.numero_nf ?? "—"}</>}</DialogDescription>
         </DialogHeader>
         {m && b && (
           <div className="space-y-4">

@@ -13,10 +13,10 @@ import type { Opcao } from "@/components/ui/select";
 import { Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
-import { baseCobranca, cobrancaAvulsa, rotuloValorCobranca, calcularHoraExtra, calcularValorMedicao, calcularVencimento, hojeSP, somar, type TipoCobranca } from "@/lib/calculos";
+import { baseCobranca, cobrancaAvulsa, rotuloValorCobranca, calcularHoraExtra, calcularValorMedicao, calcularVencimento, hojeSP, somar, type TipoCobrancaFatura } from "@/lib/calculos";
 import { formatBRL, formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
-import { FORMAS_FATURA, type FormaFatura, type ItemFatura } from "@/lib/schemas/operacao";
+import { FORMAS_FATURA, UNIDADES_AVULSA, formatQuantidadeAvulsa, type FormaFatura, type ItemAvulsoSalvo, type ItemFatura, type UnidadeAvulsa } from "@/lib/schemas/operacao";
 import { SelectSimples } from "@/components/ui/select";
 import { baixarFaturaPDF } from "@/lib/documentos/baixar";
 import { cn } from "@/lib/utils";
@@ -28,14 +28,20 @@ import { DialogoLancarMedicao } from "./lancar";
 import { DialogoTentativasNFSe } from "./tentativas-nfse";
 
 export type LinhaMedicao = {
-  id: string; contrato_id: string; empresa_id: string; empresa_apelido: string; periodo_inicio: string; periodo_fim: string; competencia: string;
+  /** contrato_id nulo = fatura avulsa (sem contrato nem veículo) */
+  id: string; contrato_id: string | null; empresa_id: string; empresa_apelido: string; periodo_inicio: string; periodo_fim: string; competencia: string;
   dias: number; valor_mensal: number; valor_base: number; acrescimos: number; descontos: number; valor_final: number; numero_nf: string | null;
   data_emissao: string | null; data_vencimento: string | null; status: string; status_exibicao: string; observacoes: string | null; final: boolean;
-  cliente_id: string; cliente_fantasia: string; obra_nome: string | null; placa: string; proprietario: string; prazo_pagamento_dias: number;
+  cliente_id: string; cliente_fantasia: string; obra_nome: string | null; placa: string | null; proprietario: string | null; prazo_pagamento_dias: number | null;
   dia_corte_inicio: number; valor_recebido: number; repasse_liquido: number | null; margem: number;
   contrato_numero: string | number | null; cliente_nome: string | null; veiculo_tipo: string | null; saldo: number;
-  tipo_cobranca: TipoCobranca | null; forma_pagamento: string | null; acrescimos_itens: ItemFatura[] | null; descontos_itens: ItemFatura[] | null;
+  tipo_cobranca: TipoCobrancaFatura | null; descricao: string | null; unidade: string | null; forma_pagamento: string | null; acrescimos_itens: ItemFatura[] | null; descontos_itens: ItemFatura[] | null;
+  /** fatura avulsa com vários itens (vazio = um item só, nas colunas dias / unidade / valor_mensal) */
+  itens: ItemAvulsoSalvo[] | null;
 };
+
+/** Fatura avulsa com vários itens: quantidade e valor vêm dos itens, não se editam na grade */
+const temItens = (m: LinhaMedicao) => (m.itens?.length ?? 0) > 0;
 
 type Editavel = Pick<LinhaMedicao, "dias" | "valor_mensal" | "acrescimos" | "descontos" | "numero_nf" | "data_emissao" | "data_vencimento" | "observacoes">;
 const COLS = ["dias", "valor_mensal", "acrescimos", "descontos", "numero_nf", "data_emissao", "data_vencimento", "observacoes"] as const;
@@ -54,9 +60,9 @@ const COLUNAS_LEMBRETE: ColunaExport<LinhaLembrete>[] = [
   { titulo: "Responsável (faturamento)", valor: (l) => l.contatos, largura: 50 }, { titulo: "Observações", valor: (l) => l.observacoes, largura: 30 },
 ];
 
-export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, competenciaPadrao, clientes, contratos, placas, baseDias, podeEditar }: {
+export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, competenciaPadrao, clientes, contratos, placas, veiculos, empresas, empresaPadrao, baseDias, podeEditar }: {
   linhas: LinhaMedicao[]; total: number; pagina: number; tamanho: number; competencia: string; competenciaPadrao: string;
-  clientes: Opcao[]; contratos: Opcao[]; placas: Opcao[]; baseDias: number; podeEditar: boolean;
+  clientes: Opcao[]; contratos: Opcao[]; placas: Opcao[]; veiculos: Opcao[]; empresas: Opcao[]; empresaPadrao: string | null; baseDias: number; podeEditar: boolean;
 }) {
   const router = useRouter();
   const url = useUrlParams();
@@ -79,7 +85,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
     setEdicoes((e) => {
       const atual: Partial<Editavel> = { ...(e[m.id] ?? {}), [k]: v };
       // emissão alterada e vencimento não mexido → recalcula vencimento (emissão + prazo)
-      if (k === "data_emissao" && !("data_vencimento" in (e[m.id] ?? {}) && e[m.id]!.data_vencimento !== m.data_vencimento)) {
+      if (k === "data_emissao" && m.prazo_pagamento_dias != null && !("data_vencimento" in (e[m.id] ?? {}) && e[m.id]!.data_vencimento !== m.data_vencimento)) {
         atual.data_vencimento = calcularVencimento(v as string | null, m.prazo_pagamento_dias);
       }
       return { ...e, [m.id]: atual };
@@ -250,7 +256,9 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                   <TableCell className="cursor-pointer" onClick={() => setDetalhe(m)} title={`${m.empresa_apelido} · ${m.cliente_fantasia}${m.obra_nome ? ` · ${m.obra_nome}` : ""}`}>
                     <div className="flex items-center gap-1">
                       {m.contrato_numero != null && <span className="font-mono text-sm font-semibold hover:underline">{m.contrato_numero}</span>}
-                      <span className={cn("font-mono", m.contrato_numero != null ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{formatPlaca(m.placa)}</span>
+                      {m.contrato_id
+                        ? <span className={cn("font-mono", m.contrato_numero != null ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{formatPlaca(m.placa)}</span>
+                        : <><Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Avulsa</Badge>{m.placa && <span className="font-mono text-sm font-semibold">{formatPlaca(m.placa)}</span>}<span className={cn("truncate", m.placa ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{m.descricao}</span></>}
                       {m.proprietario === "locador" && <Badge variant="info" className="px-1.5 py-0 text-[10px]">Sub</Badge>}
                       {m.final && <Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Final</Badge>}
                     </div>
@@ -261,13 +269,14 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                       <p className="text-[11px] text-status-alerta" title="Dias, acréscimos e descontos: abra a fatura para ajustar">{m.dias} dias{m.acrescimos > 0 ? " · +acr." : ""}{m.descontos > 0 ? " · −desc." : ""}</p>
                     )}
                     {cobrancaAvulsa(m.tipo_cobranca) && <p className="text-[11px] text-muted-foreground">{m.dias} {m.tipo_cobranca === "hora" ? "h" : "diárias"}</p>}
+                    {m.tipo_cobranca === "avulsa" && <p className="text-[11px] text-muted-foreground">{temItens(m) ? `${m.itens!.length} itens` : formatQuantidadeAvulsa(m.dias, m.unidade)}</p>}
                   </TableCell>
                   <TableCell className="text-right leading-tight">
                     <span className="text-sm font-semibold"><Moeda valor={valorFinal} /></span><br />
-                    {ed
+                    {ed && !temItens(m)
                       ? <InputMoeda data-linha={i} data-col="valor_mensal" aria-label={rotuloValorCobranca(m.tipo_cobranca)} title={rotuloValorCobranca(m.tipo_cobranca)}
                           className="mt-0.5 h-6 w-28 pl-7 text-right text-[11px]" permitirVazio={false} value={valor(m, "valor_mensal")} onChange={(v) => editar(m, "valor_mensal", v ?? 0)} />
-                      : <span className="text-[11px] text-muted-foreground" title="Valor mensal">mensal <Moeda valor={m.valor_mensal} /></span>}
+                      : <span className="text-[11px] text-muted-foreground" title={rotuloValorCobranca(m.tipo_cobranca)}>{temItens(m) ? `${m.itens!.length} itens` : <>{m.tipo_cobranca === "avulsa" ? "unit." : "mensal"} <Moeda valor={m.valor_mensal} /></>}</span>}
                   </TableCell>
                   <TableCell><Input data-linha={i} data-col="numero_nf" aria-label="Número da NF" className={campo} disabled={!ed} value={valor(m, "numero_nf") ?? ""} onChange={(e) => editar(m, "numero_nf", e.target.value || null)} /></TableCell>
                   <TableCell><Input data-linha={i} data-col="data_emissao" aria-label="Data de emissão" type="date" className={data} disabled={!ed} value={valor(m, "data_emissao") ?? ""} onChange={(e) => editar(m, "data_emissao", e.target.value || null)} /></TableCell>
@@ -304,7 +313,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
             <Card key={m.id} className={cn("space-y-2 p-3", selecao.has(m.id) && "border-primary")}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-mono font-semibold">{m.contrato_numero != null ? `${m.contrato_numero} · ` : ""}{formatPlaca(m.placa)} <span className="font-sans text-xs font-normal text-muted-foreground">{m.empresa_apelido}</span></p>
+                  <p className="font-mono font-semibold">{m.contrato_id ? <>{m.contrato_numero != null ? `${m.contrato_numero} · ` : ""}{formatPlaca(m.placa)}</> : <span className="font-sans">Avulsa · {m.placa ? `${formatPlaca(m.placa)} · ` : ""}{m.descricao}</span>} <span className="font-sans text-xs font-normal text-muted-foreground">{m.empresa_apelido}</span></p>
                   <p className="text-xs text-muted-foreground">{m.cliente_fantasia} · {formatPeriodo(m.periodo_inicio, m.periodo_fim)}</p>
                 </div>
                 <div className="flex items-center gap-2"><StatusBadge status={m.status_exibicao} /><Checkbox aria-label="Selecionar" checked={selecao.has(m.id)} onCheckedChange={() => alternar(m.id)} /></div>
@@ -312,7 +321,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="col-span-2 space-y-1"><span className="text-xs text-muted-foreground">Valor da fatura</span><p className="font-semibold"><Moeda valor={calc(m).valorFinal} /></p></div>
                 <label className="col-span-2 space-y-1"><span className="text-xs text-muted-foreground">{rotuloValorCobranca(m.tipo_cobranca)}</span>
-                  <InputMoeda className="h-9" permitirVazio={false} disabled={!ed} value={valor(m, "valor_mensal")} onChange={(v) => editar(m, "valor_mensal", v ?? 0)} /></label>
+                  <InputMoeda className="h-9" permitirVazio={false} disabled={!ed || temItens(m)} value={valor(m, "valor_mensal")} onChange={(v) => editar(m, "valor_mensal", v ?? 0)} /></label>
                 <label className="space-y-1"><span className="text-xs text-muted-foreground">NF</span><Input className="h-9" disabled={!ed} value={valor(m, "numero_nf") ?? ""} onChange={(e) => editar(m, "numero_nf", e.target.value || null)} /></label>
                 <label className="space-y-1"><span className="text-xs text-muted-foreground">Emissão</span><Input className="h-9" type="date" disabled={!ed} value={valor(m, "data_emissao") ?? ""} onChange={(e) => editar(m, "data_emissao", e.target.value || null)} /></label>
               </div>
@@ -336,7 +345,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
         </div>
       )}
 
-      <DialogoLancarMedicao aberto={lancarAberto} onOpenChange={setLancarAberto} contratos={contratos} baseDias={baseDias}
+      <DialogoLancarMedicao aberto={lancarAberto} onOpenChange={setLancarAberto} contratos={contratos} clientes={clientes} veiculos={veiculos} empresas={empresas} empresaPadrao={empresaPadrao} baseDias={baseDias}
         onLancado={(comp) => { url.set({ comp, status: null }); router.refresh(); }} />
       <DialogoDetalhe medicao={detalhe} baseDias={baseDias} podeEditar={podeEditar} onOpenChange={(v) => !v && setDetalhe(null)}
         onSalvo={() => { setDetalhe(null); router.refresh(); }} />
@@ -527,7 +536,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
         {m && <>
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2">
-              Fatura <span className="font-mono">{m.contrato_numero ?? formatPlaca(m.placa)}</span> <StatusBadge status={m.status_exibicao} />
+              Fatura <span className="font-mono">{m.contrato_id ? m.contrato_numero ?? formatPlaca(m.placa) : "avulsa"}</span> <StatusBadge status={m.status_exibicao} />
               {m.final && <Badge variant="neutro">Final</Badge>}
             </DialogTitle>
             <DialogDescription>{m.empresa_apelido} · {m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""} · {formatCompetencia(m.competencia.slice(0, 7), true)}</DialogDescription>
@@ -535,24 +544,35 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             {item("Cliente", m.cliente_nome ?? m.cliente_fantasia)}
             {item("Obra", m.obra_nome)}
-            {item("Contrato", <Link className="underline" href={`/contratos/${m.contrato_id}`}>{m.contrato_numero ?? "Abrir contrato"}</Link>)}
-            {item("Período", `${formatPeriodo(m.periodo_inicio, m.periodo_fim)} (${m.dias} dias)`)}
-            {item("Veículo", `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)}
-            {item("Prazo de pagamento", `${m.prazo_pagamento_dias} dias`)}
+            {m.contrato_id
+              ? item("Contrato", <Link className="underline" href={`/contratos/${m.contrato_id}`}>{m.contrato_numero ?? "Abrir contrato"}</Link>)
+              : item("Contrato", "Sem contrato (avulsa)")}
+            {item("Período", m.contrato_id ? `${formatPeriodo(m.periodo_inicio, m.periodo_fim)} (${m.dias} dias)` : formatPeriodo(m.periodo_inicio, m.periodo_fim))}
+            {m.contrato_id
+              ? item("Veículo", `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)
+              : temItens(m) ? item("Serviço", `${m.itens!.length} itens${m.placa ? ` · ${formatPlaca(m.placa)}` : ""}`)
+              : item("Serviço", `${m.descricao ?? ""}${m.placa ? ` · ${formatPlaca(m.placa)}${m.veiculo_tipo ? ` (${m.veiculo_tipo})` : ""}` : ""}`)}
+            {m.contrato_id && item("Prazo de pagamento", `${m.prazo_pagamento_dias} dias`)}
           </div>
           <div className="rounded-md border">
             <Table>
               <TableBody>
-                <TableRow><TableCell>{m.tipo_cobranca === "diaria" ? "Valor da diária (10 h)" : rotuloValorCobranca(m.tipo_cobranca)}</TableCell><TableCell className="text-right"><Moeda valor={m.valor_mensal} /></TableCell></TableRow>
+                {/* vários itens: cada um com quantidade × valor; a fatura soma (quantidade fixa em 1) */}
+                {temItens(m) ? m.itens!.map((it, k) => (
+                  <TableRow key={k}><TableCell>{it.descricao}{it.placa && <span className="font-mono"> · {formatPlaca(it.placa)}</span>}
+                    <span className="block text-xs text-muted-foreground">{formatQuantidadeAvulsa(it.quantidade, it.unidade)} × <Moeda valor={it.valor_unitario} /></span></TableCell>
+                    <TableCell className="text-right"><Moeda valor={Math.round(it.quantidade * it.valor_unitario * 100) / 100} /></TableCell></TableRow>
+                ))
+                : <TableRow><TableCell>{m.tipo_cobranca === "diaria" ? "Valor da diária (10 h)" : rotuloValorCobranca(m.tipo_cobranca)}</TableCell><TableCell className="text-right"><Moeda valor={m.valor_mensal} /></TableCell></TableRow>}
                 {/* diária = 10 h; o que passar vira o item "Hora extra" dos acréscimos (10% da diária por hora) */}
                 {m.tipo_cobranca === "diaria" && <TableRow><TableCell>Horas trabalhadas <span className="text-xs text-muted-foreground">(passou de 10 h por diária = hora extra, 10% da diária cada)</span></TableCell><TableCell className="text-right">
                   <InputNumero aria-label="Horas trabalhadas" className="ml-auto h-8 w-20 text-right" casas={1} value={horas} placeholder="h" disabled={!ed}
                     onChange={(v) => { setHoras(v); if (v != null) setAjuste((a) => ({ ...a, acrescimos: comHoraExtra(a.acrescimos, m.valor_mensal, a.dias, v) })); }} />
                 </TableCell></TableRow>}
-                <TableRow><TableCell>{m.tipo_cobranca === "diaria" ? "Diárias" : m.tipo_cobranca === "hora" ? "Horas trabalhadas (hora × horas)" : `Dias (mensal ÷ ${baseDias} × dias)`}</TableCell><TableCell className="text-right">
-                  <InputNumero aria-label={m.tipo_cobranca === "hora" ? "Horas" : "Dias"} className="ml-auto h-8 w-20 text-right" value={ajuste.dias} disabled={!ed || m.status !== "a_faturar"}
-                    onChange={(v) => setAjuste((a) => ({ ...a, dias: Math.min(31, v ?? 0) }))} />
-                </TableCell></TableRow>
+                {!temItens(m) && <TableRow><TableCell>{m.tipo_cobranca === "diaria" ? "Diárias" : m.tipo_cobranca === "hora" ? "Horas trabalhadas (hora × horas)" : m.tipo_cobranca === "avulsa" ? `Quantidade${m.unidade ? ` de ${UNIDADES_AVULSA[m.unidade as UnidadeAvulsa]?.toLowerCase() ?? m.unidade}` : ""} (unitário × quantidade)` : `Dias (mensal ÷ ${baseDias} × dias)`}</TableCell><TableCell className="text-right">
+                  <InputNumero aria-label={m.tipo_cobranca === "hora" ? "Horas" : m.tipo_cobranca === "avulsa" ? "Quantidade" : "Dias"} className="ml-auto h-8 w-20 text-right" value={ajuste.dias} disabled={!ed || m.status !== "a_faturar"}
+                    onChange={(v) => setAjuste((a) => ({ ...a, dias: Math.min(m.tipo_cobranca === "avulsa" ? 99_999 : 31, v ?? 0) }))} />
+                </TableCell></TableRow>}
                 <ListaItensFatura titulo="Acréscimos" nome="acréscimo" exemplo="Ex.: hora extra do operador, frete, pedágio…" itens={ajuste.acrescimos} total={acrescimos}
                   editavel={ed} onChange={(itens) => setAjuste((a) => ({ ...a, acrescimos: itens }))} />
                 <ListaItensFatura titulo="Descontos" nome="desconto" exemplo="Ex.: dia parado por chuva, abatimento combinado…" itens={ajuste.descontos} total={descontos} negativo
@@ -591,7 +611,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
               {gerando ? <Loader2 className="animate-spin" /> : <FileDown />} Gerar fatura (PDF)
             </Button>
           </DialogFooter>
-          <DialogoTentativasNFSe medicaoId={m.id} rotulo={String(m.contrato_numero ?? formatPlaca(m.placa))} aberto={verEnvios} onOpenChange={setVerEnvios} />
+          <DialogoTentativasNFSe medicaoId={m.id} rotulo={m.contrato_id ? String(m.contrato_numero ?? formatPlaca(m.placa)) : `avulsa · ${m.cliente_fantasia}`} aberto={verEnvios} onOpenChange={setVerEnvios} />
         </>}
       </DialogContent>
     </Dialog>

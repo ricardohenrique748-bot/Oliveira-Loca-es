@@ -166,6 +166,57 @@ describe("medições geradas pelo seed (regra base 30)", () => {
   });
 });
 
+describe("fatura avulsa (sem contrato)", () => {
+  it("cobra unitário × quantidade, aparece na view com o cliente, sem repasse, e recebe normalmente", async () => {
+    const [cl] = await q<{ id: string }>("select id from public.clientes limit 1");
+    const [m] = await q<{ id: string; valor_final: string; empresa_id: string }>(
+      `insert into public.medicoes (cliente_id, empresa_id, descricao, periodo_inicio, periodo_fim, dias, valor_mensal, acrescimos, descontos)
+       values ($1, $2, 'Frete de máquina', '2026-10-10', '2026-10-12', 40, 150, 100, 50) returning id, valor_final::text, empresa_id`, [cl.id, OLIVEIRA]);
+    expect(num(m.valor_final)).toBe(40 * 150 + 100 - 50);
+    expect(m.empresa_id).toBe(OLIVEIRA);
+
+    const [v] = await q<{ cliente_id: string; tipo_cobranca: string; placa: string | null; descricao: string }>(
+      "select cliente_id, tipo_cobranca, placa, descricao from public.medicoes_v where id = $1", [m.id]);
+    expect(v).toMatchObject({ cliente_id: cl.id, tipo_cobranca: "avulsa", placa: null, descricao: "Frete de máquina" });
+    expect(await q("select 1 from public.repasses where medicao_id = $1", [m.id])).toHaveLength(0);
+
+    // sem prazo de contrato: o vencimento é o digitado
+    await db.query("update public.medicoes set data_emissao = '2026-10-13', data_vencimento = '2026-10-20', status = 'faturado' where id = $1", [m.id]);
+    await db.query("insert into public.recebimentos (medicao_id, data, valor) values ($1, '2026-10-16', $2)", [m.id, m.valor_final]);
+    const [f] = await q<{ status: string; data_vencimento: string }>("select status, data_vencimento::text from public.medicoes where id = $1", [m.id]);
+    expect(f).toEqual({ status: "recebido", data_vencimento: "2026-10-20" });
+  });
+
+  it("vários itens: a fatura soma os itens e a margem por placa reparte a receita", async () => {
+    const [cl] = await q<{ id: string }>("select id from public.clientes limit 1");
+    const [v1, v2] = await q<{ id: string; placa: string }>("select id, placa from public.veiculos order by placa limit 2");
+    // 2 × 500 + 4 × 250 = 2000; +200 de acréscimo → receita ×1,1 por item
+    const itens = [
+      { descricao: "Frete", veiculo_id: v1.id, placa: v1.placa, quantidade: 2, unidade: "dia", valor_unitario: 500 },
+      { descricao: "Munck", veiculo_id: v2.id, placa: v2.placa, quantidade: 4, unidade: "hora", valor_unitario: 250 },
+    ];
+    const [m] = await q<{ id: string; valor_final: string }>(
+      `insert into public.medicoes (cliente_id, empresa_id, descricao, periodo_inicio, periodo_fim, dias, valor_mensal, acrescimos, itens)
+       values ($1, $2, 'Frete; Munck', '2025-03-10', '2025-03-12', 1, 2000, 200, $3) returning id, valor_final::text`, [cl.id, OLIVEIRA, JSON.stringify(itens)]);
+    expect(num(m.valor_final)).toBe(2200);
+
+    const [vw] = await q<{ itens: unknown[] }>("select itens from public.medicoes_v where id = $1", [m.id]);
+    expect(vw.itens).toHaveLength(2);
+    const margem = await q<{ veiculo_id: string; receita: string }>(
+      "select veiculo_id, receita::text from public.vw_margem_placa_mes where mes = '2025-03-01' and veiculo_id in ($1, $2)", [v1.id, v2.id]);
+    const receita = (id: string) => num(margem.find((r) => r.veiculo_id === id)?.receita ?? "0");
+    expect(receita(v1.id)).toBeGreaterThanOrEqual(1100);
+    expect(receita(v2.id)).toBeGreaterThanOrEqual(1100);
+    await db.query("delete from public.medicoes where id = $1", [m.id]);
+  });
+
+  it("precisa de contrato ou cliente", async () => {
+    await expect(db.query(
+      `insert into public.medicoes (empresa_id, periodo_inicio, periodo_fim, dias, valor_mensal) values ($1, '2026-10-10', '2026-10-10', 1, 100)`, [OLIVEIRA],
+    )).rejects.toThrow(/contrato_ou_cliente/);
+  });
+});
+
 describe("repasses e abatimentos", () => {
   const V12 = "88888888-0000-0000-0000-000000000012"; // Robson, OS motor 14.800 descontar
   const V11 = "88888888-0000-0000-0000-000000000011"; // Robson, Silcar 4×1.250 + multa 293,47

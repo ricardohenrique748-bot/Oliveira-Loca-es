@@ -215,7 +215,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
 
       <Dialog open={novo} onOpenChange={setNovo}>
         <DialogContent tamanho="lg">
-          <DialogHeader><DialogTitle>Nova conta a pagar</DialogTitle><DialogDescription>Parcelada gera N lançamentos “n/N” mensais; recorrente gera os próximos 12 meses (o job mensal mantém sempre 12 à frente).</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Nova conta a pagar</DialogTitle><DialogDescription>Parcelada gera N lançamentos “n/N” mensais (anexando vários boletos, cada um vai para uma parcela, na ordem); recorrente gera os próximos 12 meses (o job mensal mantém sempre 12 à frente).</DialogDescription></DialogHeader>
           {novo && (
             <Formulario<ContaPagarNovaForm> campos={camposConta<ContaPagarNovaForm>(opcoes, true)} schema={contaPagarNovaSchema as never}
               valores={{ empresa_id: empresaPadrao ?? opcoes.empresas[0]?.value, fornecedor_id: null, descricao: "", categoria_id: null, tipo: "fixa", veiculo_id: null,

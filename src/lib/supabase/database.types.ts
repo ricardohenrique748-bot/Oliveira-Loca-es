@@ -700,67 +700,70 @@ export type Database = {
       }
       empresas: {
         Row: {
-          inscricao_municipal: string | null
-          regime_tributario: string | null
-          codigo_ibge: string | null
-          nfse_codigo_servico: string | null
-          nfse_aliquota_iss: number | null
-          nfse_texto_complementar: string | null
           apelido: string
           ativo: boolean
           cidade: string | null
           cnpj: string | null
+          codigo_ibge: string | null
           contato_nome: string | null
           created_at: string
           created_by: string | null
           email: string | null
           endereco: string | null
           id: string
+          inscricao_municipal: string | null
+          nfse_aliquota_iss: number | null
+          nfse_codigo_servico: string | null
+          nfse_proximo_dps: number
+          nfse_texto_complementar: string | null
           razao_social: string
+          regime_tributario: string | null
           telefone: string | null
           uf: string | null
           updated_at: string
         }
         Insert: {
-          inscricao_municipal?: string | null
-          regime_tributario?: string | null
-          codigo_ibge?: string | null
-          nfse_codigo_servico?: string | null
-          nfse_aliquota_iss?: number | null
-          nfse_texto_complementar?: string | null
           apelido: string
           ativo?: boolean
           cidade?: string | null
           cnpj?: string | null
+          codigo_ibge?: string | null
           contato_nome?: string | null
           created_at?: string
           created_by?: string | null
           email?: string | null
           endereco?: string | null
           id?: string
+          inscricao_municipal?: string | null
+          nfse_aliquota_iss?: number | null
+          nfse_codigo_servico?: string | null
+          nfse_proximo_dps?: number
+          nfse_texto_complementar?: string | null
           razao_social: string
+          regime_tributario?: string | null
           telefone?: string | null
           uf?: string | null
           updated_at?: string
         }
         Update: {
-          inscricao_municipal?: string | null
-          regime_tributario?: string | null
-          codigo_ibge?: string | null
-          nfse_codigo_servico?: string | null
-          nfse_aliquota_iss?: number | null
-          nfse_texto_complementar?: string | null
           apelido?: string
           ativo?: boolean
           cidade?: string | null
           cnpj?: string | null
+          codigo_ibge?: string | null
           contato_nome?: string | null
           created_at?: string
           created_by?: string | null
           email?: string | null
           endereco?: string | null
           id?: string
+          inscricao_municipal?: string | null
+          nfse_aliquota_iss?: number | null
+          nfse_codigo_servico?: string | null
+          nfse_proximo_dps?: number
+          nfse_texto_complementar?: string | null
           razao_social?: string
+          regime_tributario?: string | null
           telefone?: string | null
           uf?: string | null
           updated_at?: string
@@ -905,7 +908,8 @@ export type Database = {
         Row: {
           acrescimos: number
           acrescimos_itens: Json
-          contrato_id: string
+          cliente_id: string | null
+          contrato_id: string | null
           created_at: string
           created_by: string | null
           data_emissao: string | null
@@ -914,24 +918,33 @@ export type Database = {
           descontos_itens: Json
           descricao: string | null
           dias: number
-          forma_pagamento: Database["public"]["Enums"]["forma_pagamento"]
           empresa_id: string
           final: boolean
+          forma_pagamento: Database["public"]["Enums"]["forma_pagamento"]
           id: string
+          nfse_ambiente: string | null
+          nfse_chave: string | null
+          nfse_dps: number | null
+          nfse_emitida_em: string | null
+          nfse_erro: string | null
           numero_nf: string | null
           observacoes: string | null
           periodo_fim: string
           periodo_inicio: string
           status: Database["public"]["Enums"]["status_medicao"]
+          unidade: string | null
+          itens: Json
           updated_at: string
           valor_base: number
           valor_final: number
           valor_mensal: number
+          veiculo_id: string | null
         }
         Insert: {
           acrescimos?: number
           acrescimos_itens?: Json
-          contrato_id: string
+          cliente_id?: string | null
+          contrato_id?: string | null
           created_at?: string
           created_by?: string | null
           data_emissao?: string | null
@@ -940,24 +953,33 @@ export type Database = {
           descontos_itens?: Json
           descricao?: string | null
           dias: number
-          forma_pagamento?: Database["public"]["Enums"]["forma_pagamento"]
           empresa_id: string
           final?: boolean
+          forma_pagamento?: Database["public"]["Enums"]["forma_pagamento"]
           id?: string
+          nfse_ambiente?: string | null
+          nfse_chave?: string | null
+          nfse_dps?: number | null
+          nfse_emitida_em?: string | null
+          nfse_erro?: string | null
           numero_nf?: string | null
           observacoes?: string | null
           periodo_fim: string
           periodo_inicio: string
           status?: Database["public"]["Enums"]["status_medicao"]
+          unidade?: string | null
+          itens?: Json
           updated_at?: string
           valor_base?: number
           valor_final?: number
           valor_mensal?: number
+          veiculo_id?: string | null
         }
         Update: {
           acrescimos?: number
           acrescimos_itens?: Json
-          contrato_id?: string
+          cliente_id?: string | null
+          contrato_id?: string | null
           created_at?: string
           created_by?: string | null
           data_emissao?: string | null
@@ -966,21 +988,36 @@ export type Database = {
           descontos_itens?: Json
           descricao?: string | null
           dias?: number
-          forma_pagamento?: Database["public"]["Enums"]["forma_pagamento"]
           empresa_id?: string
           final?: boolean
+          forma_pagamento?: Database["public"]["Enums"]["forma_pagamento"]
           id?: string
+          nfse_ambiente?: string | null
+          nfse_chave?: string | null
+          nfse_dps?: number | null
+          nfse_emitida_em?: string | null
+          nfse_erro?: string | null
           numero_nf?: string | null
           observacoes?: string | null
           periodo_fim?: string
           periodo_inicio?: string
           status?: Database["public"]["Enums"]["status_medicao"]
+          unidade?: string | null
+          itens?: Json
           updated_at?: string
           valor_base?: number
           valor_final?: number
           valor_mensal?: number
+          veiculo_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "medicoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "medicoes_contrato_id_fkey"
             columns: ["contrato_id"]
@@ -993,6 +1030,13 @@ export type Database = {
             columns: ["empresa_id"]
             isOneToOne: false
             referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medicoes_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
             referencedColumns: ["id"]
           },
         ]
@@ -2099,6 +2143,8 @@ export type Database = {
           status: Database["public"]["Enums"]["status_medicao"] | null
           status_exibicao: string | null
           tipo_cobranca: string | null
+          unidade: string | null
+          itens: Json | null
           updated_at: string | null
           valor_base: number | null
           valor_final: number | null
@@ -2418,6 +2464,12 @@ export type Database = {
           p_dry_run?: boolean
         }
         Returns: { contrato_id: string; empresa_id: string; periodo_inicio: string; periodo_fim: string; dias: number; valor_mensal: number; valor_final: number; valor_repasse_bruto: number; medicao_id: string }[]
+      }
+      fn_nfse_reservar_dps: {
+        Args: {
+          p_empresa: string
+        }
+        Returns: number
       }
       fn_pagar_repasse: {
         Args: {

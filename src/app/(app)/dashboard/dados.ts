@@ -46,9 +46,11 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
     f.veReceita ? med(sb.from("medicoes_v").select("data_emissao, valor_final, status").gte("data_emissao", ini12).lte("data_emissao", fim).neq("status", "cancelado")) : vazio,
     f.veReceita ? med(sb.from("medicoes_v").select("id, placa, cliente_fantasia, periodo_fim, valor_final, saldo, status, status_exibicao, data_vencimento, numero_nf").in("status", ["a_faturar", "faturado", "recebido_parcial"])) : vazio,
     f.veReceita ? (() => {
-      let q = sb.from("recebimentos").select("data, valor, medicoes!inner(empresa_id, contrato_id, contratos!inner(cliente_id, veiculos!inner(placa)))").gte("data", ini12).lte("data", fim);
+      // fatura avulsa não tem contrato: o join com contrato/veículo só é obrigatório ao filtrar por placa; o cliente é filtrado abaixo
+      let q = sb.from("recebimentos").select(f.placa
+        ? "data, valor, medicoes!inner(empresa_id, cliente_id, contratos!inner(cliente_id, veiculos!inner(placa)))"
+        : "data, valor, medicoes!inner(empresa_id, cliente_id, contratos(cliente_id))").gte("data", ini12).lte("data", fim);
       if (f.empresaId) q = q.eq("medicoes.empresa_id", f.empresaId);
-      if (f.clienteId) q = q.eq("medicoes.contratos.cliente_id", f.clienteId);
       if (f.placa) q = q.ilike("medicoes.contratos.veiculos.placa", `%${f.placa}%`);
       return q;
     })() : vazio,
@@ -101,9 +103,9 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
   // ----- Hoje -----
   const hoje: ItemHoje[] = [];
   for (const m of aFaturar.filter((m) => m.periodo_fim < f.hoje))
-    hoje.push({ tipo: "Faturar", titulo: `${m.placa} · ${m.cliente_fantasia}`, detalhe: `período encerrado em ${m.periodo_fim.split("-").reverse().join("/")}`, valor: m.valor_final, href: `/medicoes?comp=todas&placa=${m.placa}`, acao: "Faturar", severidade: "alerta" });
+    hoje.push({ tipo: "Faturar", titulo: `${m.placa ?? "Avulsa"} · ${m.cliente_fantasia}`, detalhe: `período encerrado em ${m.periodo_fim.split("-").reverse().join("/")}`, valor: m.valor_final, href: `/medicoes?comp=todas&placa=${m.placa}`, acao: "Faturar", severidade: "alerta" });
   for (const m of vencidas)
-    hoje.push({ tipo: "Vencida", titulo: `NF ${m.numero_nf ?? "—"} · ${m.cliente_fantasia}`, detalhe: `${diffDias(m.data_vencimento!, f.hoje)} dias em atraso · ${m.placa}`, valor: m.saldo, href: `/receber?id=${m.id}`, acao: "Cobrar", severidade: "critico" });
+    hoje.push({ tipo: "Vencida", titulo: `NF ${m.numero_nf ?? "—"} · ${m.cliente_fantasia}`, detalhe: `${diffDias(m.data_vencimento!, f.hoje)} dias em atraso · ${m.placa ?? "avulsa"}`, valor: m.saldo, href: `/receber?id=${m.id}`, acao: "Cobrar", severidade: "critico" });
   for (const m of aReceber.filter((m) => m.status_exibicao !== "vencido" && m.data_vencimento && m.data_vencimento <= em5))
     hoje.push({ tipo: "Vence em breve", titulo: `NF ${m.numero_nf ?? "—"} · ${m.cliente_fantasia}`, detalhe: `vence ${m.data_vencimento!.split("-").reverse().join("/")}`, valor: m.saldo, href: `/receber?id=${m.id}`, acao: "Lembrar", severidade: "info" });
   for (const r of rep.filter((r) => r.status === "liberado"))
@@ -124,7 +126,8 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
 
   // ----- Gráficos -----
   const meses = Array.from({ length: 12 }, (_, i) => addCompetencia(f.mes, i - 11));
-  const rec = (recebimentos.data ?? []) as { data: string; valor: number }[];
+  const rec = ((recebimentos.data ?? []) as unknown as { data: string; valor: number; medicoes: { cliente_id: string | null; contratos: { cliente_id: string } | null } | null }[])
+    .filter((r) => !f.clienteId || (r.medicoes?.contratos?.cliente_id ?? r.medicoes?.cliente_id) === f.clienteId);
   const faturamento12 = meses.map((c) => ({
     mes: c,
     faturado: somar(m12.filter((m) => m.status !== "a_faturar" && m.data_emissao && competenciaDe(m.data_emissao) === c).map((m) => m.valor_final)),

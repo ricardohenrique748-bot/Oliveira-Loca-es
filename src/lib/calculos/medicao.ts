@@ -83,6 +83,8 @@ export function calcularDiasPeriodoLivre({ periodo, dataInicioContrato, dataFimE
 }
 
 export type TipoCobranca = "mensal" | "diaria" | "hora";
+/** Na fatura: o tipo do contrato, ou "avulsa" quando a fatura não tem contrato (valor unitário × quantidade). */
+export type TipoCobrancaFatura = TipoCobranca | "avulsa";
 
 /** Diária e hora: contrato de um dia só (mais dias = renovar); a fatura cobra valor × quantidade (diárias ou horas). */
 export function cobrancaAvulsa(tipo: TipoCobranca | string | null | undefined): boolean {
@@ -90,12 +92,12 @@ export function cobrancaAvulsa(tipo: TipoCobranca | string | null | undefined): 
 }
 
 export function rotuloValorCobranca(tipo: TipoCobranca | string | null | undefined): string {
-  return tipo === "diaria" ? "Valor da diária" : tipo === "hora" ? "Valor da hora" : "Valor mensal";
+  return tipo === "diaria" ? "Valor da diária" : tipo === "hora" ? "Valor da hora" : tipo === "avulsa" ? "Valor unitário" : "Valor mensal";
 }
 
-/** Divisor do valor do contrato: diária e hora = 1 (valor × quantidade), mensal = base de dias. */
-export function baseCobranca(tipo: TipoCobranca | null | undefined, baseDias = BASE_DIAS_PADRAO): number {
-  return cobrancaAvulsa(tipo) ? 1 : baseDias;
+/** Divisor do valor: diária, hora e fatura avulsa = 1 (valor × quantidade), mensal = base de dias. */
+export function baseCobranca(tipo: TipoCobrancaFatura | null | undefined, baseDias = BASE_DIAS_PADRAO): number {
+  return cobrancaAvulsa(tipo) || tipo === "avulsa" ? 1 : baseDias;
 }
 
 /** Dias corridos (inclusive) do período dentro da vigência — usado na diária. */

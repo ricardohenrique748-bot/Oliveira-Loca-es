@@ -3,7 +3,7 @@ import { z } from "zod";
 import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
-import { edicaoMedicaoSchema, lancamentoMedicaoSchema } from "@/lib/schemas/operacao";
+import { edicaoMedicaoSchema, lancamentoAvulsoSchema, lancamentoMedicaoSchema, type ItemAvulsoSalvo } from "@/lib/schemas/operacao";
 import { addDias, cobrancaAvulsa, diffDias, horasEntre, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
 
 const REVALIDAR = ["/medicoes", "/receber", "/repasses", "/dashboard"];
@@ -64,9 +64,9 @@ export async function gerarMedicoes(comp: string, contratos?: string[]) {
 async function zerarDiasDiaria(supabase: Awaited<ReturnType<typeof createClient>>, medicaoIds: string[]) {
   if (!medicaoIds.length) return;
   const { data: meds } = await supabase.from("medicoes").select("id, contrato_id").in("id", medicaoIds);
-  const { data: diaria } = await supabase.from("contratos").select("id").in("id", [...new Set((meds ?? []).map((m) => m.contrato_id))]).in("tipo_cobranca", ["diaria", "hora"]);
+  const { data: diaria } = await supabase.from("contratos").select("id").in("id", [...new Set((meds ?? []).map((m) => m.contrato_id).filter((c): c is string => !!c))]).in("tipo_cobranca", ["diaria", "hora"]);
   const contratosDiaria = new Set((diaria ?? []).map((c) => c.id));
-  const diarias = (meds ?? []).filter((m) => contratosDiaria.has(m.contrato_id)).map((m) => m.id);
+  const diarias = (meds ?? []).filter((m) => m.contrato_id && contratosDiaria.has(m.contrato_id)).map((m) => m.id);
   if (diarias.length) checar(await supabase.from("medicoes").update({ dias: 0 }).in("id", diarias));
 }
 
@@ -180,6 +180,35 @@ export async function lancarMedicao(dados: unknown) {
     }).select("id").single());
     // diária / hora depois do último dia: o contrato passa a ir até esse dia (igual a renovar)
     if (avulsa && (!c.data_fim || d.periodo_fim > c.data_fim)) checar(await supabase.from("contratos").update({ data_fim: d.periodo_fim }).eq("id", c.id));
+    return { id: nova!.id, competencia: d.periodo_fim.slice(0, 7) };
+  }, REVALIDAR, "Fatura lançada");
+}
+
+/** Lança uma fatura avulsa: sem contrato, direto para o cliente, com um ou mais itens (placa opcional, sem repasse). */
+export async function lancarFaturaAvulsa(dados: unknown) {
+  return executar(async () => {
+    await exigirEscrita("medicoes");
+    const d = lancamentoAvulsoSchema.parse(dados);
+    const supabase = await createClient();
+    // um item: quantidade × unitário nas colunas da fatura (editável depois); vários: ficam em itens e a fatura vale 1 × a soma
+    const [primeiro] = d.itens;
+    const varios = d.itens.length > 1;
+    const placas = new Set(d.itens.map((i) => i.veiculo_id ?? null));
+    const ids = [...placas].filter((x): x is string => !!x);
+    const { data: veics } = ids.length ? await supabase.from("veiculos").select("id, placa").in("id", ids) : { data: [] };
+    const itens: ItemAvulsoSalvo[] = d.itens.map((i) => ({ ...i, placa: veics?.find((v) => v.id === i.veiculo_id)?.placa ?? null }));
+    const cabecalho = varios
+      ? { descricao: d.itens.map((i) => i.descricao).join("; ").slice(0, 500), veiculo_id: placas.size === 1 ? primeiro.veiculo_id ?? null : null,
+          dias: 1, unidade: null, valor_mensal: somar(d.itens.map((i) => Math.round(i.quantidade * i.valor_unitario * 100) / 100)), itens }
+      : { descricao: primeiro.descricao, veiculo_id: primeiro.veiculo_id ?? null, dias: primeiro.quantidade, unidade: primeiro.unidade, valor_mensal: primeiro.valor_unitario };
+    const nova = checar(await supabase.from("medicoes").insert({
+      contrato_id: null, cliente_id: d.cliente_id, empresa_id: d.empresa_id, ...cabecalho,
+      periodo_inicio: d.periodo_inicio, periodo_fim: d.periodo_fim,
+      acrescimos: d.acrescimos, descontos: d.descontos, observacoes: d.observacoes ?? null, data_vencimento: d.data_vencimento,
+      acrescimos_itens: d.acrescimos > 0 ? [{ descricao: "Acréscimos", valor: d.acrescimos }] : [],
+      descontos_itens: d.descontos > 0 ? [{ descricao: "Descontos", valor: d.descontos }] : [],
+      forma_pagamento: d.forma_pagamento,
+    }).select("id").single());
     return { id: nova!.id, competencia: d.periodo_fim.slice(0, 7) };
   }, REVALIDAR, "Fatura lançada");
 }
@@ -325,7 +354,7 @@ export async function dadosLembrete(ids: unknown) {
     return (meds ?? []).map((m): LinhaLembrete => {
       const cs = (contatos ?? []).filter((c) => c.cliente_id === m.cliente_id && (!c.obra_id || c.obra_id === m.obra_id));
       return {
-        id: m.id!, empresa: m.empresa_apelido!, cliente: m.cliente_fantasia!, obra: m.obra_nome, placa: m.placa!,
+        id: m.id!, empresa: m.empresa_apelido!, cliente: m.cliente_fantasia!, obra: m.obra_nome, placa: m.placa ?? "",
         periodo_inicio: m.periodo_inicio!, periodo_fim: m.periodo_fim!, dias: m.dias!, valor_final: Number(m.valor_final), numero_nf: m.numero_nf,
         data_emissao: m.data_emissao, data_vencimento: m.data_vencimento, status: m.status_exibicao!, observacoes: m.observacoes,
         contatos: cs.map((c) => [c.nome, c.email, c.whatsapp].filter(Boolean).join(" · ")).join(" | "),

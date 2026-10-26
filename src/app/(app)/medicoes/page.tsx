@@ -26,7 +26,7 @@ export default function MedicoesPage() {
     let q = supabase.from("medicoes_v").select(`id, contrato_id, empresa_id, empresa_apelido, periodo_inicio, periodo_fim, competencia, dias, valor_mensal,
       valor_base, acrescimos, descontos, valor_final, numero_nf, data_emissao, data_vencimento, status, status_exibicao, observacoes, final,
       cliente_id, cliente_fantasia, obra_nome, placa, proprietario, prazo_pagamento_dias, dia_corte_inicio, valor_recebido, repasse_liquido, margem,
-      contrato_numero, cliente_nome, veiculo_tipo, saldo, tipo_cobranca, forma_pagamento, acrescimos_itens, descontos_itens`, { count: "exact" });
+      contrato_numero, cliente_nome, veiculo_tipo, saldo, tipo_cobranca, forma_pagamento, acrescimos_itens, descontos_itens, descricao, unidade, itens`, { count: "exact" });
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     // "todas" = pendentes de qualquer mês; "historico" = tudo, de todos os meses e status (inclusive canceladas)
     const historico = comp === "historico";
@@ -44,11 +44,15 @@ export default function MedicoesPage() {
     // placas de todos os contratos (inclusive antigos), para o filtro do histórico
     let qp = supabase.from("contratos").select("veiculos(placa)");
     if (s.empresaId) qp = qp.eq("empresa_id", s.empresaId);
-    const [{ data: linhas, count }, { data: clientes }, { data: contratos }, { data: placas }] = await Promise.all([
+    // placas para a fatura avulsa
+    let qv = supabase.from("veiculos").select("id, placa, tipo").neq("status", "vendido").order("placa");
+    if (s.empresaId) qv = qv.eq("empresa_id", s.empresaId);
+    const [{ data: linhas, count }, { data: clientes }, { data: contratos }, { data: placas }, { data: veiculos }] = await Promise.all([
       (historico ? q.order("periodo_inicio", { ascending: false }).order("placa") : q.order("empresa_apelido").order("cliente_fantasia").order("placa").order("periodo_inicio")).range(p.de, p.ate),
       supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("ativo", true).order("nome_fantasia"),
       qc,
       qp,
+      qv,
     ]);
 
     return {
@@ -65,6 +69,9 @@ export default function MedicoesPage() {
       })).sort((a, b) => a.label.localeCompare(b.label)),
       placas: [...new Set((placas ?? []).map((c) => c.veiculos?.placa).filter((x): x is string => !!x))].sort()
         .map((pl) => ({ value: pl, label: formatPlaca(pl) })),
+      veiculos: (veiculos ?? []).map((v) => ({ value: v.id, label: formatPlaca(v.placa) })),
+      empresas: s.empresas.map((e) => ({ value: e.id, label: e.apelido })),
+      empresaPadrao: s.empresaId,
       baseDias: Number(cfg.base_dias_mes) || 30,
       podeEditar: podeEscrever(s.perfil, "medicoes"),
     };

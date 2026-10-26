@@ -68,7 +68,8 @@ const itensFatura = (nome: string) => z.array(z.object({
 /** Edição na grade de medições (estilo planilha) */
 export const edicaoMedicaoSchema = z.object({
   id: z.string().uuid(),
-  dias: z.number().int().min(0).max(31).optional(),
+  /** até 31 com contrato (o banco confere); fatura avulsa usa como quantidade */
+  dias: z.number().int().min(0).max(99_999).optional(),
   /** valor mensal (ou da diária) desta medição; o contrato só dá o valor inicial */
   valor_mensal: z.number().min(0).max(999_999_999).optional(),
   acrescimos: z.number().min(0).optional(),
@@ -100,6 +101,50 @@ export const lancamentoMedicaoSchema = z.object({
   observacoes: z.string().trim().max(1000).nullable().optional(),
 }).refine((d) => d.periodo_fim >= d.periodo_inicio, { message: "O fim do período deve ser depois do início", path: ["periodo_fim"] });
 export type LancamentoMedicao = z.input<typeof lancamentoMedicaoSchema>;
+
+/** Unidade da quantidade na fatura avulsa (espelho do check em medicoes.unidade) */
+export const UNIDADES_AVULSA = { mes: "Mês", semana: "Semana", dia: "Diária", hora: "Hora" } as const;
+export type UnidadeAvulsa = keyof typeof UNIDADES_AVULSA;
+
+/** "3 meses", "1 semana", "8 h"; sem unidade (fatura antiga) só o número */
+export function formatQuantidadeAvulsa(qtd: number, unidade: string | null | undefined): string {
+  const plural = qtd === 1 ? 0 : 1;
+  switch (unidade) {
+    case "mes": return `${qtd} ${["mês", "meses"][plural]}`;
+    case "semana": return `${qtd} ${["semana", "semanas"][plural]}`;
+    case "dia": return `${qtd} ${["diária", "diárias"][plural]}`;
+    case "hora": return `${qtd} h`;
+    default: return String(qtd);
+  }
+}
+
+/** Item da fatura avulsa: descrição, placa opcional, quantidade × valor unitário (espelho de medicoes.itens) */
+export const itemAvulsoSchema = z.object({
+  descricao: z.string({ required_error: "Descreva o serviço" }).trim().min(1, "Descreva o serviço de cada item").max(500),
+  /** placa opcional (sem repasse) */
+  veiculo_id: uuidOpc,
+  quantidade: z.number().int().min(1, "Quantidade deve ser ao menos 1").max(99_999),
+  unidade: z.enum(["mes", "semana", "dia", "hora"], { required_error: "Escolha a unidade" }),
+  valor_unitario: z.number({ invalid_type_error: "Informe o valor" }).positive("Informe o valor de cada item").max(999_999_999),
+});
+export type ItemAvulso = z.infer<typeof itemAvulsoSchema>;
+/** como fica em medicoes.itens: com a placa copiada (para a fatura, a NF e a tela sem precisar do veículo) */
+export type ItemAvulsoSalvo = ItemAvulso & { placa: string | null };
+
+/** Fatura avulsa: sem contrato, direto para o cliente; valor = soma (valor unitário × quantidade) dos itens + acréscimos − descontos. */
+export const lancamentoAvulsoSchema = z.object({
+  empresa_id: uuidObr("a empresa"),
+  cliente_id: uuidObr("o cliente"),
+  itens: z.array(itemAvulsoSchema).min(1, "Inclua ao menos um item").max(50),
+  periodo_inicio: dataObr("a data"),
+  periodo_fim: dataObr("o fim do período"),
+  acrescimos: z.number().min(0).default(0),
+  descontos: z.number().min(0).default(0),
+  data_vencimento: dataOpc,
+  forma_pagamento: z.enum(["boleto", "pix"]).default("boleto"),
+  observacoes: z.string().trim().max(1000).nullable().optional(),
+}).refine((d) => d.periodo_fim >= d.periodo_inicio, { message: "O fim do período deve ser depois do início", path: ["periodo_fim"] });
+export type LancamentoAvulso = z.input<typeof lancamentoAvulsoSchema>;
 
 export const recebimentoSchema = z.object({
   medicao_id: z.string().uuid(),

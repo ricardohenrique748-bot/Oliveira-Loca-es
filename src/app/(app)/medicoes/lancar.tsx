@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,25 +9,52 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { Moeda } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
-import { baseCobranca, cobrancaAvulsa, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde } from "@/lib/calculos";
+import { baseCobranca, cobrancaAvulsa, diffDias, hojeSP, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde, somar } from "@/lib/calculos";
 import { formatPeriodo, formatPlaca } from "@/lib/format";
-import { FORMAS_FATURA, type FormaFatura } from "@/lib/schemas/operacao";
-import { dadosLancamento, lancarMedicao, type ContratoLancamento } from "./actions";
+import { FORMAS_FATURA, UNIDADES_AVULSA, type FormaFatura, type UnidadeAvulsa } from "@/lib/schemas/operacao";
+import { dadosLancamento, lancarFaturaAvulsa, lancarMedicao, type ContratoLancamento } from "./actions";
 
 const OPCOES_FORMA: Opcao[] = Object.entries(FORMAS_FATURA).map(([value, label]) => ({ value, label }));
+const OPCOES_UNIDADE: Opcao[] = Object.entries(UNIDADES_AVULSA).map(([value, label]) => ({ value, label }));
+const VALOR_POR: Record<UnidadeAvulsa, string> = { mes: "Valor por mês", semana: "Valor por semana", dia: "Valor da diária", hora: "Valor da hora" };
+
+/** Linha da fatura avulsa na tela; qtdManual = quantidade digitada (não segue mais o período) */
+type ItemTela = { descricao: string; veiculo: string | null; quantidade: number; unidade: UnidadeAvulsa; qtdManual: boolean; valorUnitario: number };
+const ITEM_NOVO: ItemTela = { descricao: "", veiculo: null, quantidade: 1, unidade: "mes", qtdManual: false, valorUnitario: 0 };
+const subtotal = (i: ItemTela) => calcularValorMedicao({ valorMensal: i.valorUnitario, dias: i.quantidade, acrescimos: 0, descontos: 0, baseDias: 1 }).valorBase;
+
+/** Quantidade sugerida pelo período (hora: digitada, sem sugestão). */
+function quantidadePeriodo(unidade: UnidadeAvulsa, inicio: string, fim: string): number | null {
+  if (unidade === "hora" || !inicio || !fim || fim < inicio) return null;
+  const dias = diffDias(inicio, fim) + 1;
+  return unidade === "dia" ? dias : unidade === "semana" ? Math.ceil(dias / 7) : Math.max(1, Math.round(dias / 30));
+}
 
 /**
  * Lançamento manual de medição: escolhe o contrato (ou vem fixo) e o período.
  * Sugere o mês seguinte à última medição; dias e valor são recalculados ao mudar o período.
+ * Sem contrato (fatura avulsa): cliente e um ou mais itens (descrição, placa, quantidade × valor unitário).
  */
-export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contratoId, baseDias, onLancado }: {
+export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contratoId, clientes, veiculos, empresas, empresaPadrao, baseDias, onLancado }: {
   aberto: boolean; onOpenChange: (v: boolean) => void;
   /** opções de contrato (quando não vem fixo) */
   contratos?: Opcao[];
   contratoId?: string;
+  /** clientes e empresas da fatura avulsa (sem eles, só com contrato) */
+  clientes?: Opcao[];
+  /** placas (opcional na avulsa) */
+  veiculos?: Opcao[];
+  empresas?: Opcao[];
+  empresaPadrao?: string | null;
   baseDias: number;
   onLancado: (competencia: string) => void;
 }) {
+  const podeAvulsa = !contratoId && !!clientes && !!empresas?.length;
+  const [semContrato, setSemContrato] = React.useState(false);
+  const [empresa, setEmpresa] = React.useState<string | null>(null);
+  const [cliente, setCliente] = React.useState<string | null>(null);
+  const [itens, setItens] = React.useState<ItemTela[]>([ITEM_NOVO]);
+  const [vencimento, setVencimento] = React.useState("");
   const [contrato, setContrato] = React.useState<string | null>(contratoId ?? null);
   const [info, setInfo] = React.useState<ContratoLancamento | null>(null);
   const [inicio, setInicio] = React.useState("");
@@ -39,11 +66,24 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   const [observacoes, setObservacoes] = React.useState("");
   const [forma, setForma] = React.useState<FormaFatura>("boleto");
   const [carregando, setCarregando] = React.useState(false);
+  // incrementa para recarregar a sugestão do contrato ao reabrir
+  const [recarga, setRecarga] = React.useState(0);
+
+  const limpar = React.useCallback(() => {
+    setContrato(contratoId ?? null); setInfo(null); setAcrescimos(0); setDescontos(0); setObservacoes(""); setForma("boleto"); setDiasManual(false);
+    setRecarga((n) => n + 1);
+    // avulsa: mantém o modo e a empresa; o resto volta ao padrão
+    setCliente(null); setItens([ITEM_NOVO]); setVencimento("");
+    const hoje = hojeSP(); setInicio(hoje); setFim(hoje);
+  }, [contratoId]);
 
   React.useEffect(() => {
-    if (!aberto) return;
-    setContrato(contratoId ?? null); setInfo(null); setAcrescimos(0); setDescontos(0); setObservacoes(""); setForma("boleto"); setDiasManual(false);
-  }, [aberto, contratoId]);
+    if (aberto) { setSemContrato(false); setEmpresa(empresaPadrao ?? (empresas?.length === 1 ? empresas[0].value : null)); }
+  }, [aberto, empresaPadrao, empresas]);
+
+  React.useEffect(() => {
+    if (aberto) limpar();
+  }, [aberto, limpar]);
 
   React.useEffect(() => {
     if (!aberto || !contrato) return;
@@ -56,7 +96,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
       setInfo(r.dados); setInicio(r.dados.sugestao.inicio); setFim(r.dados.sugestao.fim); setDiasManual(false);
     });
     return () => { vivo = false; };
-  }, [aberto, contrato]);
+  }, [aberto, contrato, recarga]);
 
   // dias automáticos a partir do período (até o usuário editar à mão)
   React.useEffect(() => {
@@ -66,11 +106,27 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     setDias(info.tipo_cobranca === "hora" ? 0 : info.tipo_cobranca === "diaria" ? calcularDiasCorridos(entrada) : calcularDiasPeriodoLivre(entrada));
   }, [info, inicio, fim, diasManual, baseDias]);
 
+  // avulsa: quantidade sugerida pelo período e unidade de cada item (até o usuário editar à mão)
+  const sugerir = React.useCallback((i: ItemTela): ItemTela => {
+    if (i.qtdManual) return i;
+    const q = quantidadePeriodo(i.unidade, inicio, fim);
+    return q == null || q === i.quantidade ? i : { ...i, quantidade: Math.min(99_999, q) };
+  }, [inicio, fim]);
+  React.useEffect(() => {
+    setItens((lista) => { const nova = lista.map(sugerir); return nova.some((i, k) => i !== lista[k]) ? nova : lista; });
+  }, [sugerir]);
+  const editarItem = (k: number, campos: Partial<ItemTela>) => setItens((lista) => lista.map((i, j) => (j === k ? sugerir({ ...i, ...campos }) : i)));
+
+  const totalItens = somar(itens.map(subtotal));
+  const valorAvulsa = Math.max(0, somar([totalItens, acrescimos, -descontos]));
+  const invalidoAvulsa = !empresa || !cliente || !inicio || !fim || fim < inicio
+    || itens.some((i) => !i.descricao.trim() || i.quantidade < 1 || i.valorUnitario <= 0);
   const valor = info ? calcularValorMedicao({ valorMensal: info.valor_mensal, dias, acrescimos, descontos, baseDias: baseCobranca(info.tipo_cobranca, baseDias) }).valorFinal : 0;
   const avulsa = cobrancaAvulsa(info?.tipo_cobranca);
   const invalido = !info || !inicio || !fim || fim < inicio || dias < 1;
 
   const lancar = async () => {
+    if (semContrato) return lancarAvulsa();
     if (!info) return;
     setCarregando(true);
     const r = await lancarMedicao({ contrato_id: info.id, periodo_inicio: inicio, periodo_fim: fim, dias, acrescimos, descontos, forma_pagamento: forma, observacoes: observacoes || null });
@@ -81,13 +137,126 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     onLancado(r.dados.competencia);
   };
 
+  const lancarAvulsa = async () => {
+    setCarregando(true);
+    const r = await lancarFaturaAvulsa({
+      empresa_id: empresa, cliente_id: cliente, periodo_inicio: inicio, periodo_fim: fim,
+      itens: itens.map((i) => ({ descricao: i.descricao, veiculo_id: i.veiculo, quantidade: i.quantidade, unidade: i.unidade, valor_unitario: i.valorUnitario })),
+      acrescimos, descontos, data_vencimento: vencimento || null, forma_pagamento: forma, observacoes: observacoes || null,
+    });
+    setCarregando(false);
+    if (!r.ok) return toast.error(r.erro);
+    toast.success(`Fatura avulsa lançada (${clientes?.find((c) => c.value === cliente)?.label ?? ""})`);
+    onOpenChange(false);
+    onLancado(r.dados.competencia);
+  };
+  const bloqueado = semContrato ? invalidoAvulsa : invalido;
+
   return (
     <Dialog open={aberto} onOpenChange={onOpenChange}>
-      <DialogContent tamanho="md">
+      <DialogContent tamanho={semContrato ? "lg" : "md"}>
         <DialogHeader>
           <DialogTitle>Lançar fatura</DialogTitle>
-          <DialogDescription>Escolha o contrato e o período. O sistema sugere o mês seguinte à última fatura do contrato; dias e valor são calculados automaticamente.</DialogDescription>
+          <DialogDescription>{semContrato
+            ? "Fatura direto para o cliente, sem contrato. Inclua um ou mais itens: descreva o serviço, escolha a placa se houver e informe a quantidade (por mês, semana, diária ou hora) e o valor."
+            : "Escolha o contrato e o período. O sistema sugere o mês seguinte à última fatura do contrato; dias e valor são calculados automaticamente."}</DialogDescription>
         </DialogHeader>
+        {podeAvulsa && (
+          <div className="flex gap-1 rounded-md bg-muted p-1" role="group" aria-label="Tipo de fatura">
+            <Button size="sm" className="flex-1" variant={semContrato ? "ghost" : "default"} aria-pressed={!semContrato} onClick={() => setSemContrato(false)}>Com contrato</Button>
+            <Button size="sm" className="flex-1" variant={semContrato ? "default" : "ghost"} aria-pressed={semContrato} onClick={() => setSemContrato(true)}>Sem contrato (avulsa)</Button>
+          </div>
+        )}
+        {semContrato ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              {(empresas?.length ?? 0) > 1 && (
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="avulsa-empresa">Empresa</Label>
+                  <SelectSimples id="avulsa-empresa" value={empresa} onChange={setEmpresa} opcoes={empresas ?? []} placeholder="Selecione a empresa…" />
+                </div>
+              )}
+              <div className="col-span-2 space-y-1.5">
+                <Label htmlFor="avulsa-cliente">Cliente</Label>
+                <SelectSimples id="avulsa-cliente" value={cliente} onChange={setCliente} opcoes={clientes ?? []} placeholder="Selecione o cliente…" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="avulsa-inicio">Início</Label>
+                <Input id="avulsa-inicio" type="date" value={inicio} onChange={(e) => { setInicio(e.target.value); if (!fim || fim < e.target.value) setFim(e.target.value); }} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="avulsa-fim">Fim</Label>
+                <Input id="avulsa-fim" type="date" value={fim} min={inicio} onChange={(e) => setFim(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Itens da fatura</Label>
+                <span className="text-sm text-muted-foreground">{itens.length} {itens.length === 1 ? "item" : "itens"} · <Moeda valor={totalItens} /></span>
+              </div>
+              {itens.map((it, k) => (
+                <div key={k} className="space-y-2 rounded-md border p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 shrink-0 text-xs font-medium text-muted-foreground">{k + 1}.</span>
+                    <Input aria-label={`Descrição do item ${k + 1}`} className="flex-1" value={it.descricao} maxLength={500}
+                      placeholder="Ex.: frete de máquina, serviço de munck…" onChange={(e) => editarItem(k, { descricao: e.target.value })} />
+                    {itens.length > 1 && <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" aria-label={`Remover item ${k + 1}`}
+                      onClick={() => setItens((lista) => lista.filter((_, j) => j !== k))}><Trash2 /></Button>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1.3fr_1fr_auto] sm:items-end">
+                    <div className="space-y-1">
+                      <Label htmlFor={`avulsa-placa-${k}`} className="text-xs">Placa <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                      <SelectSimples id={`avulsa-placa-${k}`} value={it.veiculo} onChange={(v) => editarItem(k, { veiculo: v })} opcoes={veiculos ?? []} vazio="Sem placa" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`avulsa-qtd-${k}`} className="text-xs">Quantidade</Label>
+                      <div className="flex gap-2">
+                        <InputNumero id={`avulsa-qtd-${k}`} className="w-16 shrink-0" value={it.quantidade}
+                          onChange={(v) => editarItem(k, { quantidade: Math.max(0, Math.min(99_999, v ?? 0)), qtdManual: true })} />
+                        <SelectSimples aria-label={`Unidade do item ${k + 1}`} className="min-w-0 flex-1" value={it.unidade}
+                          onChange={(v) => editarItem(k, { unidade: (v as UnidadeAvulsa | null) ?? "mes", qtdManual: false })} opcoes={OPCOES_UNIDADE} />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`avulsa-valor-${k}`} className="text-xs">{VALOR_POR[it.unidade]}</Label>
+                      <InputMoeda id={`avulsa-valor-${k}`} permitirVazio={false} value={it.valorUnitario} onChange={(v) => editarItem(k, { valorUnitario: v ?? 0 })} />
+                    </div>
+                    <p className="pb-2 text-right text-sm font-semibold sm:min-w-24"><Moeda valor={subtotal(it)} /></p>
+                  </div>
+                </div>
+              ))}
+              <Button size="sm" variant="outline" onClick={() => setItens((lista) => [...lista, sugerir({ ...ITEM_NOVO, unidade: lista[lista.length - 1]?.unidade ?? "mes" })])}>
+                <Plus /> Adicionar item
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="avulsa-acr">Acréscimos</Label>
+                <InputMoeda id="avulsa-acr" permitirVazio={false} value={acrescimos} onChange={(v) => setAcrescimos(v ?? 0)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="avulsa-desc">Descontos</Label>
+                <InputMoeda id="avulsa-desc" permitirVazio={false} value={descontos} onChange={(v) => setDescontos(v ?? 0)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="avulsa-forma">Condição de pagamento</Label>
+                <SelectSimples id="avulsa-forma" value={forma} onChange={(v) => setForma((v as FormaFatura | null) ?? "boleto")} opcoes={OPCOES_FORMA} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="avulsa-venc">Vencimento <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                <Input id="avulsa-venc" type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="avulsa-obs">Observações</Label>
+              <Input id="avulsa-obs" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-md bg-muted p-3 text-sm">
+              <span className="text-muted-foreground">Valor = soma dos itens (valor × quantidade) + acréscimos − descontos</span>
+              <span className="text-lg font-semibold"><Moeda valor={valorAvulsa} /></span>
+            </div>
+          </div>
+        ) : (
         <div className="space-y-4">
           {!contratoId && (
             <div className="space-y-1.5">
@@ -153,9 +322,10 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
               : <>Mês cheio conta {baseDias} dias. Valor = (mensal ÷ {baseDias}) × dias + acréscimos − descontos.</>}</p>
           </>}
         </div>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          <Button disabled={invalido || carregando} onClick={lancar}>{carregando && info ? <Loader2 className="animate-spin" /> : <Plus />} Lançar fatura</Button>
+          <Button disabled={bloqueado || carregando} onClick={lancar}>{carregando && (info || semContrato) ? <Loader2 className="animate-spin" /> : <Plus />} Lançar fatura</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

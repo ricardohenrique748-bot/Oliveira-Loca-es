@@ -25,6 +25,9 @@ export async function criarContaPagar(dados: unknown) {
       const grupo = crypto.randomUUID();
       linhas = gerarParcelas({ descricao: c.descricao, valor: c.valor, modo: modo_valor, total: parcelas!, inicio: parcela_inicial ?? 1, primeiroVencimento: c.vencimento })
         .map((p) => ({ ...comum, descricao: p.descricao, vencimento: p.vencimento, valor: p.valor, parcela_num: p.parcelaNum, parcela_total: p.parcelaTotal, grupo_parcela_id: grupo }));
+      // vários boletos: um por parcela, na ordem (1º boleto → 1ª parcela gerada); um só (carnê) vai em todas
+      const boletos = (c.anexo_url ?? "").split("\n").map((r) => r.trim()).filter(Boolean);
+      if (boletos.length > 1) linhas = linhas.map((l, i) => ({ ...l, anexo_url: boletos[i] ?? null }));
     } else if (repeticao === "recorrente") {
       const grupo = crypto.randomUUID();
       const venc = [c.vencimento, ...vencimentosRecorrentesFaltantes({ vencimentoBase: c.vencimento, existentes: [c.vencimento], hoje: hojeSP() })];
