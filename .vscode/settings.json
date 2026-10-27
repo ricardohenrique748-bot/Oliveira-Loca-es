@@ -1,0 +1,9 @@
+{
+  // Gradle 8.14 (exigido pelo Android Gradle Plugin 8.13) não roda no Java 25 que vem com a extensão Java
+  "java.import.gradle.java.home": "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.101-hotspot",
+  "java.import.gradle.wrapper.enabled": true,
+  // o único projeto Gradle é android/; os de node_modules/@capacitor/* não são projetos soltos
+  // (abertos sozinhos usam o Gradle 9 da extensão e falham pelo "ç" do caminho)
+  "gradle.nestedProjects": ["android"],
+  "java.import.exclusions": ["**/node_modules/**", "**/.metadata/**", "**/archetype-resources/**", "**/META-INF/maven/**"]
+}
