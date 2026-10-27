@@ -66,17 +66,22 @@ export async function editarContaPagar(id: string, dados: unknown) {
       const ehParcelada = atual.parcela_total != null;
       // anexo só se propaga quando foi alterado, para não sobrescrever o boleto próprio de cada parcela
       const anexoMudou = (c.anexo_url ?? null) !== (atual.anexo_url ?? null);
+      // vários boletos na parcela (ainda não paga): um por parcela, na ordem, desta em diante (como na criação);
+      // assim dá para anexar todos na 1ª e espalhar depois
+      const boletos = (c.anexo_url ?? "").split("\n").map((r) => r.trim()).filter(Boolean);
+      const distribuir = ehParcelada && !atual.pago_em && boletos.length > 1;
       const plano = planejarEdicaoParcelas(lista, alvo.parcelaNum, {
         valor: c.valor !== atual.valor ? c.valor : undefined,
         vencimento: c.vencimento !== atual.vencimento ? c.vencimento : undefined,
         descricao: c.descricao !== atual.descricao ? c.descricao : undefined,
       }, "seguintes");
-      for (const p of plano) {
+      for (const [k, p] of plano.entries()) {
         const alt: TablesUpdate<"contas_pagar"> = { ...comuns };
         if (p.alteracoes.valor !== undefined) alt.valor = p.alteracoes.valor;
         if (p.alteracoes.vencimento) alt.vencimento = p.alteracoes.vencimento;
         if (p.alteracoes.descricao) alt.descricao = ehParcelada ? p.alteracoes.descricao : c.descricao;
-        if (p.id === id || anexoMudou) alt.anexo_url = c.anexo_url;
+        if (distribuir) { if (boletos[k]) alt.anexo_url = boletos[k]; }
+        else if (p.id === id || anexoMudou) alt.anexo_url = c.anexo_url;
         checar(await supabase.from("contas_pagar").update(alt).eq("id", p.id));
       }
       return { alteradas: plano.length };

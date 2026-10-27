@@ -117,7 +117,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
     ) },
     { accessorKey: "empresa_apelido", header: "Empresa" },
     { id: "placa", header: "Placa", cell: ({ row: { original: c } }) => c.placa ? (
-      <span><span className="font-mono">{formatPlaca(c.placa)}</span>{c.descontar_locador && <Badge variant="info" className="ml-1" title="Descontar do locador"><UserMinus className="h-3 w-3" /> Locador</Badge>}</span>
+      <span className="whitespace-nowrap"><span className="font-mono">{formatPlaca(c.placa)}</span>{c.descontar_locador && <Badge variant="info" className="ml-1" title="Descontar do locador"><UserMinus className="h-3 w-3" /> Locador</Badge>}</span>
     ) : <span className="text-muted-foreground">Fixa</span> },
     { id: "pagamento", header: "Forma / banco", cell: ({ row: { original: c } }) => <span className="text-sm">{FORMAS[c.forma_pagamento]}<span className="block text-xs text-muted-foreground">{c.conta_apelido ?? c.banco ?? "—"}</span></span> },
     { accessorKey: "valor", header: "Valor", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number} className="font-semibold" />, footer: () => <Moeda valor={somar(linhas.map((l) => l.valor))} /> },
@@ -179,7 +179,8 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
         </div>
       </BarraFiltros>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_18rem]">
+      {/* tabela com a largura toda; os totais ficam ao lado só em tela bem larga (senão cortava a tabela) */}
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 space-y-3">
           {visao === "calendario" && <Calendario mes={mes} linhas={linhas} diaSel={diaSel} onDia={(d) => setDiaSel(d === diaSel ? null : d)} />}
           {diaSel && <p className="text-sm">Mostrando <strong>{formatData(diaSel)}</strong> · <button className="underline" onClick={() => setDiaSel(null)}>ver mês todo</button></p>}
@@ -201,7 +202,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
               { titulo: "Descontar locador", valor: (c) => (c.descontar_locador ? "Sim" : "Não") }, { titulo: "Status", valor: (c) => c.status },
             ] }} />
         </div>
-        <aside className="space-y-4">
+        <aside className="grid content-start gap-4 md:grid-cols-2 2xl:grid-cols-1">
           <Card>
             <CardHeader><CardTitle className="text-base">Em aberto por conta</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
