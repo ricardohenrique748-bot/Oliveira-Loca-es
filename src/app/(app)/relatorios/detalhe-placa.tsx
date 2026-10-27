@@ -1,7 +1,8 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Badge, Table, TableBody, TableCell, TableRow } from "@/components/ui/basicos";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/overlays";
 import { Moeda } from "@/components/app/comuns";
@@ -10,7 +11,7 @@ import { somar } from "@/lib/calculos";
 import { formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import type { ItemAvulsoSalvo } from "@/lib/schemas/operacao";
 
-type Lancamento = { data: string; descricao: string; detalhe?: string | null; valor: number; href?: string; fora?: string };
+type Lancamento = { id?: string; data: string; descricao: string; detalhe?: string | null; valor: number; href?: string; fora?: string };
 type Grupo = { titulo: string; sinal: 1 | -1; linhas: Lancamento[] };
 /** linha de medicoes_v (as colunas da view vêm como anuláveis nos tipos gerados) */
 type FaturaV = { periodo_inicio: string; periodo_fim: string; valor_final: number; valor_base?: number; cliente_fantasia: string | null;
@@ -62,8 +63,8 @@ async function carregar(veiculoId: string, placa: string, ini: string, fim: stri
 
   return [
     { titulo: "Receita", sinal: 1, linhas: receitas },
-    { titulo: "Repasse ao locador", sinal: -1, linhas: (rep.data ?? []).map((r) => ({
-      data: r.periodo_fim ?? "", descricao: r.locador_nome ?? "Locador", detalhe: r.periodo_inicio && r.periodo_fim ? formatPeriodo(r.periodo_inicio, r.periodo_fim) : null,
+    { titulo: RECIBO, sinal: -1, linhas: (rep.data ?? []).map((r) => ({
+      id: r.id ?? undefined, data: r.periodo_fim ?? "", descricao: r.locador_nome ?? "Locador", detalhe: r.periodo_inicio && r.periodo_fim ? formatPeriodo(r.periodo_inicio, r.periodo_fim) : null,
       valor: r.valor_bruto ?? 0, href: "/repasses" })) },
     { titulo: "Manutenção (OS fechadas)", sinal: -1, linhas: (os.data ?? []).map((o) => ({
       data: o.data_fechamento!, descricao: `OS ${o.numero}${o.descricao_problema ? ` · ${o.descricao_problema}` : ""}`, detalhe: o.fornecedores?.nome ?? "Própria",
@@ -74,10 +75,14 @@ async function carregar(veiculoId: string, placa: string, ini: string, fim: stri
   ].map((g) => ({ ...g, linhas: g.linhas.sort((a, b) => a.data.localeCompare(b.data)) })) as Grupo[];
 }
 
+const RECIBO = "Repasse ao locador";
+
 /** Ao clicar na placa do DRE: tudo o que foi lançado para ela no período. */
-export function DetalhePlaca({ placa, onOpenChange, ini, fim, empresaId, periodo }: {
+export function DetalhePlaca({ placa, onOpenChange, ini, fim, empresaId, periodo, onRecibo }: {
   placa: { veiculoId: string; placa: string } | null; onOpenChange: (v: boolean) => void;
   ini: string; fim: string; empresaId: string | null; periodo: string;
+  /** abre o recibo do repasse (com acréscimos e descontos só do recibo) */
+  onRecibo: (placa: { veiculoId: string; placa: string }) => void;
 }) {
   const [grupos, setGrupos] = React.useState<Grupo[] | null>(null);
   const [erro, setErro] = React.useState<string | null>(null);
@@ -106,9 +111,15 @@ export function DetalhePlaca({ placa, onOpenChange, ini, fim, empresaId, periodo
           <div className="max-h-[65vh] space-y-4 overflow-y-auto">
             {grupos.map((g) => (
               <div key={g.titulo} className="space-y-1">
-                <div className="flex items-center justify-between text-sm font-semibold">
+                <div className="flex items-center justify-between gap-2 text-sm font-semibold">
                   <span>{g.titulo} <span className="font-normal text-muted-foreground">({g.linhas.length})</span></span>
-                  <Moeda valor={g.sinal * total(g)} sinal />
+                  <span className="flex items-center gap-3">
+                    {/* recibo para o locador assinar: só o repasse, sem receita nem margem */}
+                    {g.titulo === RECIBO && g.linhas.length > 0 && (
+                      <Button size="xs" variant="outline" onClick={() => placa && onRecibo(placa)}><FileText /> Recibo do repasse (PDF)</Button>
+                    )}
+                    <Moeda valor={g.sinal * total(g)} sinal />
+                  </span>
                 </div>
                 {g.linhas.length === 0 ? <p className="text-sm text-muted-foreground">Nada lançado no período.</p> : (
                   <div className="rounded-md border">

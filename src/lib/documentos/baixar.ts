@@ -6,6 +6,9 @@ import { montarContrato, type DadosContrato } from "./contrato";
 import { montarFatura, type DadosFatura } from "./fatura";
 import { montarProposta, type DadosProposta } from "./proposta";
 import { baixarDocumentoPDF } from "./pdf";
+import { montarReciboRepasse, type DadosReciboRepasse } from "./recibo-repasse";
+export type { ItemRecibo } from "./recibo-repasse";
+import { hojeSP } from "@/lib/calculos";
 
 const EMPRESA = "razao_social, cnpj, endereco, cidade, uf, contato_nome, telefone, email";
 const CLIENTE = "razao_social, nome_fantasia, cnpj, endereco, cidade, uf, email";
@@ -90,5 +93,32 @@ export function baixarFaturaPDF(id: string, baseDias: number) {
       empresa: m.empresas, cliente,
     };
     return montarFatura(dados);
+  });
+}
+
+/** Recibo para o locador assinar: os repasses escolhidos (mesma placa), com os abatimentos de cada um. */
+export function baixarReciboRepassePDF(ids: string[], ajustes?: DadosReciboRepasse["ajustes"]) {
+  return gerar(async () => {
+    const supabase = createClient();
+    const { data: rs, error } = await supabase.from("repasses_v")
+      .select("id, placa, locador_id, empresa_id, periodo_inicio, periodo_fim, dias, valor_bruto, valor_liquido").in("id", ids);
+    if (error) throw error;
+    const [r0] = rs ?? [];
+    if (!r0?.locador_id || !r0.empresa_id) return null;
+    const [loc, emp, abat] = await Promise.all([
+      supabase.from("locadores").select("nome, cpf_cnpj, chave_pix, tipo_chave_pix, banco, nome_titular_pix").eq("id", r0.locador_id).maybeSingle(),
+      supabase.from("empresas").select(EMPRESA).eq("id", r0.empresa_id).maybeSingle(),
+      supabase.from("repasse_abatimentos").select("repasse_id, descricao, valor").in("repasse_id", ids),
+    ]);
+    for (const x of [loc, emp, abat]) if (x.error) throw x.error;
+    if (!loc.data || !emp.data) return null;
+    const dados: DadosReciboRepasse = {
+      placa: r0.placa ?? "", empresa: emp.data, locador: loc.data as DadosReciboRepasse["locador"], data: hojeSP(), ajustes,
+      repasses: (rs ?? []).map((r) => ({
+        periodo_inicio: r.periodo_inicio!, periodo_fim: r.periodo_fim!, dias: r.dias, valor_bruto: r.valor_bruto ?? 0, valor_liquido: r.valor_liquido ?? 0,
+        abatimentos: (abat.data ?? []).filter((a) => a.repasse_id === r.id).map((a) => ({ descricao: a.descricao, valor: a.valor })),
+      })),
+    };
+    return montarReciboRepasse(dados);
   });
 }

@@ -3,6 +3,7 @@ import { montarContrato } from "./contrato";
 import { contrato, propostaCaminhao, propostaGuindaste } from "./fixtures";
 import { descricaoEquipamento, montarProposta } from "./proposta";
 import { montarFatura } from "./fatura";
+import { montarReciboRepasse } from "./recibo-repasse";
 import type { Bloco, Documento } from "./pdf";
 
 /** todo o texto do documento, para buscar trechos */
@@ -138,5 +139,42 @@ describe("fatura — nome do arquivo", () => {
       placa: "DWK9E10", veiculo_tipo: "caminhao", obra: null, empresa: propostaGuindaste.empresa, cliente: propostaGuindaste.cliente,
     });
     expect(d.arquivo).toBe("fatura_DWK9E10_outubro_2026");
+  });
+});
+
+describe("recibo de repasse ao locador", () => {
+  const base = {
+    placa: "DWK9E10", data: "2026-11-05",
+    empresa: { razao_social: "Oliveira Locações Ltda", cnpj: "32.511.022/0001-02", endereco: null, cidade: "São José do Rio Preto", uf: "SP", contato_nome: null, telefone: null, email: null },
+    locador: { nome: "Robson", cpf_cnpj: "123.456.789-00", chave_pix: "robson@email.com", tipo_chave_pix: "email" as const, banco: null, nome_titular_pix: null },
+  };
+
+  it("só o repasse, por extenso, sem receita da fatura", () => {
+    const d = montarReciboRepasse({ ...base, repasses: [{ periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 31, valor_bruto: 3000, valor_liquido: 3000, abatimentos: [] }] });
+    const t = texto(d);
+    expect(d.blocos[0]).toMatchObject({ t: "titulo", texto: "REPASSE" });
+    expect(t).toContain("três mil reais");
+    expect(t).toContain("E-mail: robson@email.com");
+    expect(t).not.toMatch(/10\.680/);
+    expect(d.arquivo).toBe("recibo_repasse_DWK9E10_2026-10-01_a_2026-10-31");
+  });
+
+  it("abatimentos descontados e total líquido", () => {
+    const d = montarReciboRepasse({ ...base, repasses: [{ periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 31, valor_bruto: 3000, valor_liquido: 2700,
+      abatimentos: [{ descricao: "Pneu", valor: 300 }] }] });
+    const t = texto(d);
+    expect(t).toContain("(-) Pneu");
+    expect(t).toContain("dois mil e setecentos reais");
+    expect(t).toContain("já descontadas as despesas");
+  });
+
+  it("acréscimos e descontos digitados só no recibo", () => {
+    const d = montarReciboRepasse({ ...base, repasses: [{ periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 31, valor_bruto: 3000, valor_liquido: 3000, abatimentos: [] }],
+      ajustes: { acrescimos: [{ descricao: "Frete", valor: 500 }], descontos: [{ descricao: "Adiantamento", valor: 1000 }] } });
+    const t = texto(d);
+    expect(t).toContain("(+) Frete");
+    expect(t).toContain("(-) Adiantamento");
+    expect(t).toContain("dois mil e quinhentos reais");
+    expect(t).toContain("acréscimos e descontos acima");
   });
 });

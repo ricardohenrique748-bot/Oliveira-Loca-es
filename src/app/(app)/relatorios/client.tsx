@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { FileSpreadsheet, FileText } from "lucide-react";
+import { ChevronRight, FileSpreadsheet, FileText } from "lucide-react";
 import { Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
 import { formatCompetencia, formatData, formatHoras, formatPct, formatPlaca } from "@/lib/format";
 import { ROTULOS } from "@/lib/schemas/cadastros";
 import { DetalhePlaca } from "./detalhe-placa";
+import { DialogoReciboRepasse } from "./recibo-repasse";
 
 export type Relatorio = "dre_placa" | "dre_cliente" | "faturamento" | "aging" | "repasses" | "despesas" | "manutencao";
 type Linha = Record<string, string | number | null>;
@@ -20,7 +21,7 @@ type Col = { chave: string; titulo: string; tipo?: "moeda" | "numero" | "data" |
 
 const RELATORIOS: Record<Relatorio, { titulo: string; descricao: string; colunas: Col[] }> = {
   dre_placa: {
-    titulo: "DRE por placa", descricao: "Receita das medições − repasse ao locador − manutenção − outras despesas do veículo (despesas descontadas do locador não entram).",
+    titulo: "DRE por placa", descricao: "Receita das medições − repasse ao locador − manutenção − outras despesas do veículo (despesas descontadas do locador não entram). Clique na placa para ver os lançamentos e gerar o recibo do repasse.",
     colunas: [
       { chave: "placa", titulo: "Placa", tipo: "placa" }, { chave: "empresa", titulo: "Empresa" }, { chave: "proprietario", titulo: "Frota" },
       { chave: "receita", titulo: "Receita", tipo: "moeda" }, { chave: "repasse", titulo: "Repasse", tipo: "moeda" }, { chave: "manutencao", titulo: "Manutenção", tipo: "moeda" },
@@ -103,16 +104,30 @@ export function RelatoriosCliente({ relatorio, linhas, totais, de, ate, ini, fim
   const periodo = `${formatCompetencia(de)} a ${formatCompetencia(ate)}`;
   // DRE por placa: clicar na placa abre os lançamentos dela no período
   const [detalhe, setDetalhe] = React.useState<{ veiculoId: string; placa: string } | null>(null);
+  // recibo do repasse: abre a janela de acréscimos/descontos antes do PDF
+  const [recibo, setRecibo] = React.useState<{ veiculoId: string; placa: string } | null>(null);
 
-  const colunas = React.useMemo<ColumnDef<Linha, unknown>[]>(() => cfg.colunas.map((c, i) => ({
+  const colunas = React.useMemo<ColumnDef<Linha, unknown>[]>(() => cfg.colunas.map((c, i): ColumnDef<Linha, unknown> => ({
     id: c.chave, header: c.titulo,
     meta: { direita: ["moeda", "numero", "pct", "horas"].includes(c.tipo ?? ""), tituloMobile: i === 0 },
     cell: ({ row }) => relatorio === "dre_placa" && c.chave === "placa" && row.original.veiculo_id
-      ? <button type="button" className="underline-offset-2 hover:underline" title="Ver lançamentos da placa"
-          onClick={() => setDetalhe({ veiculoId: String(row.original.veiculo_id), placa: String(row.original.placa) })}>{celula(c, row.original[c.chave])}</button>
+      ? <button type="button" className="inline-flex items-center gap-1 text-primary underline decoration-dotted underline-offset-4 hover:decoration-solid" title="Ver lançamentos da placa e gerar o recibo do repasse"
+          onClick={() => setDetalhe({ veiculoId: String(row.original.veiculo_id), placa: String(row.original.placa) })}>{celula(c, row.original[c.chave])}<ChevronRight className="h-3.5 w-3.5" /></button>
       : celula(c, row.original[c.chave]),
     footer: () => (i === 0 ? "Total" : c.tipo === "moeda" && totais[c.chave] !== undefined ? <Moeda valor={totais[c.chave]} /> : null),
-  })), [cfg, totais, relatorio]);
+  })).concat(relatorio === "dre_placa" ? [{
+    // só placa com repasse no período (sublocada): recibo para o locador assinar
+    id: "recibo", header: "",
+    cell: ({ row }) => {
+      const id = String(row.original.veiculo_id ?? "");
+      return id && Number(row.original.repasse) > 0 ? (
+        <Button size="xs" variant="outline" title="Recibo do repasse para o locador assinar (PDF)"
+          onClick={() => setRecibo({ veiculoId: id, placa: String(row.original.placa) })}>
+          <FileText /> Recibo
+        </Button>
+      ) : null;
+    },
+  }] : []), [cfg, totais, relatorio]);
 
   const exp: ColunaExport<Linha>[] = cfg.colunas.map((c) => ({
     titulo: c.titulo, largura: c.largura,
@@ -141,7 +156,9 @@ export function RelatoriosCliente({ relatorio, linhas, totais, de, ate, ini, fim
         <p className="pb-2 text-sm text-muted-foreground">{cfg.descricao}</p>
       </BarraFiltros>
       <DataTable colunas={colunas} dados={linhas} getId={(l) => cfg.colunas.map((c) => String(l[c.chave] ?? "")).join("|")} rodape />
-      {relatorio === "dre_placa" && <DetalhePlaca placa={detalhe} onOpenChange={(v) => !v && setDetalhe(null)} ini={ini} fim={fim} empresaId={empresaId} periodo={periodo} />}
+      {relatorio === "dre_placa" && <DetalhePlaca placa={detalhe} onOpenChange={(v) => !v && setDetalhe(null)} ini={ini} fim={fim} empresaId={empresaId} periodo={periodo}
+        onRecibo={setRecibo} />}
+      {relatorio === "dre_placa" && <DialogoReciboRepasse alvo={recibo} onOpenChange={(v) => !v && setRecibo(null)} ini={ini} fim={fim} empresaId={empresaId} />}
     </div>
   );
 }
