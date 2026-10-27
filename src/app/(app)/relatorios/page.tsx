@@ -41,10 +41,10 @@ export default function RelatoriosPage() {
 
     let linhas: Linha[] = [];
     if (r === "dre_placa") {
-      let q = supabase.from("vw_margem_placa_mes").select("placa, tipo, proprietario, empresa_apelido, receita, repasse, manutencao, outras_despesas, margem").gte("mes", ini).lte("mes", fim);
+      let q = supabase.from("vw_margem_placa_mes").select("veiculo_id, placa, tipo, proprietario, empresa_apelido, receita, repasse, manutencao, outras_despesas, margem").gte("mes", ini).lte("mes", fim);
       if (emp) q = q.eq("empresa_id", emp);
       const { data: res } = await q;
-      linhas = agrupar(res ?? [], (x) => x.placa!, ["receita", "repasse", "manutencao", "outras_despesas", "margem"], (x) => ({ placa: x.placa, empresa: x.empresa_apelido, proprietario: x.proprietario === "locador" ? "Sublocado" : "Própria" }))
+      linhas = agrupar(res ?? [], (x) => x.placa!, ["receita", "repasse", "manutencao", "outras_despesas", "margem"], (x) => ({ veiculo_id: x.veiculo_id, placa: x.placa, empresa: x.empresa_apelido, proprietario: x.proprietario === "locador" ? "Sublocado" : "Própria" }))
         .map((l): Linha => ({ ...l, margem_pct: Number(l.receita) ? Math.round((Number(l.margem) / Number(l.receita)) * 1000) / 10 : null }))
         .sort((a, b) => Number(b.margem) - Number(a.margem));
     } else if (r === "dre_cliente") {
@@ -99,10 +99,13 @@ export default function RelatoriosPage() {
       totais,
       de,
       ate,
+      ini,
+      fim,
       empresa,
+      empresaId: emp,
     };
   }, [rParam, deParam, ateParam, sessao?.empresaId]);
 
   if (loading || !data) return <CarregandoPagina />;
-  return <RelatoriosCliente relatorio={data.r} linhas={data.linhas} totais={data.totais} de={data.de} ate={data.ate} empresa={data.empresa} />;
+  return <RelatoriosCliente relatorio={data.r} linhas={data.linhas} totais={data.totais} de={data.de} ate={data.ate} ini={data.ini} fim={data.fim} empresa={data.empresa} empresaId={data.empresaId} />;
 }

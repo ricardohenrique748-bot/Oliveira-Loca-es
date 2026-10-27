@@ -12,6 +12,7 @@ import { BarraFiltros, useUrlParams } from "@/components/app/url";
 import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
 import { formatCompetencia, formatData, formatHoras, formatPct, formatPlaca } from "@/lib/format";
 import { ROTULOS } from "@/lib/schemas/cadastros";
+import { DetalhePlaca } from "./detalhe-placa";
 
 export type Relatorio = "dre_placa" | "dre_cliente" | "faturamento" | "aging" | "repasses" | "despesas" | "manutencao";
 type Linha = Record<string, string | number | null>;
@@ -92,19 +93,26 @@ function celula(c: Col, v: string | number | null) {
   }
 }
 
-export function RelatoriosCliente({ relatorio, linhas, totais, de, ate, empresa }: {
+export function RelatoriosCliente({ relatorio, linhas, totais, de, ate, ini, fim, empresa, empresaId }: {
   relatorio: Relatorio; linhas: Linha[]; totais: Record<string, number>; de: string; ate: string; empresa: string;
+  /** período em datas (início do mês "de" e fim do mês "até") e empresa escolhida, para o detalhe da placa */
+  ini: string; fim: string; empresaId: string | null;
 }) {
   const url = useUrlParams();
   const cfg = RELATORIOS[relatorio];
   const periodo = `${formatCompetencia(de)} a ${formatCompetencia(ate)}`;
+  // DRE por placa: clicar na placa abre os lançamentos dela no período
+  const [detalhe, setDetalhe] = React.useState<{ veiculoId: string; placa: string } | null>(null);
 
   const colunas = React.useMemo<ColumnDef<Linha, unknown>[]>(() => cfg.colunas.map((c, i) => ({
     id: c.chave, header: c.titulo,
     meta: { direita: ["moeda", "numero", "pct", "horas"].includes(c.tipo ?? ""), tituloMobile: i === 0 },
-    cell: ({ row }) => celula(c, row.original[c.chave]),
+    cell: ({ row }) => relatorio === "dre_placa" && c.chave === "placa" && row.original.veiculo_id
+      ? <button type="button" className="underline-offset-2 hover:underline" title="Ver lançamentos da placa"
+          onClick={() => setDetalhe({ veiculoId: String(row.original.veiculo_id), placa: String(row.original.placa) })}>{celula(c, row.original[c.chave])}</button>
+      : celula(c, row.original[c.chave]),
     footer: () => (i === 0 ? "Total" : c.tipo === "moeda" && totais[c.chave] !== undefined ? <Moeda valor={totais[c.chave]} /> : null),
-  })), [cfg, totais]);
+  })), [cfg, totais, relatorio]);
 
   const exp: ColunaExport<Linha>[] = cfg.colunas.map((c) => ({
     titulo: c.titulo, largura: c.largura,
@@ -133,6 +141,7 @@ export function RelatoriosCliente({ relatorio, linhas, totais, de, ate, empresa 
         <p className="pb-2 text-sm text-muted-foreground">{cfg.descricao}</p>
       </BarraFiltros>
       <DataTable colunas={colunas} dados={linhas} getId={(l) => cfg.colunas.map((c) => String(l[c.chave] ?? "")).join("|")} rodape />
+      {relatorio === "dre_placa" && <DetalhePlaca placa={detalhe} onOpenChange={(v) => !v && setDetalhe(null)} ini={ini} fim={fim} empresaId={empresaId} periodo={periodo} />}
     </div>
   );
 }
