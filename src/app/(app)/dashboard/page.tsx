@@ -12,7 +12,7 @@ import { useAsyncPage } from "@/lib/use-async-page";
 import { carregarDashboard } from "./dados";
 import { FiltrosDashboard } from "./filtros";
 import { BarraSegmentada, BarrasMini, CartaoDestaque, ListaHoje, Painel, TituloPainel, Variacao } from "./cartoes";
-import { CartaoFrota, GraficoAging, GraficoFaturamento } from "./graficos";
+import { CartaoFrota, GraficoAging, GraficoFaturamento, PainelMargemPlaca } from "./graficos";
 
 const ROTULO_ATRASO: Record<string, string> = { "1-30": "até 30d", "31-60": "31–60d", "61-90": "61–90d", "90+": "+90d" };
 const compactoBRL = (v: number) => v >= 10_000 ? `R$ ${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil` : formatBRL(v);
@@ -158,6 +158,8 @@ export default function DashboardPage() {
             <div className="lg:col-span-8"><GraficoFaturamento dados={d} /></div>
             <div className="lg:col-span-4">{hojePainel}</div>
           </div>
+
+          <PainelMargemPlaca dados={d} mes={mes} />
         </>
       ) : (
         <>

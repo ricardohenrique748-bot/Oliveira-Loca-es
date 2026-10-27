@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, ChevronDown, ChevronRight, FileText, Loader2, Plus, Search, Wallet } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, FileSignature, FileText, Loader2, Plus, Search, Wallet } from "lucide-react";
 import { Badge, Card, CardContent, Checkbox, Label, Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import { ROTULOS } from "@/lib/schemas/cadastros";
 import { cn } from "@/lib/utils";
 import { InputMoeda } from "@/components/app/campos";
 import { alterarValorRepasse, buscarRepassesPendentes, pagarRepasse } from "./actions";
+import { DialogoReciboRepasse } from "./recibo";
 
 export type Repasse = {
   id: string; medicao_id: string; locador_id: string; locador_nome: string; empresa_id: string; empresa_apelido: string; veiculo_id: string; placa: string;
@@ -42,6 +43,8 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, pode
   const router = useRouter();
   const [pagando, setPagando] = React.useState<Repasse | null>(null);
   const [lancando, setLancando] = React.useState(false);
+  // recibo do repasse para o locador assinar (acréscimos/descontos só no PDF)
+  const [recibo, setRecibo] = React.useState<Repasse | null>(null);
   const [abertos, setAbertos] = React.useState<Set<string>>(new Set());
 
   const locadorDe = (id: string, nome: string) => locadores.find((l) => l.id === id) ?? ({ id, nome } as Locador);
@@ -153,15 +156,22 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, pode
                           {r.adiantado && <Badge variant="critico" className="ml-1"><AlertTriangle className="h-3 w-3" /> Adiantado</Badge>}
                           <p className="whitespace-nowrap text-xs text-muted-foreground">{r.status === "pago" ? formatData(r.data_pagamento) : SITUACAO_CLIENTE[r.medicao_status] ?? r.medicao_status}</p>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-right">
+                        <TableCell className="text-right">
+                          {/* ícones em cima e "Pagar" embaixo: a coluna fica estreita e a tabela cabe na tela */}
+                          <div className="flex flex-col items-end gap-1">
+                          <div className="flex items-center justify-end whitespace-nowrap">
                           <Button variant="ghost" size="icon-sm" title={`Extrato de ${r.locador_nome}`} aria-label={`Extrato PDF de ${r.locador_nome}`}
                             onClick={() => extrato(locadorDe(r.locador_id, r.locador_nome), repasses.filter((x) => x.locador_id === r.locador_id))}><FileText /></Button>
+                          <Button variant="ghost" size="icon-sm" title="Recibo do repasse (PDF)" aria-label={`Recibo do repasse ${formatPlaca(r.placa)}`}
+                            onClick={() => setRecibo(r)}><FileSignature /></Button>
                           {r.comprovante_url && <LinkAnexo referencia={r.comprovante_url} rotulo="Comprovante" />}
+                          </div>
                           {podeEditar && (r.status === "previsto" || r.status === "liberado") && (
                             <Button size="xs" variant={r.seria_adiantado ? "outline" : "default"} className={cn(r.seria_adiantado && "border-status-critico text-status-critico")} onClick={() => setPagando(r)}>
                               {r.seria_adiantado && <AlertTriangle />} Pagar
                             </Button>
                           )}
+                          </div>
                         </TableCell>
                       </TableRow>
                       {aberto && abs.map((a) => (
@@ -193,6 +203,8 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, pode
         </Card>
       )}
 
+      <DialogoReciboRepasse repasse={recibo} mesmaPlaca={recibo ? repasses.filter((x) => x.veiculo_id === recibo.veiculo_id && x.status !== "cancelado") : []}
+        onOpenChange={(v) => !v && setRecibo(null)} />
       <DialogoLancar aberto={lancando} onOpenChange={setLancando} onEscolher={(r) => { setLancando(false); setPagando(r); }} />
       <DialogoPagar repasse={pagando} locador={pagando ? locadorDe(pagando.locador_id, pagando.locador_nome) : null} onOpenChange={(v) => !v && setPagando(null)} onFeito={() => router.refresh()} />
     </div>

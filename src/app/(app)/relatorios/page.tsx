@@ -41,12 +41,11 @@ export default function RelatoriosPage() {
 
     let linhas: Linha[] = [];
     if (r === "dre_placa") {
-      let q = supabase.from("vw_margem_placa_mes").select("veiculo_id, placa, tipo, proprietario, empresa_apelido, receita, repasse, manutencao, outras_despesas, margem").gte("mes", ini).lte("mes", fim);
+      let q = supabase.from("vw_margem_placa_mes").select("veiculo_id, placa, tipo, proprietario, empresa_apelido, receita, repasse, manutencao, outras_despesas").gte("mes", ini).lte("mes", fim);
       if (emp) q = q.eq("empresa_id", emp);
       const { data: res } = await q;
-      linhas = agrupar(res ?? [], (x) => x.placa!, ["receita", "repasse", "manutencao", "outras_despesas", "margem"], (x) => ({ veiculo_id: x.veiculo_id, placa: x.placa, empresa: x.empresa_apelido, proprietario: x.proprietario === "locador" ? "Sublocado" : "Própria" }))
-        .map((l): Linha => ({ ...l, margem_pct: Number(l.receita) ? Math.round((Number(l.margem) / Number(l.receita)) * 1000) / 10 : null }))
-        .sort((a, b) => Number(b.margem) - Number(a.margem));
+      linhas = agrupar(res ?? [], (x) => x.placa!, ["receita", "repasse", "manutencao", "outras_despesas"], (x) => ({ veiculo_id: x.veiculo_id, placa: x.placa, empresa: x.empresa_apelido, proprietario: x.proprietario === "locador" ? "Sublocado" : "Própria" }))
+        .sort((a, b) => Number(b.receita) - Number(a.receita));
     } else if (r === "dre_cliente") {
       let q = supabase.from("vw_dre_cliente_mes").select("cliente_nome, empresa_apelido, receita, repasse, recebido, margem, medicoes").gte("mes", ini).lte("mes", fim);
       if (emp) q = q.eq("empresa_id", emp);

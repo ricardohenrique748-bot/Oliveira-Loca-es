@@ -151,3 +151,36 @@ export function GraficoAging({ dados: d }: { dados: DadosDashboard }) {
     </Painel>
   );
 }
+
+/** Margem do mês por placa: receita − (repasse + manutenção + outras despesas). */
+export function PainelMargemPlaca({ dados: d, mes }: { dados: DadosDashboard; mes: string }) {
+  const lista = d.margemPlacas;
+  const total = lista.reduce((a, m) => ({ receita: a.receita + m.receita, margem: a.margem + m.margem }), { receita: 0, margem: 0 });
+  const max = Math.max(1, ...lista.map((m) => Math.abs(m.margem)));
+  return (
+    <Painel className="h-full">
+      <TituloPainel titulo="Margem por placa" acao={<Seta href={`/relatorios?r=dre_placa&de=${mes}&ate=${mes}`} rotulo="Abrir DRE por placa" />}
+        descricao={<>{formatCompetencia(mes, true)} · margem total <span className="num font-semibold text-white">{formatBRL(total.margem)}</span>
+          {total.receita > 0 && <> ({(Math.round((total.margem / total.receita) * 1000) / 10).toLocaleString("pt-BR")}%)</>}</>} />
+      {lista.length === 0 ? <p className="text-sm text-white/60">Nenhuma receita ou despesa por placa no mês.</p> : (
+        <ul className="max-h-80 space-y-3 overflow-y-auto pr-1">
+          {lista.map((m) => (
+            <li key={m.placa}>
+              <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-xs">
+                <span><span className="font-mono font-semibold">{m.placa}</span> <span className="text-white/50">{m.proprietario === "locador" ? "sublocado" : "própria"}</span></span>
+                <span className="num">
+                  <span className="text-white/50">receita {formatBRL(m.receita)} · custos {formatBRL(m.custos)} · </span>
+                  <span className={m.margem < 0 ? "font-semibold text-red-400" : "font-semibold"}>{formatBRL(m.margem)}</span>
+                  {m.pct != null && <span className="text-white/50"> ({m.pct.toLocaleString("pt-BR")}%)</span>}
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full" style={{ width: `${Math.max(m.margem ? 3 : 0, (Math.abs(m.margem) / max) * 100)}%`, background: m.margem < 0 ? NEG : S1 }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Painel>
+  );
+}

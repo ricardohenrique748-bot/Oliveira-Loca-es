@@ -41,7 +41,7 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
   const vazio = Promise.resolve({ data: [] as never[] });
 
   const [
-    medicoes12, abertas, recebimentos, repasses, contas, veiculos, preventivas, osAbertas, docs,
+    medicoes12, abertas, recebimentos, repasses, contas, veiculos, preventivas, osAbertas, docs, margens,
   ] = await Promise.all([
     f.veReceita ? med(sb.from("medicoes_v").select("data_emissao, valor_final, status").gte("data_emissao", ini12).lte("data_emissao", fim).neq("status", "cancelado")) : vazio,
     f.veReceita ? med(sb.from("medicoes_v").select("id, placa, cliente_fantasia, periodo_fim, valor_final, saldo, status, status_exibicao, data_vencimento, numero_nf").in("status", ["a_faturar", "faturado", "recebido_parcial"])) : vazio,
@@ -60,6 +60,12 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
     emp(sb.from("vw_preventivas_status").select("plano_id, placa, servico, status")),
     emp(sb.from("ordens_servico").select("id, numero, data_abertura, descricao_problema, status, veiculos(placa)").in("status", ["aberta", "em_execucao", "aguardando_peca"])),
     sb.from("documentos_veiculo").select("id, tipo, validade, veiculos!inner(placa, empresa_id)").lte("validade", addDias(f.hoje, 30)).order("validade"),
+    // margem por placa no mês (mesma conta do DRE por placa)
+    f.veReceita ? (() => {
+      let q = emp(sb.from("vw_margem_placa_mes").select("veiculo_id, placa, proprietario, receita, repasse, manutencao, outras_despesas, margem").eq("mes", ini));
+      if (f.placa) q = q.ilike("placa", `%${f.placa}%`);
+      return q;
+    })() : vazio,
   ]);
 
   // ----- KPIs -----
@@ -144,9 +150,22 @@ export async function carregarDashboard(sb: SupabaseServer, f: FiltrosDashboard)
     }).map((m) => m.saldo)),
   }));
 
+  // uma linha por placa (a view separa por empresa); maior margem primeiro
+  type Mg = { veiculo_id: string; placa: string; proprietario: string; receita: number; repasse: number; manutencao: number; outras_despesas: number; margem: number };
+  const porPlaca = new Map<string, { placa: string; proprietario: string; receita: number; custos: number; margem: number }>();
+  for (const m of (margens.data ?? []) as Mg[]) {
+    const a = porPlaca.get(m.veiculo_id) ?? { placa: m.placa, proprietario: m.proprietario, receita: 0, custos: 0, margem: 0 };
+    a.receita = somar([a.receita, m.receita]);
+    a.custos = somar([a.custos, m.repasse, m.manutencao, m.outras_despesas]);
+    a.margem = somar([a.margem, m.margem]);
+    porPlaca.set(m.veiculo_id, a);
+  }
+  const margemPlacas = [...porPlaca.values()].map((m) => ({ ...m, pct: m.receita > 0 ? Math.round((m.margem / m.receita) * 1000) / 10 : null }))
+    .sort((a, b) => b.margem - a.margem);
+
   const statusFrota = ["locado", "disponivel", "manutencao", "parado"].map((s) => ({ status: s, qtd: veics.filter((v) => v.status === s).length }));
 
-  return { kpis, hoje, faturamento12, aging, statusFrota };
+  return { kpis, hoje, faturamento12, aging, statusFrota, margemPlacas };
 }
 
 export type DadosDashboard = Awaited<ReturnType<typeof carregarDashboard>>;
