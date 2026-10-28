@@ -14,7 +14,7 @@ import { excluirDocumento, salvarDocumento } from "../actions";
 export type LinhaDoc = { id: string; veiculo_id: string; placa: string; tipo: DocumentoForm["tipo"]; numero: string | null; validade: string | null; anexo_url: string | null; observacoes: string | null };
 
 const colunas: ColumnDef<LinhaDoc, unknown>[] = [
-  { accessorKey: "placa", header: "Placa", meta: { tituloMobile: true }, cell: ({ getValue }) => <span className="font-mono font-semibold">{formatPlaca(getValue() as string)}</span> },
+  { accessorKey: "placa", header: "Placa", meta: { tituloMobile: true }, cell: ({ getValue }) => <span className="whitespace-nowrap font-mono font-semibold">{formatPlaca(getValue() as string)}</span> },
   { accessorKey: "tipo", header: "Documento", cell: ({ row }) => ROTULOS.tipoDocumento[row.original.tipo] },
   { accessorKey: "numero", header: "Número" },
   { accessorKey: "validade", header: "Validade", cell: ({ getValue }) => <ValidadeBadge validade={getValue() as string | null} /> },

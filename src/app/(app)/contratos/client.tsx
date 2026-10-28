@@ -52,8 +52,10 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
       ajuda: "Ao salvar, o cliente é cadastrado com estes dados — complete o CNPJ depois em Clientes." },
     { nome: "obra_id", rotulo: "Obra", tipo: "select", visivel: (v) => mensal(v) && !clienteNovo(v), vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3 },
     { nome: "sublocado", rotulo: "Sublocado?", tipo: "select", col: 2, opcoes: [{ value: "nao", label: "Não — frota própria (com motorista)" }, { value: "sim", label: "Sim — locador (sem motorista)" }] },
+    // placa locada (ou em manutenção) não entra em contrato novo; a do próprio contrato continua na lista
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", obrigatorio: true, col: 4, opcoes: (v) => opcoes.veiculos.filter((x) =>
-      (!v.empresa_id || x.empresa_id === v.empresa_id) && (!v.sublocado || (x.proprietario === "locador") === (v.sublocado === "sim"))) },
+      (x.status === "disponivel" || x.status === "parado" || x.value === v.veiculo_id)
+      && (!v.empresa_id || x.empresa_id === v.empresa_id) && (!v.sublocado || (x.proprietario === "locador") === (v.sublocado === "sim"))) },
     { nome: "valor_mensal", rotulo: "Valor mensal (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: mensal },
     { nome: "valor_mensal", rotulo: "Valor da diária (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: diaria, ajuda: "Diária = 10 horas. Hora extra = 10% da diária (ex.: diária R$ 1.800 → hora extra R$ 180)" },
     { nome: "valor_mensal", rotulo: "Valor da hora (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: hora, ajuda: "Fatura = horas trabalhadas × valor da hora" },

@@ -48,7 +48,7 @@ export function LicenciamentoCliente({ linhas, calendario, ano, podeEditar }: {
 
   const colunas = React.useMemo<ColumnDef<LinhaLicenciamento, unknown>[]>(() => [
     { accessorKey: "placa", header: "Placa", meta: { tituloMobile: true }, cell: ({ row: { original: l } }) => (
-      <span><span className="font-mono font-semibold">{formatPlaca(l.placa)}</span><span className="block text-xs text-muted-foreground">{ROTULOS.tipoVeiculo[l.tipo] ?? l.tipo} · {l.empresa_apelido}</span></span>
+      <span><span className="whitespace-nowrap font-mono font-semibold">{formatPlaca(l.placa)}</span><span className="block text-xs text-muted-foreground">{ROTULOS.tipoVeiculo[l.tipo] ?? l.tipo} · {l.empresa_apelido}</span></span>
     ) },
     { accessorKey: "renavam", header: "RENAVAM", cell: ({ getValue }) => <span className="font-mono text-sm">{(getValue() as string | null) ?? "—"}</span> },
     { id: "calendario", header: "Calendário", cell: ({ row: { original: l } }) => podeEditar ? (

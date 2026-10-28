@@ -15,7 +15,18 @@ export async function salvarContrato(id: string | null, dados: unknown) {
   // diária / hora vale um dia só: o último dia do contrato é o próprio início (mais dias = renovar)
   const form = cliente.dados as { tipo_cobranca?: string; data_inicio?: string | null; data_fim?: string | null };
   const valores = !id && cobrancaAvulsa(form.tipo_cobranca) ? { ...form, data_fim: form.data_inicio } : form;
-  const r = await salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados: valores, schema: contratoSchema, revalidar: ["/contratos", "/medicoes", "/dashboard"] });
+  // placa já locada não entra em outro contrato (ao editar, só se trocar de placa)
+  const veiculoId = (valores as { veiculo_id?: string }).veiculo_id;
+  if (veiculoId) {
+    const supabase = await createClient();
+    const atual = id ? (await supabase.from("contratos").select("veiculo_id").eq("id", id).maybeSingle()).data?.veiculo_id : null;
+    if (veiculoId !== atual) {
+      const { data: v } = await supabase.from("veiculos").select("placa, status").eq("id", veiculoId).maybeSingle();
+      if (v && v.status !== "disponivel" && v.status !== "parado")
+        return { ok: false as const, erro: `A placa ${v.placa} está ${v.status === "locado" ? "locada em outro contrato" : "em manutenção ou vendida"} — escolha um veículo disponível` };
+    }
+  }
+  const r = await salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados: valores, schema: contratoSchema, revalidar: ["/contratos", "/medicoes", "/dashboard", "/cadastros/veiculos", "/manutencao"] });
   if (!r.ok || id) return r;
   // contrato novo já entra no faturamento; se falhar, o contrato fica salvo e a fatura sai pelo "Gerar faturas do período"
   const f = await enviarAoFaturamento(r.dados.id);

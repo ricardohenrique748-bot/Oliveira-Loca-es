@@ -36,7 +36,7 @@ const colContatos: ColumnDef<Contato, unknown>[] = [
 ];
 
 const colContratos: ColumnDef<Contrato, unknown>[] = [
-  { accessorKey: "placa", header: "Placa", cell: ({ getValue }) => <span className="font-mono font-semibold">{formatPlaca(getValue() as string)}</span>, meta: { tituloMobile: true } },
+  { accessorKey: "placa", header: "Placa", cell: ({ getValue }) => <span className="whitespace-nowrap font-mono font-semibold">{formatPlaca(getValue() as string)}</span>, meta: { tituloMobile: true } },
   { accessorKey: "numero", header: "Contrato" },
   { accessorKey: "empresa", header: "Empresa" },
   { accessorKey: "obra", header: "Obra" },

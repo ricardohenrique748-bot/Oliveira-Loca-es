@@ -26,7 +26,7 @@ export function PneusCliente({ linhas, veiculos, podeEditar }: { linhas: LinhaPn
   const [hist, setHist] = React.useState<{ pneu: LinhaPneu; itens: { id: string; data: string; evento: string; posicao: string | null; km: number | null; placa: string | null }[] } | null>(null);
   const colunas: ColumnDef<LinhaPneu, unknown>[] = [
     { accessorKey: "numero_fogo", header: "Nº de fogo", meta: { tituloMobile: true }, cell: ({ getValue }) => <span className="font-mono font-semibold">{getValue() as string}</span> },
-    { accessorKey: "placa", header: "Veículo", cell: ({ getValue }) => (getValue() ? <span className="font-mono">{formatPlaca(getValue() as string)}</span> : "—") },
+    { accessorKey: "placa", header: "Veículo", cell: ({ getValue }) => (getValue() ? <span className="whitespace-nowrap font-mono">{formatPlaca(getValue() as string)}</span> : "—") },
     { accessorKey: "posicao", header: "Posição" },
     { id: "pneu", header: "Marca / medida", cell: ({ row }) => [row.original.marca, row.original.medida].filter(Boolean).join(" · ") },
     { accessorKey: "ressolagens", header: "Ressolagens", meta: { direita: true } },

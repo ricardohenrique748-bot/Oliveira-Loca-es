@@ -5,8 +5,10 @@ import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { edicaoMedicaoSchema, lancamentoAvulsoSchema, lancamentoMedicaoSchema, type ItemAvulsoSalvo } from "@/lib/schemas/operacao";
 import { addDias, cobrancaAvulsa, diffDias, horasEntre, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
+import { formatPlaca } from "@/lib/format";
 
-const REVALIDAR = ["/medicoes", "/receber", "/repasses", "/dashboard"];
+// fatura avulsa com placa muda o status do veículo (0048)
+const REVALIDAR = ["/medicoes", "/receber", "/repasses", "/dashboard", "/cadastros/veiculos", "/manutencao"];
 const competencia = z.string().regex(/^\d{4}-\d{2}$/, "Competência inválida");
 
 export interface LinhaPrevia {
@@ -199,7 +201,9 @@ export async function lancarFaturaAvulsa(dados: unknown) {
     const periodoFim = d.itens.map((i) => i.periodo_fim).sort().at(-1)!;
     const placas = new Set(d.itens.map((i) => i.veiculo_id ?? null));
     const ids = [...placas].filter((x): x is string => !!x);
-    const { data: veics } = ids.length ? await supabase.from("veiculos").select("id, placa").in("id", ids) : { data: [] };
+    const { data: veics } = ids.length ? await supabase.from("veiculos").select("id, placa, status").in("id", ids) : { data: [] };
+    const ocupada = veics?.find((v) => v.status !== "disponivel" && v.status !== "parado");
+    if (ocupada) throw new Error(`A placa ${formatPlaca(ocupada.placa)} está ${ocupada.status === "locado" ? "locada" : "em manutenção ou vendida"} — escolha um veículo disponível`);
     const itens: ItemAvulsoSalvo[] = d.itens.map((i) => ({ ...i, placa: veics?.find((v) => v.id === i.veiculo_id)?.placa ?? null }));
     const cabecalho = varios
       ? { descricao: d.itens.map((i) => i.descricao).join("; ").slice(0, 500), veiculo_id: placas.size === 1 ? primeiro.veiculo_id ?? null : null,

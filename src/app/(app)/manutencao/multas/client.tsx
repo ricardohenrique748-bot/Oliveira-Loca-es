@@ -34,7 +34,7 @@ const RESPONSAVEL: Opcao[] = [{ value: "empresa", label: "Empresa" }, { value: "
 const ROTULO_RESP = Object.fromEntries(RESPONSAVEL.map((r) => [r.value, r.label]));
 
 const colunas: ColumnDef<LinhaMulta, unknown>[] = [
-  { accessorKey: "placa", header: "Placa", meta: { tituloMobile: true }, cell: ({ getValue }) => <span className="font-mono font-semibold">{formatPlaca(getValue() as string)}</span> },
+  { accessorKey: "placa", header: "Placa", meta: { tituloMobile: true }, cell: ({ getValue }) => <span className="whitespace-nowrap font-mono font-semibold">{formatPlaca(getValue() as string)}</span> },
   { accessorKey: "data_infracao", header: "Infração", cell: ({ getValue }) => formatData(getValue() as string) },
   { id: "descricao", header: "Descrição", cell: ({ row: { original: m } }) => (
     <div className="max-w-[18rem]">

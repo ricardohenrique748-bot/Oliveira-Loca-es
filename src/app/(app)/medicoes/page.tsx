@@ -45,8 +45,8 @@ export default function MedicoesPage() {
     // placas de todos os contratos (inclusive antigos), para o filtro do histórico
     let qp = supabase.from("contratos").select("veiculos(placa)");
     if (s.empresaId) qp = qp.eq("empresa_id", s.empresaId);
-    // placas para a fatura avulsa
-    let qv = supabase.from("veiculos").select("id, placa, tipo").neq("status", "vendido").order("placa");
+    // placas para a fatura avulsa: só as livres (locada ou em manutenção não aluga de novo)
+    let qv = supabase.from("veiculos").select("id, placa, tipo").in("status", ["disponivel", "parado"]).order("placa");
     if (s.empresaId) qv = qv.eq("empresa_id", s.empresaId);
     const [{ data: linhas, count, error: erroLinhas }, { data: clientes }, { data: contratos }, { data: placas }, { data: veiculos }] = await Promise.all([
       (historico ? q.order("periodo_inicio", { ascending: false }).order("placa") : q.order("empresa_apelido").order("cliente_fantasia").order("placa").order("periodo_inicio")).range(p.de, p.ate),

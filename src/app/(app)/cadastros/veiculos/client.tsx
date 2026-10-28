@@ -17,12 +17,12 @@ export type LinhaVeiculo = {
 };
 
 const colunas: ColumnDef<LinhaVeiculo, unknown>[] = [
-  { accessorKey: "placa", header: "Placa", meta: { ordem: "placa", tituloMobile: true }, cell: ({ getValue }) => <span className="font-mono font-semibold tracking-wider">{formatPlaca(getValue() as string)}</span> },
+  { accessorKey: "placa", header: "Placa", meta: { ordem: "placa", tituloMobile: true }, cell: ({ getValue }) => <span className="whitespace-nowrap font-mono font-semibold tracking-wider">{formatPlaca(getValue() as string)}</span> },
   { accessorKey: "tipo", header: "Tipo", meta: { ordem: "tipo" }, cell: ({ row }) => ROTULOS.tipoVeiculo[row.original.tipo] },
   { id: "modelo", header: "Marca / modelo", meta: { ordem: "modelo" }, cell: ({ row: { original: v } }) => <span>{[v.marca, v.modelo].filter(Boolean).join(" ")}{v.ano ? <span className="text-muted-foreground"> · {v.ano}</span> : null}</span> },
   { accessorKey: "empresa", header: "Empresa" },
   { id: "prop", header: "Propriedade", cell: ({ row: { original: v } }) => v.proprietario === "locador" ? <Badge variant="info">Locador: {v.locador}</Badge> : <Badge variant="secondary">Própria</Badge> },
-  { accessorKey: "km_atual", header: "Km", meta: { ordem: "km_atual", direita: true }, cell: ({ getValue }) => formatKm(getValue() as number) },
+  { accessorKey: "km_atual", header: "Km", meta: { ordem: "km_atual", direita: true }, cell: ({ getValue }) => <span className="whitespace-nowrap">{formatKm(getValue() as number)}</span> },
   { accessorKey: "horimetro_atual", header: "Horímetro", meta: { direita: true }, cell: ({ getValue }) => (getValue() ? formatHoras(getValue() as number) : "—") },
   { accessorKey: "status", header: "Status", meta: { ordem: "status" }, cell: ({ getValue }) => <StatusBadge status={getValue() as string} /> },
 ];
