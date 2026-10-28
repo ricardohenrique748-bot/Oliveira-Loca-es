@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { InputMoeda } from "@/components/app/campos";
 import { alterarValorRepasse, buscarRepassesPendentes, pagarRepasse } from "./actions";
 import { DialogoReciboRepasse } from "./recibo";
+import { baixarReciboDescontosPDF } from "@/lib/documentos/baixar";
 
 export type Repasse = {
   id: string; medicao_id: string; locador_id: string; locador_nome: string; empresa_id: string; empresa_apelido: string; veiculo_id: string; placa: string;
@@ -53,6 +54,13 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
   // recibo do repasse para o locador assinar (acréscimos/descontos só no PDF)
   const [recibo, setRecibo] = React.useState<Repasse | null>(null);
   const [abertos, setAbertos] = React.useState<Set<string>>(new Set());
+  // descontos sem repasse: uma linha por placa na própria tabela, "aguardando fatura"
+  const aguardando = React.useMemo(() => {
+    const m = new Map<string, DescontoPendente[]>();
+    for (const d of descontosPendentes) { const k = d.veiculo_id ?? d.placa ?? d.id; m.set(k, [...(m.get(k) ?? []), d]); }
+    return [...m.entries()].map(([k, ds]) => ({ k, placa: ds[0].placa, empresa: ds[0].empresa_apelido, locador_id: ds[0].locador_id, ds, total: somar(ds.map((d) => d.saldo)) }))
+      .sort((a, b) => (a.placa ?? "").localeCompare(b.placa ?? ""));
+  }, [descontosPendentes]);
 
   const locadorDe = (id: string, nome: string) => locadores.find((l) => l.id === id) ?? ({ id, nome } as Locador);
   const abatDe = (id: string) => abatimentos.filter((a) => a.repasse_id === id);
@@ -109,54 +117,19 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
         <FiltroSelectUrl param="locador" rotulo="Parceiro" opcoes={locadores.map((l) => ({ value: l.id, label: l.nome }))} />
       </BarraFiltros>
 
-      {descontosPendentes.length > 0 && (
-        <Card>
-          <CardContent className="space-y-2">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="font-semibold">Descontos aguardando repasse</p>
-              <p className="text-sm">Total a descontar: <Moeda valor={somar(descontosPendentes.map((d) => d.saldo))} className="font-semibold text-status-critico" /></p>
-            </div>
-            <p className="text-xs text-muted-foreground">Despesas marcadas “descontar do locador” que ainda não têm repasse para abater. O desconto entra sozinho no próximo repasse da placa, criado quando a fatura do veículo for lançada.</p>
-            <Table className="text-sm">
-              <TableHeader><TableRow className="hover:bg-transparent">
-                <TableHead>Placa</TableHead><TableHead>Despesa</TableHead><TableHead>Vencimento</TableHead>
-                <TableHead className="text-right">Valor</TableHead><TableHead className="text-right">A descontar</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {descontosPendentes.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell className="whitespace-nowrap"><span className="font-mono font-semibold">{d.placa ? formatPlaca(d.placa) : "—"}</span>
-                      <p className="text-xs text-muted-foreground">{d.empresa_apelido}</p></TableCell>
-                    <TableCell><Link className="hover:underline" href={`/pagar?id=${d.id}`}>{d.descricao ?? "Despesa"}</Link>
-                      {d.fornecedor_nome && <p className="text-xs text-muted-foreground">{d.fornecedor_nome}</p>}</TableCell>
-                    <TableCell className="whitespace-nowrap">{formatData(d.vencimento)}</TableCell>
-                    <TableCell className="text-right"><Moeda valor={d.valor} />
-                      {d.valor_locador != null && <p className="text-xs text-muted-foreground">para o locador {formatBRL(d.valor_locador)}</p>}</TableCell>
-                    <TableCell className="text-right"><Moeda valor={-d.saldo} className="text-status-critico" />
-                      {d.valor_abatido > 0 && <p className="text-xs text-muted-foreground">já descontado {formatBRL(d.valor_abatido)}</p>}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {repasses.length === 0 && <Vazio icone={Wallet} titulo="Nenhum repasse" descricao={descontosPendentes.length
-        ? "Esta placa ainda não tem repasse: ele é criado quando a fatura (medição) do veículo sublocado é lançada. Os descontos acima entram nele."
-        : "Repasses são criados automaticamente nas medições de veículos sublocados."} />}
+      {repasses.length === 0 && !aguardando.length && <Vazio icone={Wallet} titulo="Nenhum repasse" descricao="Repasses são criados automaticamente nas medições de veículos sublocados." />}
 
       {/* uma linha por caminhão, ordenada por parceiro, como na planilha "Valor Repasse" */}
-      {repasses.length > 0 && (
+      {(repasses.length > 0 || aguardando.length > 0) && (
         <Card>
           <CardContent className="p-0 sm:p-0">
-            {/* células mais estreitas: 10 colunas precisam caber em 1280px */}
+            {/* 8 colunas: período+NF e contrato+responsável juntos, para caber na tela sem cortar */}
             <Table className="text-sm [&_td]:px-2.5 [&_th]:px-2.5 [&_td:first-child]:pl-4 [&_th:first-child]:pl-4">
               <TableHeader><TableRow className="hover:bg-transparent">
                 <TableHead>Parceiro</TableHead><TableHead>Contrato</TableHead><TableHead>Placa</TableHead>
-                <TableHead>Período</TableHead><TableHead>Faturado / NF</TableHead>
+                <TableHead>Período / NF</TableHead>
                 <TableHead className="text-right">Valor</TableHead><TableHead className="text-right">Repasse</TableHead>
-                <TableHead>Responsável</TableHead><TableHead>Status</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right"><span className="sr-only">Ações</span></TableHead>
               </TableRow></TableHeader>
               <TableBody>
@@ -168,11 +141,14 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                     <React.Fragment key={r.id}>
                       <TableRow className={cn(r.adiantado && "bg-red-50 dark:bg-red-950/40", r.status === "liberado" && "bg-green-50/60 dark:bg-green-950/20")}>
                         <TableCell className="font-medium">{r.locador_nome}</TableCell>
-                        <TableCell><p>{r.cliente_nome}</p>{r.obra_nome && <p className="text-xs text-muted-foreground">{r.obra_nome}</p>}</TableCell>
+                        <TableCell className="max-w-52">
+                          <p>{r.cliente_nome}</p>{r.obra_nome && <p className="text-xs text-muted-foreground">{r.obra_nome}</p>}
+                          {r.responsavel_nome && <p className="truncate text-xs text-muted-foreground" title={[r.responsavel_nome, r.responsavel_whatsapp ? maskTelefone(r.responsavel_whatsapp) : r.responsavel_email].filter(Boolean).join(" · ")}>
+                            Resp.: {r.responsavel_nome}{r.responsavel_whatsapp && ` · ${maskTelefone(r.responsavel_whatsapp)}`}</p>}
+                        </TableCell>
                         <TableCell className="whitespace-nowrap"><span className="font-mono font-semibold">{formatPlaca(r.placa)}</span><p className="text-xs text-muted-foreground">{r.empresa_apelido}</p></TableCell>
-                        <TableCell className="whitespace-nowrap text-xs" title={formatPeriodo(r.periodo_inicio, r.periodo_fim)}>{diaMes(r.periodo_inicio)} a {diaMes(r.periodo_fim)}<p className="text-muted-foreground">{r.dias} dias</p></TableCell>
-                        <TableCell className="whitespace-nowrap text-xs">
-                          {r.medicao_emissao ? diaMes(r.medicao_emissao) : <span className="text-muted-foreground">a faturar</span>}{r.numero_nf && <span className="font-medium"> · NF {r.numero_nf}</span>}
+                        <TableCell className="whitespace-nowrap text-xs" title={formatPeriodo(r.periodo_inicio, r.periodo_fim)}>{diaMes(r.periodo_inicio)} a {diaMes(r.periodo_fim)} <span className="text-muted-foreground">· {r.dias} dias</span>
+                          <p className="text-muted-foreground">{r.medicao_emissao ? `fat. ${diaMes(r.medicao_emissao)}` : "a faturar"}{r.numero_nf && <span className="font-medium text-foreground"> · NF {r.numero_nf}</span>}</p>
                           {r.medicao_vencimento && <p className="text-muted-foreground">venc. {diaMes(r.medicao_vencimento)}</p>}
                         </TableCell>
                         <TableCell className="text-right"><Moeda valor={r.medicao_valor} /></TableCell>
@@ -185,12 +161,6 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                             <button type="button" onClick={alternar} aria-expanded={aberto} className="flex w-full items-center justify-end gap-0.5 whitespace-nowrap text-xs text-status-critico hover:underline">
                               {aberto ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} −{formatBRL(r.valor_abatimentos)}
                             </button>
-                          )}
-                        </TableCell>
-                        <TableCell className="max-w-44 text-xs">
-                          {r.responsavel_nome ? <p className="truncate" title={r.responsavel_nome}>{r.responsavel_nome}</p> : <span className="text-muted-foreground">—</span>}
-                          {(r.responsavel_whatsapp || (r.responsavel_email && r.responsavel_email !== r.responsavel_nome)) && (
-                            <p className="truncate text-muted-foreground" title={r.responsavel_email ?? undefined}>{r.responsavel_whatsapp ? maskTelefone(r.responsavel_whatsapp) : r.responsavel_email}</p>
                           )}
                         </TableCell>
                         <TableCell>
@@ -218,13 +188,51 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                       </TableRow>
                       {aberto && abs.map((a) => (
                         <TableRow key={a.id} className="bg-muted/30 text-xs hover:bg-muted/30">
-                          <TableCell colSpan={6} className="pl-8 text-muted-foreground">
+                          <TableCell colSpan={5} className="pl-8 text-muted-foreground">
                             (−) {a.descricao}{a.vencimento && ` · ${formatData(a.vencimento)}`}
                             {a.os_numero && <Link className="ml-3 underline" href={`/manutencao/ordens/${a.ordem_servico_id}`}>OS #{a.os_numero}</Link>}
                             {a.conta_pagar_id && <Link className="ml-3 underline" href={`/pagar?id=${a.conta_pagar_id}`}>Conta a pagar</Link>}
                           </TableCell>
                           <TableCell className="text-right"><Moeda valor={-a.valor} className="text-status-critico" /></TableCell>
-                          <TableCell colSpan={3} />
+                          <TableCell colSpan={2} />
+                        </TableRow>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+                {aguardando.map((g) => {
+                  const aberto = abertos.has(g.k);
+                  const alternar = () => setAbertos((x) => { const n = new Set(x); if (n.has(g.k)) n.delete(g.k); else n.add(g.k); return n; });
+                  return (
+                    <React.Fragment key={`aguardando-${g.k}`}>
+                      <TableRow className="text-muted-foreground">
+                        <TableCell className="font-medium text-foreground">{locadores.find((l) => l.id === g.locador_id)?.nome ?? "—"}</TableCell>
+                        <TableCell>—</TableCell>
+                        <TableCell className="whitespace-nowrap"><span className="font-mono font-semibold text-foreground">{g.placa ? formatPlaca(g.placa) : "—"}</span><p className="text-xs">{g.empresa}</p></TableCell>
+                        <TableCell className="whitespace-nowrap text-xs">sem fatura</TableCell>
+                        <TableCell className="text-right">—</TableCell>
+                        <TableCell className="text-right">
+                          <button type="button" onClick={alternar} aria-expanded={aberto} className="flex w-full items-center justify-end gap-0.5 whitespace-nowrap text-xs text-status-critico hover:underline">
+                            {aberto ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} −{formatBRL(g.total)}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="alerta">Aguardando fatura</Badge>
+                          <p className="text-xs">desconta no repasse</p>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon-sm" title="Recibo dos descontos (PDF)" aria-label={`Recibo dos descontos ${g.placa ? formatPlaca(g.placa) : ""}`}
+                            onClick={() => baixarReciboDescontosPDF(g.ds.map((d) => d.id))}><FileSignature /></Button>
+                        </TableCell>
+                      </TableRow>
+                      {aberto && g.ds.map((d) => (
+                        <TableRow key={d.id} className="bg-muted/30 text-xs hover:bg-muted/30">
+                          <TableCell colSpan={5} className="pl-8 text-muted-foreground">
+                            (−) {d.descricao ?? "Despesa"}{d.fornecedor_nome && ` · ${d.fornecedor_nome}`}{d.vencimento && ` · ${formatData(d.vencimento)}`}
+                            <Link className="ml-3 underline" href={`/pagar?id=${d.id}`}>Conta a pagar</Link>
+                          </TableCell>
+                          <TableCell className="text-right"><Moeda valor={-d.saldo} className="text-status-critico" /></TableCell>
+                          <TableCell colSpan={2} />
                         </TableRow>
                       ))}
                     </React.Fragment>
@@ -232,10 +240,11 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                 })}
               </TableBody>
               <TableFooter><TableRow>
-                <TableCell colSpan={5}>{repasses.length} {repasses.length === 1 ? "repasse" : "repasses"} · {new Set(repasses.map((r) => r.locador_id)).size} parceiro(s)</TableCell>
+                <TableCell colSpan={4}>{repasses.length} {repasses.length === 1 ? "repasse" : "repasses"} · {new Set(repasses.map((r) => r.locador_id)).size} parceiro(s)
+                  {aguardando.length > 0 && <span className="text-xs text-muted-foreground"> · {aguardando.length} placa(s) aguardando fatura (−{formatBRL(somar(aguardando.map((g) => g.total)))})</span>}</TableCell>
                 <TableCell className="text-right"><Moeda valor={somar(repasses.map((r) => r.medicao_valor))} /></TableCell>
                 <TableCell className="text-right"><Moeda valor={somar(repasses.map((r) => r.valor_liquido))} /></TableCell>
-                <TableCell colSpan={3}>
+                <TableCell colSpan={2}>
                   <span className="text-xs text-muted-foreground">Margem </span>
                   <Moeda valor={somar(repasses.map((r) => r.medicao_valor)) - somar(repasses.map((r) => r.valor_bruto))} sinal />
                 </TableCell>

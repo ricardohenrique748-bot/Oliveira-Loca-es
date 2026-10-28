@@ -66,3 +66,43 @@ export function montarReciboRepasse(d: DadosReciboRepasse): Documento {
     blocos,
   };
 }
+
+export interface DadosReciboDescontos {
+  placa: string;
+  empresa: EmpresaDoc;
+  locador: DadosReciboRepasse["locador"];
+  descontos: { descricao: string; data: string | null; valor: number }[];
+  data: string;
+}
+
+/**
+ * Mesmo modelo do recibo de repasse, para a placa que ainda não tem fatura:
+ * só as despesas que serão descontadas no próximo repasse (o locador assina a ciência).
+ */
+export function montarReciboDescontos(d: DadosReciboDescontos): Documento {
+  const placa = formatPlaca(d.placa);
+  const ds = [...d.descontos].sort((a, b) => (a.data ?? "").localeCompare(b.data ?? ""));
+  const total = somar(ds.map((x) => x.valor));
+  const l = d.locador;
+  const pix = l.chave_pix ? `${l.tipo_chave_pix ? `${ROTULOS.tipoChavePix[l.tipo_chave_pix]}: ` : ""}${l.chave_pix}${l.nome_titular_pix ? ` (${l.nome_titular_pix})` : ""}` : "";
+
+  const blocos: Bloco[] = [
+    { t: "titulo", texto: "DESCONTOS A ABATER", sub: `Placa ${placa} · aguardando fatura` },
+    { t: "secao", texto: "Locador" },
+    { t: "campos", colunas: 2, pares: [["Nome", l.nome], ["CPF/CNPJ", l.cpf_cnpj ?? ""], ["PIX", pix], ["Banco", l.banco ?? ""]] },
+    { t: "secao", texto: "Pagador" },
+    { t: "campos", colunas: 2, pares: [["Razão social", d.empresa.razao_social], ["CNPJ", d.empresa.cnpj ?? ""]] },
+    { t: "secao", texto: "Discriminação" },
+    { t: "tabela", cabecalho: ["Descrição", "Data", "Valor"], linhas: ds.map((x) => [`(-) ${x.descricao}`, formatData(x.data), `- ${formatBRL(x.valor)}`]),
+      direita: [2], larguras: [0, 40, 30], total: ["Total a descontar", "", `- ${formatBRL(total)}`] },
+    { t: "espaco", mm: 4 },
+    { t: "paragrafo", texto: `Estou ciente de que as despesas acima, do veículo placa ${placa}, no total de ${formatBRL(total)} (${valorPorExtenso(total)}), `
+      + `serão descontadas do próximo repasse da locação a ser pago por ${d.empresa.razao_social}${d.empresa.cnpj ? `, CNPJ ${d.empresa.cnpj}` : ""}.` },
+    { t: "espaco", mm: 2 },
+    { t: "paragrafo", alinhar: "direita", texto: `${d.empresa.cidade ? `${d.empresa.cidade}${d.empresa.uf ? `/${d.empresa.uf}` : ""}, ` : ""}${formatData(d.data)}` },
+    { t: "espaco", mm: 10 },
+    { t: "assinaturas", partes: [{ titulo: l.nome, linhas: [l.cpf_cnpj ? `CPF/CNPJ ${l.cpf_cnpj}` : "Locador"] }] },
+  ];
+
+  return { arquivo: `descontos_${placa}_${d.data}`, cabecalho: `Descontos a abater · ${placa}`, rodape: [], blocos };
+}

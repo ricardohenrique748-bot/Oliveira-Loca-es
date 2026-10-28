@@ -6,7 +6,7 @@ import { montarContrato, type DadosContrato } from "./contrato";
 import { montarFatura, type DadosFatura } from "./fatura";
 import { montarProposta, type DadosProposta } from "./proposta";
 import { baixarDocumentoPDF } from "./pdf";
-import { montarReciboRepasse, type DadosReciboRepasse } from "./recibo-repasse";
+import { montarReciboDescontos, montarReciboRepasse, type DadosReciboRepasse } from "./recibo-repasse";
 export type { ItemRecibo } from "./recibo-repasse";
 import { hojeSP } from "@/lib/calculos";
 
@@ -120,5 +120,31 @@ export function baixarReciboRepassePDF(ids: string[], ajustes?: DadosReciboRepas
       })),
     };
     return montarReciboRepasse(dados);
+  });
+}
+
+/** Recibo das despesas "descontar do locador" de uma placa sem fatura (mesmo modelo do recibo de repasse). */
+export function baixarReciboDescontosPDF(contaIds: string[]) {
+  return gerar(async () => {
+    const supabase = createClient();
+    const { data: cs, error } = await supabase.from("contas_pagar_v")
+      .select("id, placa, veiculo_id, empresa_id, descricao, vencimento, valor, valor_locador, valor_abatido").in("id", contaIds);
+    if (error) throw error;
+    const [c0] = cs ?? [];
+    if (!c0?.veiculo_id || !c0.empresa_id) return null;
+    const { data: v, error: ev } = await supabase.from("veiculos").select("locador_id").eq("id", c0.veiculo_id).maybeSingle();
+    if (ev) throw ev;
+    if (!v?.locador_id) return null;
+    const [loc, emp] = await Promise.all([
+      supabase.from("locadores").select("nome, cpf_cnpj, chave_pix, tipo_chave_pix, banco, nome_titular_pix").eq("id", v.locador_id).maybeSingle(),
+      supabase.from("empresas").select(EMPRESA).eq("id", c0.empresa_id).maybeSingle(),
+    ]);
+    for (const x of [loc, emp]) if (x.error) throw x.error;
+    if (!loc.data || !emp.data) return null;
+    return montarReciboDescontos({
+      placa: c0.placa ?? "", empresa: emp.data, locador: loc.data as DadosReciboRepasse["locador"], data: hojeSP(),
+      descontos: (cs ?? []).map((c) => ({ descricao: c.descricao ?? "Despesa", data: c.vencimento,
+        valor: Math.round(((c.valor_locador ?? c.valor ?? 0) - (c.valor_abatido ?? 0)) * 100) / 100 })).filter((x) => x.valor > 0),
+    });
   });
 }
