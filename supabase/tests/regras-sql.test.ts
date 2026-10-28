@@ -620,3 +620,40 @@ describe("valor para o locador na conta a pagar", () => {
     await expect(db.query("update public.contas_pagar set valor_locador = 0 where id = $1", [c.id])).rejects.toThrow();
   });
 });
+
+describe("fatura avulsa deixa o veículo locado", () => {
+  it("período em andamento: locado; futuro: não muda; excluída: volta a disponível; locado à mão não é mexido", async () => {
+    const [cl] = await q<{ id: string }>("select id from public.clientes limit 1");
+    const [v, w] = await q<{ id: string; placa: string }>(
+      `select v.id, v.placa from public.veiculos v where v.status = 'disponivel' and v.proprietario = 'proprio'
+        and not exists (select 1 from public.contratos c where c.veiculo_id = v.id and c.status = 'ativo') order by v.placa limit 2`);
+    const status = async (id: string) => (await q<{ status: string; ate: string | null }>(
+      "select status::text, locado_avulsa_ate::text as ate from public.veiculos where id = $1", [id]))[0];
+
+    // fatura de uma placa cobrindo hoje
+    const [m] = await q<{ id: string }>(
+      `insert into public.medicoes (cliente_id, empresa_id, veiculo_id, descricao, periodo_inicio, periodo_fim, dias, valor_mensal)
+       values ($1, $2, $3, 'Diária', app.hoje() - 1, app.hoje() + 2, 1, 500) returning id`, [cl.id, OLIVEIRA, v.id]);
+    const [{ fim }] = await q<{ fim: string }>("select (app.hoje() + 2)::text as fim");
+    expect(await status(v.id)).toEqual({ status: "locado", ate: fim });
+
+    // item com período no futuro: ainda não loca a placa
+    const itens = [{ descricao: "Frete", veiculo_id: w.id, placa: w.placa, quantidade: 1, unidade: "dia", valor_unitario: 300,
+      periodo_inicio: "2099-01-10", periodo_fim: "2099-01-11" }];
+    const [m2] = await q<{ id: string }>(
+      `insert into public.medicoes (cliente_id, empresa_id, descricao, periodo_inicio, periodo_fim, dias, valor_mensal, itens)
+       values ($1, $2, 'Frete', '2099-01-10', '2099-01-11', 1, 300, $3) returning id`, [cl.id, OLIVEIRA, JSON.stringify(itens)]);
+    expect((await status(w.id)).status).toBe("disponivel");
+
+    // excluída: a placa volta a disponível
+    await db.query("delete from public.medicoes where id = $1", [m.id]);
+    expect(await status(v.id)).toEqual({ status: "disponivel", ate: null });
+
+    // "locado" escolhido à mão (sem avulsa) não é desfeito pelo agendador
+    await db.query("update public.veiculos set status = 'locado' where id = $1", [w.id]);
+    await db.query("select app.job_status_avulsas()");
+    expect(await status(w.id)).toEqual({ status: "locado", ate: null });
+    await db.query("update public.veiculos set status = 'disponivel' where id = $1", [w.id]);
+    await db.query("delete from public.medicoes where id = $1", [m2.id]);
+  });
+});
