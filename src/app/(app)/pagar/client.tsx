@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, List, MoreHorizontal, Pencil, Plus, Repeat, Trash2, Undo2, UserMinus } from "lucide-react";
-import { Badge, Card, CardContent, CardHeader, CardTitle, Label } from "@/components/ui/basicos";
+import { Badge, Card, CardContent, CardHeader, CardTitle, Checkbox, Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/overlays";
@@ -19,7 +19,7 @@ import { InputMoeda } from "@/components/app/campos";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { addCompetencia, addDias, gerarParcelas, hojeSP, somar } from "@/lib/calculos";
 import { formatBRL, formatCompetencia, formatData, formatPlaca } from "@/lib/format";
-import { contaPagarEdicaoSchema, contaPagarNovaSchema, FORMAS, type ContaPagarEdicaoForm, type ContaPagarNovaForm } from "@/lib/schemas/financeiro";
+import { contaPagarEdicaoSchema, contaPagarNovaSchema, FORMAS, type ContaPagarEdicaoForm, type ContaPagarNovaForm, type ItemRateio } from "@/lib/schemas/financeiro";
 import { opcoesDe } from "@/lib/schemas/cadastros";
 import { cn } from "@/lib/utils";
 import { salvarCategoria } from "../cadastros/actions";
@@ -51,10 +51,11 @@ function comEmpresa<V extends { empresa_id: string; tipo: string; veiculo_id?: s
 
 function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opcoes, novo: boolean): Campo<V>[] {
   const ehLocador = (v: V) => !!o.veiculos.find((x) => x.value === v.veiculo_id)?.locador;
+  const rateio = (v: V) => novo && !!(v as ContaPagarNovaForm).rateio;
   const lista: Campo<ContaPagarNovaForm>[] = [
     { nome: "descricao", rotulo: "Descrição", obrigatorio: true, col: 6, placeholder: "Ex.: Silcar Pneus" },
     { nome: "tipo", rotulo: "Lançamento", tipo: "select", opcoes: [{ value: "fixa", label: "Despesa fixa" }, { value: "variavel", label: "Despesa variável" }, { value: "veiculo", label: "Despesa de veículo" }], col: 2 },
-    { nome: "veiculo_id", rotulo: "Placa", tipo: "select", vazio: "—", opcoes: o.veiculos, col: 2, visivel: (v) => v.tipo === "veiculo", obrigatorio: true },
+    { nome: "veiculo_id", rotulo: "Placa", tipo: "select", vazio: "—", opcoes: o.veiculos, col: 2, visivel: (v) => v.tipo === "veiculo" && !rateio(v as V), obrigatorio: true },
     { nome: "categoria_id", rotulo: "Categoria", tipo: "select", vazio: "—", opcoes: (v) => o.categorias.filter((c) => c.tipo === v.tipo), col: 2,
       criar: { rotulo: "Nova categoria", salvar: (nome, v) => salvarCategoria(null, { nome, tipo: v.tipo, ativo: true }) } },
     { nome: "fornecedor_id", rotulo: "Fornecedor", tipo: "select", vazio: "—", opcoes: o.fornecedores, col: 3 },
@@ -62,14 +63,17 @@ function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opc
     { nome: "valor", rotulo: "Valor", tipo: "moeda", obrigatorio: true, col: 2 },
     { nome: "forma_pagamento", rotulo: "Forma", tipo: "select", opcoes: opcoesDe(FORMAS), col: 2 },
     { nome: "conta_bancaria_id", rotulo: "Banco / conta", tipo: "select", vazio: "—", opcoes: o.contas, col: 2 },
-    { nome: "descontar_locador", rotulo: "Descontar do locador (abate no próximo repasse)", tipo: "checkbox", col: 6, visivel: (v) => v.tipo === "veiculo" && ehLocador(v as V) },
-    { nome: "valor_locador", rotulo: "Valor para o locador", tipo: "moeda", col: 2, visivel: (v) => v.tipo === "veiculo" && !!v.descontar_locador && ehLocador(v as V),
+    { nome: "descontar_locador", rotulo: "Descontar do locador (abate no próximo repasse)", tipo: "checkbox", col: 6, visivel: (v) => v.tipo === "veiculo" && !rateio(v as V) && ehLocador(v as V) },
+    { nome: "valor_locador", rotulo: "Valor para o locador", tipo: "moeda", col: 2, visivel: (v) => v.tipo === "veiculo" && !rateio(v as V) && !!v.descontar_locador && ehLocador(v as V),
       ajuda: novo ? "É este valor que vai para o repasse. Vazio = o valor da despesa. Em parcelas, vale para o total e é dividido na mesma proporção."
         : "É este valor que vai para o repasse. Vazio = o valor da despesa." },
   ];
   if (novo) {
     lista.push(
-      { nome: "repeticao", rotulo: "Repetição", tipo: "select", col: 2, opcoes: [{ value: "unica", label: "Única" }, { value: "parcelada", label: "Parcelada (n/N)" }, { value: "recorrente", label: "Recorrente (mensal)" }] },
+      { nome: "rateio", rotulo: "Boleto com várias placas (uma nota para cada placa)", tipo: "checkbox", col: 6, visivel: (v) => v.tipo === "veiculo" },
+      { nome: "itens", rotulo: "Notas do boleto", tipo: "personalizado", col: 6, visivel: (v) => v.tipo === "veiculo" && !!v.rateio,
+        render: ({ value, onChange, valores }) => <EditorRateio itens={value ?? []} onChange={onChange} total={valores.valor ?? 0} veiculos={o.veiculos} /> },
+      { nome: "repeticao", rotulo: "Repetição", tipo: "select", col: 2, visivel: (v) => !rateio(v as V), opcoes: [{ value: "unica", label: "Única" }, { value: "parcelada", label: "Parcelada (n/N)" }, { value: "recorrente", label: "Recorrente (mensal)" }] },
       { nome: "parcelas", rotulo: "Nº de parcelas", tipo: "numero", col: 1, visivel: (v) => v.repeticao === "parcelada" },
       { nome: "parcela_inicial", rotulo: "Começa na", tipo: "numero", col: 1, visivel: (v) => v.repeticao === "parcelada", ajuda: "ex.: 15 de 53" },
       { nome: "modo_valor", rotulo: "O valor é", tipo: "select", col: 2, visivel: (v) => v.repeticao === "parcelada", opcoes: [{ value: "parcela", label: "de cada parcela" }, { value: "total", label: "total (dividir)" }] },
@@ -224,9 +228,10 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
             <Formulario<ContaPagarNovaForm> campos={camposConta<ContaPagarNovaForm>(opcoes, true)} schema={contaPagarNovaSchema as never}
               valores={{ empresa_id: empresaPadrao ?? opcoes.empresas[0]?.value, fornecedor_id: null, descricao: "", categoria_id: null, tipo: "fixa", veiculo_id: null,
                 vencimento: hojeSP(), valor: undefined, forma_pagamento: "boleto", conta_bancaria_id: null, descontar_locador: false, valor_locador: null, anexo_url: null, observacoes: null,
+                rateio: false, itens: [{ ...ITEM_VAZIO }, { ...ITEM_VAZIO }],
                 repeticao: "unica", parcelas: null, parcela_inicial: 1, modo_valor: "parcela" }}
               extra={(v) => <PreviaParcelas v={v} />}
-              onSalvar={async (v) => { const r = await criarContaPagar(comEmpresa(v, opcoes)); return r.ok ? { ok: true, mensagem: `${r.dados.criadas} lançamento(s) criado(s)` } : r; }}
+              onSalvar={async (v) => { const r = await criarContaPagar(comEmpresaItens(comEmpresa(v, opcoes), opcoes)); return r.ok ? { ok: true, mensagem: `${r.dados.criadas} lançamento(s) criado(s)` } : r; }}
               onSucesso={() => { setNovo(false); router.refresh(); }} />
           )}
         </DialogContent>
@@ -235,6 +240,64 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
       <DialogoEditar conta={editando} opcoes={opcoes} onOpenChange={(v) => { if (!v) { setEditando(null); if (foco) url.set({ id: null }); } }} onFeito={() => router.refresh()} />
       <DialogoBaixa contas={baixa} opcoes={opcoes} onOpenChange={(v) => !v && setBaixa(null)} onFeito={() => router.refresh()} />
       <DialogoExcluir conta={excluir} onOpenChange={(v) => !v && setExcluir(null)} onFeito={() => router.refresh()} />
+    </div>
+  );
+}
+
+const ITEM_VAZIO: ItemRateio = { veiculo_id: null, nota: null, valor: null, descontar_locador: false, valor_locador: null };
+
+/** No boleto com várias placas, cada conta fica na empresa da sua placa. */
+function comEmpresaItens(v: ContaPagarNovaForm, o: Opcoes): ContaPagarNovaForm {
+  if (!v.rateio) return { ...v, itens: [] };
+  return { ...v, itens: (v.itens ?? []).map((i) => ({ ...i, empresa_id: o.veiculos.find((x) => x.value === i.veiculo_id)?.empresa_id ?? null })) };
+}
+
+/** Linhas placa / nota / valor do boleto único; confere a soma com o valor do boleto. */
+function EditorRateio({ itens, onChange, total, veiculos }: {
+  itens: ItemRateio[]; onChange: (v: ItemRateio[]) => void; total: number; veiculos: Opcoes["veiculos"];
+}) {
+  const alterar = (i: number, p: Partial<ItemRateio>) => onChange(itens.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const soma = somar(itens.map((x) => x.valor ?? 0));
+  const bate = Math.abs(soma - total) < 0.005;
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-xs text-muted-foreground">Cada linha vira uma conta na sua placa, com o mesmo fornecedor, vencimento e forma. Em <strong>Valor</strong> acima, informe o total do boleto.</p>
+      {itens.map((it, i) => {
+        const locador = !!veiculos.find((x) => x.value === it.veiculo_id)?.locador;
+        return (
+          <div key={i} className="grid grid-cols-6 items-end gap-2 border-b pb-2 last:border-0">
+            <div className="col-span-3 space-y-1 sm:col-span-2"><Label className="text-xs">Placa</Label>
+              <SelectSimples value={it.veiculo_id} vazio="—" opcoes={veiculos} aria-label="Placa"
+                onChange={(v) => alterar(i, { veiculo_id: v, ...(veiculos.find((x) => x.value === v)?.locador ? {} : { descontar_locador: false, valor_locador: null }) })} /></div>
+            <div className="col-span-3 space-y-1 sm:col-span-1"><Label className="text-xs">Nota nº</Label>
+              <Input value={it.nota ?? ""} onChange={(e) => alterar(i, { nota: e.target.value || null })} placeholder="opcional" /></div>
+            <div className="col-span-4 space-y-1 sm:col-span-2"><Label className="text-xs">Valor</Label>
+              <InputMoeda value={it.valor} onChange={(v) => alterar(i, { valor: v })} aria-label="Valor da placa" /></div>
+            <div className="col-span-2 flex justify-end sm:col-span-1">
+              <Button type="button" variant="ghost" size="icon" title="Remover linha" disabled={itens.length <= 1}
+                onClick={() => onChange(itens.filter((_, j) => j !== i))}><Trash2 /></Button>
+            </div>
+            {locador && (
+              <div className="col-span-6 flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={!!it.descontar_locador} onCheckedChange={(v) => alterar(i, { descontar_locador: !!v, valor_locador: v ? it.valor_locador : null })} />
+                  Descontar do locador
+                </label>
+                {it.descontar_locador && (
+                  <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">Valor para o locador</span>
+                    <InputMoeda className="w-36" value={it.valor_locador} onChange={(v) => alterar(i, { valor_locador: v })} aria-label="Valor para o locador" /></div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => onChange([...itens, { ...ITEM_VAZIO }])}><Plus /> Adicionar placa</Button>
+        <p className={cn("text-sm font-medium", bate ? "text-muted-foreground" : "text-destructive")}>
+          Soma das placas {formatBRL(soma)} {bate ? "= valor do boleto" : `· boleto ${formatBRL(total)} (diferença ${formatBRL(total - soma)})`}
+        </p>
+      </div>
     </div>
   );
 }

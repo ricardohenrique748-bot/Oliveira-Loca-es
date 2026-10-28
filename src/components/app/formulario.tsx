@@ -18,7 +18,7 @@ import { CampoAnexo, type Bucket } from "./anexo";
 
 export type TipoCampo =
   | "texto" | "email" | "textarea" | "moeda" | "numero" | "decimal" | "data" | "hora" | "mes" | "select" | "checkbox"
-  | "cpf_cnpj" | "telefone" | "placa" | "anexo";
+  | "cpf_cnpj" | "telefone" | "placa" | "anexo" | "personalizado";
 
 export interface Campo<V extends FieldValues> {
   nome: Path<V>;
@@ -43,6 +43,9 @@ export interface Campo<V extends FieldValues> {
   avancado?: boolean;
   /** tipo "select": opção "+ rótulo" que cadastra um item pelo nome e já o seleciona */
   criar?: { rotulo: string; salvar: (nome: string, valores: V) => Promise<{ ok: true; dados: { id: string } } | { ok: false; erro: string }> };
+  /** tipo "personalizado": o próprio campo desenha o editor (ex.: lista de itens) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  render?: (p: { value: any; onChange: (v: unknown) => void; valores: V }) => React.ReactNode;
 }
 
 const COL: Record<number, string> = {
@@ -200,6 +203,8 @@ export function CampoControlado<V extends FieldValues>({ campo, control, valores
               return <CampoAnexo bucket={campo.bucket ?? "anexos"} pasta={campo.pasta} valor={field.value} onChange={field.onChange} />;
             case "placa":
               return <InputPlaca {...comum} value={field.value} onChange={field.onChange} />;
+            case "personalizado":
+              return <>{campo.render?.({ value: field.value, onChange: field.onChange, valores })}</>;
             default:
               return <Input {...comum} type={tipo === "email" ? "email" : "text"} placeholder={campo.placeholder} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value || null)} />;
           }

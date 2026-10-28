@@ -5,15 +5,16 @@ import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { baixaContaSchema, contaPagarEdicaoSchema, contaPagarNovaSchema, estornoContaSchema } from "@/lib/schemas/financeiro";
 import { gerarParcelas, hojeSP, planejarEdicaoParcelas, vencimentosRecorrentesFaltantes } from "@/lib/calculos";
+import { formatBRL } from "@/lib/format";
 import type { TablesInsert, TablesUpdate } from "@/lib/supabase/database.types";
 
 const REVALIDAR = ["/pagar", "/repasses", "/dashboard"];
 
-/** Cria conta única, parcelada (N registros "n/N") ou recorrente (12 meses à frente). */
+/** Cria conta única, parcelada (N registros "n/N"), recorrente (12 meses à frente) ou boleto com várias placas (uma conta por placa). */
 export async function criarContaPagar(dados: unknown) {
   return executar(async () => {
     const s = await exigirEscrita("pagar");
-    const { repeticao, parcelas, parcela_inicial, modo_valor, ...c } = contaPagarNovaSchema.parse(dados);
+    const { repeticao, parcelas, parcela_inicial, modo_valor, rateio, itens, ...c } = contaPagarNovaSchema.parse(dados);
     const supabase = await createClient();
     const comum: Omit<TablesInsert<"contas_pagar">, "descricao" | "vencimento" | "valor"> = {
       empresa_id: c.empresa_id, fornecedor_id: c.fornecedor_id, categoria_id: c.categoria_id, tipo: c.tipo,
@@ -24,6 +25,19 @@ export async function criarContaPagar(dados: unknown) {
     const locador = comum.descontar_locador && c.valor_locador ? c.valor_locador / c.valor : null;
     const comLocador = (l: TablesInsert<"contas_pagar">) => ({ ...l, valor_locador: locador ? Math.round(Number(l.valor) * locador * 100) / 100 : null });
     let linhas: TablesInsert<"contas_pagar">[];
+    if (rateio) {
+      // boleto único com várias placas: uma conta por nota, cada uma na sua placa, mesmo vencimento e mesmo boleto
+      const obs = `Boleto único de ${formatBRL(c.valor)} com ${itens.length} placas`;
+      const linhasRateio = itens.map((i) => ({
+        ...comum, empresa_id: i.empresa_id ?? c.empresa_id, veiculo_id: i.veiculo_id, descontar_locador: i.descontar_locador,
+        valor_locador: i.descontar_locador ? i.valor_locador : null,
+        descricao: i.nota ? `${c.descricao} – NF ${i.nota}` : c.descricao, vencimento: c.vencimento, valor: i.valor!,
+        observacoes: c.observacoes ? `${c.observacoes}
+${obs}` : obs,
+      }));
+      checar(await supabase.from("contas_pagar").insert(linhasRateio));
+      return { criadas: linhasRateio.length };
+    }
     if (repeticao === "parcelada") {
       const grupo = crypto.randomUUID();
       linhas = gerarParcelas({ descricao: c.descricao, valor: c.valor, modo: modo_valor, total: parcelas!, inicio: parcela_inicial ?? 1, primeiroVencimento: c.vencimento })
