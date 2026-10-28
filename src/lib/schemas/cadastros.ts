@@ -140,7 +140,7 @@ export const veiculoSchema = z.object({
   placa,
   renavam: z.preprocess((v) => (typeof v === "string" ? v.replace(/\D/g, "") || null : v ?? null),
     z.string().regex(/^\d{9,11}$/, "RENAVAM deve ter 9 a 11 dígitos").nullable()),
-  tipo: z.enum(["caminhao", "guindaste", "trator", "munck", "outro"]),
+  tipo: z.enum(["caminhao", "guindaste", "trator", "munck", "carro", "outro"]),
   marca: textoOpc,
   modelo: textoOpc,
   ano: z.number().int().min(1950, "Ano inválido").max(2100, "Ano inválido").nullish().transform((v) => v ?? null),
@@ -160,7 +160,7 @@ export const veiculoSchema = z.object({
 export type VeiculoForm = z.input<typeof veiculoSchema>;
 
 export const ROTULOS = {
-  tipoVeiculo: { caminhao: "Caminhão", guindaste: "Guindaste", trator: "Trator", munck: "Munck", outro: "Outro" },
+  tipoVeiculo: { caminhao: "Caminhão", guindaste: "Guindaste", trator: "Trator", munck: "Munck", carro: "Carro", outro: "Outro" },
   proprietario: { proprio: "Frota própria", locador: "Sublocado (locador)" },
   tipoChavePix: { cpf: "CPF", cnpj: "CNPJ", email: "E-mail", telefone: "Telefone", aleatoria: "Aleatória" },
   tipoDespesa: { fixa: "Fixa", variavel: "Variável", veiculo: "Veículo" },

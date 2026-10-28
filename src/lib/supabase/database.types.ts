@@ -2575,7 +2575,7 @@ export type Database = {
       tipo_documento: "licenciamento" | "seguro" | "tacografo" | "inspecao_icamento" | "antt" | "outro"
       tipo_item_os: "peca" | "servico"
       tipo_os: "preventiva" | "corretiva" | "pneu" | "inspecao"
-      tipo_veiculo: "caminhao" | "guindaste" | "trator" | "munck" | "outro"
+      tipo_veiculo: "caminhao" | "guindaste" | "trator" | "munck" | "carro" | "outro"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2611,7 +2611,7 @@ export const Constants = {
       tipo_documento: ["licenciamento", "seguro", "tacografo", "inspecao_icamento", "antt", "outro"],
       tipo_item_os: ["peca", "servico"],
       tipo_os: ["preventiva", "corretiva", "pneu", "inspecao"],
-      tipo_veiculo: ["caminhao", "guindaste", "trator", "munck", "outro"],
+      tipo_veiculo: ["caminhao", "guindaste", "trator", "munck", "carro", "outro"],
     },
   },
 } as const
