@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Select = SelectPrimitive.Root;
@@ -65,7 +65,12 @@ export interface Opcao {
   label: string;
 }
 
-/** Select simples controlado por string (com opção vazia opcional). */
+/** a partir de quantas opções a lista ganha a busca */
+const MIN_BUSCA = 8;
+/** compara sem acento, maiúscula, traço ou espaço ("kif1264" acha "KIF-1264") */
+const normalizar = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s.\-/]/g, "").toLowerCase();
+
+/** Select simples controlado por string (com opção vazia opcional); listas longas têm busca (lupa) no topo. */
 export function SelectSimples({
   value, onChange, opcoes, placeholder = "Selecione…", vazio, className, disabled, id, "aria-invalid": invalido, "aria-label": ariaLabel, novo,
 }: {
@@ -83,18 +88,60 @@ export function SelectSimples({
   /** opção no topo da lista para cadastrar um item novo (ex.: "+ Nova categoria") */
   novo?: { rotulo: string; onNovo: () => void };
 }) {
+  const [aberto, setAberto] = React.useState(false);
+  const [busca, setBusca] = React.useState("");
+  const campoBusca = React.useRef<HTMLInputElement>(null);
+  const comBusca = opcoes.length >= MIN_BUSCA;
+  const termo = normalizar(busca);
+  // a opção selecionada fica sempre na lista (o Radix precisa dela para mostrar o valor no campo)
+  const filtradas = termo ? opcoes.filter((o) => o.value === value || normalizar(o.label).includes(termo)) : opcoes;
+  const nenhuma = !!termo && !filtradas.some((o) => o.value !== value);
+
+  React.useEffect(() => {
+    if (!aberto || !comBusca) return;
+    const t = setTimeout(() => campoBusca.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [aberto, comBusca]);
+
   return (
-    <Select value={value || (vazio ? VAZIO : undefined)} disabled={disabled}
+    <Select value={value || (vazio ? VAZIO : undefined)} disabled={disabled} open={aberto}
+      onOpenChange={(v) => { setAberto(v); if (!v) setBusca(""); }}
       onValueChange={(v) => (v === NOVO ? novo?.onNovo() : onChange(v === VAZIO ? null : v))}>
       <SelectTrigger id={id} className={className} aria-invalid={invalido} aria-label={ariaLabel}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent
+        onKeyDownCapture={(e) => {
+          // digitar com o foco num item (ex.: mouse em cima) também vai para a busca, não para o "pular para a letra" do Radix
+          if (!comBusca || e.target === campoBusca.current) return;
+          if (e.key.length === 1 || e.key === "Backspace") {
+            e.preventDefault(); e.stopPropagation();
+            setBusca((b) => (e.key === "Backspace" ? b.slice(0, -1) : b + e.key));
+            campoBusca.current?.focus();
+          }
+        }}>
+        {comBusca && (
+          <div className="sticky top-0 z-10 -mx-1 -mt-1 mb-1 border-b bg-popover p-1.5">
+            <div className="flex items-center gap-2 rounded-md bg-foreground/[0.06] px-2">
+              <Search className="h-4 w-4 shrink-0 opacity-60" />
+              <input ref={campoBusca} value={busca} placeholder="Pesquisar…" aria-label="Pesquisar na lista"
+                className="h-8 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                onChange={(e) => setBusca(e.target.value)}
+                onKeyDown={(e) => {
+                  // setas e Enter navegam/escolhem na lista; o resto fica na busca
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Escape" || e.key === "Tab") return;
+                  if (e.key === "Enter") { e.preventDefault(); const [primeira] = filtradas; if (primeira && termo) { onChange(primeira.value); setAberto(false); setBusca(""); } return; }
+                  e.stopPropagation();
+                }} />
+            </div>
+          </div>
+        )}
         {novo && <SelectItem value={NOVO} className="font-medium text-primary">+ {novo.rotulo}</SelectItem>}
-        {vazio && <SelectItem value={VAZIO}>{vazio}</SelectItem>}
-        {opcoes.map((o) => (
+        {vazio && !termo && <SelectItem value={VAZIO}>{vazio}</SelectItem>}
+        {filtradas.map((o) => (
           <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
         ))}
+        {nenhuma && <p className="px-2 py-1.5 text-sm text-muted-foreground">Nada encontrado</p>}
       </SelectContent>
     </Select>
   );

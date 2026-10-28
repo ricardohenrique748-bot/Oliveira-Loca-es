@@ -49,6 +49,12 @@ function comEmpresa<V extends { empresa_id: string; tipo: string; veiculo_id?: s
   return { ...v, empresa_id: daPlaca ?? daConta ?? v.empresa_id };
 }
 
+/** valor para o locador preenchido = descontar do locador; desmarcar "descontar" limpa o valor */
+function sincronizarLocador(campo: string, v: { descontar_locador?: boolean; valor_locador?: number | null }) {
+  if (campo === "valor_locador" && v.valor_locador) return { descontar_locador: true } as never;
+  if (campo === "descontar_locador" && !v.descontar_locador) return { valor_locador: null } as never;
+}
+
 function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opcoes, novo: boolean): Campo<V>[] {
   const ehLocador = (v: V) => !!o.veiculos.find((x) => x.value === v.veiculo_id)?.locador;
   const rateio = (v: V) => novo && !!(v as ContaPagarNovaForm).rateio;
@@ -64,9 +70,9 @@ function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opc
     { nome: "forma_pagamento", rotulo: "Forma", tipo: "select", opcoes: opcoesDe(FORMAS), col: 2 },
     { nome: "conta_bancaria_id", rotulo: "Banco / conta", tipo: "select", vazio: "—", opcoes: o.contas, col: 2 },
     { nome: "descontar_locador", rotulo: "Descontar do locador (abate no próximo repasse)", tipo: "checkbox", col: 6, visivel: (v) => v.tipo === "veiculo" && !rateio(v as V) && ehLocador(v as V) },
-    { nome: "valor_locador", rotulo: "Valor para o locador", tipo: "moeda", col: 2, visivel: (v) => v.tipo === "veiculo" && !rateio(v as V) && !!v.descontar_locador && ehLocador(v as V),
-      ajuda: novo ? "É este valor que vai para o repasse. Vazio = o valor da despesa. Em parcelas, vale para o total e é dividido na mesma proporção."
-        : "É este valor que vai para o repasse. Vazio = o valor da despesa." },
+    { nome: "valor_locador", rotulo: "Valor para o locador", tipo: "moeda", col: 2, visivel: (v) => v.tipo === "veiculo" && !rateio(v as V) && ehLocador(v as V),
+      ajuda: novo ? "Preenchido, vai para o repasse (marca “descontar”). Vazio + “descontar” = o valor da despesa. Em parcelas, vale para o total."
+        : "Preenchido, vai para o repasse (marca “descontar”). Vazio + “descontar” = o valor da despesa." },
   ];
   if (novo) {
     lista.push(
@@ -225,7 +231,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
         <DialogContent tamanho="lg">
           <DialogHeader><DialogTitle>Nova conta a pagar</DialogTitle><DialogDescription>Parcelada gera N lançamentos “n/N” mensais (anexando vários boletos, cada um vai para uma parcela, na ordem); recorrente gera os próximos 12 meses (o job mensal mantém sempre 12 à frente).</DialogDescription></DialogHeader>
           {novo && (
-            <Formulario<ContaPagarNovaForm> campos={camposConta<ContaPagarNovaForm>(opcoes, true)} schema={contaPagarNovaSchema as never}
+            <Formulario<ContaPagarNovaForm> campos={camposConta<ContaPagarNovaForm>(opcoes, true)} schema={contaPagarNovaSchema as never} aoAlterar={sincronizarLocador}
               valores={{ empresa_id: empresaPadrao ?? opcoes.empresas[0]?.value, fornecedor_id: null, descricao: "", categoria_id: null, tipo: "fixa", veiculo_id: null,
                 vencimento: hojeSP(), valor: undefined, forma_pagamento: "boleto", conta_bancaria_id: null, descontar_locador: false, valor_locador: null, anexo_url: null, observacoes: null,
                 rateio: false, itens: [{ ...ITEM_VAZIO }, { ...ITEM_VAZIO }],
@@ -341,7 +347,7 @@ function DialogoEditar({ conta: c, opcoes, onOpenChange, onFeito }: { conta: Lin
         {c && (
           <>
             <div className="flex items-center gap-2"><Label>Boleto / recibo:</Label><CampoAnexo bucket="anexos" pasta="contas" valor={anexo} onChange={setAnexo} multiplo /></div>
-            <Formulario<ContaPagarEdicaoForm> campos={campos} schema={contaPagarEdicaoSchema as never}
+            <Formulario<ContaPagarEdicaoForm> campos={campos} schema={contaPagarEdicaoSchema as never} aoAlterar={sincronizarLocador}
               valores={{ empresa_id: c.empresa_id, fornecedor_id: c.fornecedor_id, descricao: c.descricao, categoria_id: c.categoria_id, tipo: c.tipo, veiculo_id: c.veiculo_id,
                 vencimento: c.vencimento, valor: c.valor, forma_pagamento: c.forma_pagamento, conta_bancaria_id: c.conta_bancaria_id, descontar_locador: c.descontar_locador, valor_locador: c.valor_locador,
                 anexo_url: c.anexo_url, observacoes: c.observacoes, escopo: "esta" }}
