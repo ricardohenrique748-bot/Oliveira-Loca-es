@@ -1,6 +1,6 @@
 import {
   BarChart3, Building2, CalendarClock, ClipboardList, FileSpreadsheet, FileText, Gauge, HandCoins, Landmark, LayoutDashboard,
-  Receipt, Settings, Truck, Users, Wallet, Wrench, Tags, UserSquare2, Factory, CircleDot, FileBadge, TriangleAlert, Handshake,
+  Receipt, Settings, Truck, Users, Wallet, Wrench, Tags, UserSquare2, Factory, CircleDot, FileBadge, TriangleAlert, Handshake, CalendarCheck,
   type LucideIcon,
 } from "lucide-react";
 import type { Modulo } from "@/lib/permissoes";
@@ -48,6 +48,7 @@ const MENU_COMPLETO: GrupoMenu[] = [
       { titulo: "Planos preventivos", href: "/manutencao/planos", icone: CalendarClock, modulo: "manutencao", descricao: "Revisões programadas", secao: "Manutenção" },
       { titulo: "Leituras km/h", href: "/manutencao/leituras", icone: Gauge, modulo: "manutencao", descricao: "Hodômetro e horímetro", secao: "Controle" },
       { titulo: "Documentos", href: "/manutencao/documentos", icone: FileBadge, modulo: "manutencao", descricao: "CRLV, seguro e laudos", secao: "Controle" },
+      { titulo: "Licenciamento", href: "/manutencao/licenciamento", icone: CalendarCheck, modulo: "manutencao", descricao: "Vencimento pelo final da placa", secao: "Controle" },
       { titulo: "Multas", href: "/manutencao/multas", icone: TriangleAlert, modulo: "manutencao", descricao: "Infrações e vencimentos", secao: "Controle" },
       { titulo: "Pneus", href: "/manutencao/pneus", icone: CircleDot, modulo: "manutencao", descricao: "Vida útil e rodízio", secao: "Controle" },
     ],

@@ -30,7 +30,7 @@ export type LinhaConta = {
   categoria_id: string | null; categoria_nome: string | null; tipo: "fixa" | "variavel" | "veiculo"; veiculo_id: string | null; placa: string | null;
   vencimento: string; valor: number; parcela_num: number | null; parcela_total: number | null; grupo_parcela_id: string | null; recorrente: boolean;
   forma_pagamento: keyof typeof FORMAS; conta_bancaria_id: string | null; banco: string | null; conta_apelido: string | null;
-  descontar_locador: boolean; repasse_id: string | null; ordem_servico_id: string | null; pago_em: string | null; valor_pago: number | null;
+  descontar_locador: boolean; valor_locador: number | null; repasse_id: string | null; ordem_servico_id: string | null; pago_em: string | null; valor_pago: number | null;
   anexo_url: string | null; observacoes: string | null; status: "pago" | "vencido" | "a_vencer"; valor_abatido: number;
 };
 
@@ -63,6 +63,9 @@ function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opc
     { nome: "forma_pagamento", rotulo: "Forma", tipo: "select", opcoes: opcoesDe(FORMAS), col: 2 },
     { nome: "conta_bancaria_id", rotulo: "Banco / conta", tipo: "select", vazio: "—", opcoes: o.contas, col: 2 },
     { nome: "descontar_locador", rotulo: "Descontar do locador (abate no próximo repasse)", tipo: "checkbox", col: 6, visivel: (v) => v.tipo === "veiculo" && ehLocador(v as V) },
+    { nome: "valor_locador", rotulo: "Valor para o locador", tipo: "moeda", col: 2, visivel: (v) => v.tipo === "veiculo" && !!v.descontar_locador && ehLocador(v as V),
+      ajuda: novo ? "É este valor que vai para o repasse. Vazio = o valor da despesa. Em parcelas, vale para o total e é dividido na mesma proporção."
+        : "É este valor que vai para o repasse. Vazio = o valor da despesa." },
   ];
   if (novo) {
     lista.push(
@@ -117,7 +120,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
     ) },
     { accessorKey: "empresa_apelido", header: "Empresa" },
     { id: "placa", header: "Placa", cell: ({ row: { original: c } }) => c.placa ? (
-      <span className="whitespace-nowrap"><span className="font-mono">{formatPlaca(c.placa)}</span>{c.descontar_locador && <Badge variant="info" className="ml-1" title="Descontar do locador"><UserMinus className="h-3 w-3" /> Locador</Badge>}</span>
+      <span className="whitespace-nowrap"><span className="font-mono">{formatPlaca(c.placa)}</span>{c.descontar_locador && <Badge variant="info" className="ml-1" title={`Descontar do locador${c.valor_locador != null ? `: ${formatBRL(c.valor_locador)}` : ""}`}><UserMinus className="h-3 w-3" /> Locador{c.valor_locador != null && ` ${formatBRL(c.valor_locador)}`}</Badge>}</span>
     ) : <span className="text-muted-foreground">Fixa</span> },
     { id: "pagamento", header: "Forma / banco", cell: ({ row: { original: c } }) => <span className="text-sm">{FORMAS[c.forma_pagamento]}<span className="block text-xs text-muted-foreground">{c.conta_apelido ?? c.banco ?? "—"}</span></span> },
     { accessorKey: "valor", header: "Valor", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number} className="font-semibold" />, footer: () => <Moeda valor={somar(linhas.map((l) => l.valor))} /> },
@@ -220,7 +223,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
           {novo && (
             <Formulario<ContaPagarNovaForm> campos={camposConta<ContaPagarNovaForm>(opcoes, true)} schema={contaPagarNovaSchema as never}
               valores={{ empresa_id: empresaPadrao ?? opcoes.empresas[0]?.value, fornecedor_id: null, descricao: "", categoria_id: null, tipo: "fixa", veiculo_id: null,
-                vencimento: hojeSP(), valor: undefined, forma_pagamento: "boleto", conta_bancaria_id: null, descontar_locador: false, anexo_url: null, observacoes: null,
+                vencimento: hojeSP(), valor: undefined, forma_pagamento: "boleto", conta_bancaria_id: null, descontar_locador: false, valor_locador: null, anexo_url: null, observacoes: null,
                 repeticao: "unica", parcelas: null, parcela_inicial: 1, modo_valor: "parcela" }}
               extra={(v) => <PreviaParcelas v={v} />}
               onSalvar={async (v) => { const r = await criarContaPagar(comEmpresa(v, opcoes)); return r.ok ? { ok: true, mensagem: `${r.dados.criadas} lançamento(s) criado(s)` } : r; }}
@@ -277,7 +280,7 @@ function DialogoEditar({ conta: c, opcoes, onOpenChange, onFeito }: { conta: Lin
             <div className="flex items-center gap-2"><Label>Boleto / recibo:</Label><CampoAnexo bucket="anexos" pasta="contas" valor={anexo} onChange={setAnexo} multiplo /></div>
             <Formulario<ContaPagarEdicaoForm> campos={campos} schema={contaPagarEdicaoSchema as never}
               valores={{ empresa_id: c.empresa_id, fornecedor_id: c.fornecedor_id, descricao: c.descricao, categoria_id: c.categoria_id, tipo: c.tipo, veiculo_id: c.veiculo_id,
-                vencimento: c.vencimento, valor: c.valor, forma_pagamento: c.forma_pagamento, conta_bancaria_id: c.conta_bancaria_id, descontar_locador: c.descontar_locador,
+                vencimento: c.vencimento, valor: c.valor, forma_pagamento: c.forma_pagamento, conta_bancaria_id: c.conta_bancaria_id, descontar_locador: c.descontar_locador, valor_locador: c.valor_locador,
                 anexo_url: c.anexo_url, observacoes: c.observacoes, escopo: "esta" }}
               onSalvar={async (v) => { const r = await editarContaPagar(c.id, { ...comEmpresa(v, opcoes), anexo_url: anexo }); return r.ok ? { ok: true, mensagem: `${r.dados.alteradas} lançamento(s) atualizado(s)` } : r; }}
               onSucesso={() => { onOpenChange(false); onFeito(); }} />

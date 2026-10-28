@@ -38,6 +38,7 @@ export default function MultasPage() {
       linhas: (multas ?? []) as LinhaMulta[],
       veiculos: (veiculos ?? []).map((v) => ({ value: v.id, label: v.placa })),
       veiculoInicial: p.get("veiculo"),
+      abrirNovo: p.get("novo") === "1",
       podeEditar: podeEscrever(s.perfil, "manutencao"),
     };
   }, [searchParams, sessao?.empresaId]);

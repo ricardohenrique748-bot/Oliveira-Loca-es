@@ -30,6 +30,11 @@ export type Repasse = {
   responsavel_nome: string | null; responsavel_whatsapp: string | null; responsavel_email: string | null;
 };
 export type Abatimento = { id: string; repasse_id: string; conta_pagar_id: string | null; ordem_servico_id: string | null; descricao: string; valor: number; vencimento: string | null; os_numero: number | null };
+/** Despesa "descontar do locador" que ainda não foi abatida: espera o próximo repasse da placa (que nasce com a fatura). */
+export type DescontoPendente = {
+  id: string; placa: string | null; veiculo_id: string | null; descricao: string | null; fornecedor_nome: string | null; vencimento: string | null;
+  valor: number; valor_locador: number | null; valor_abatido: number; saldo: number; empresa_apelido: string; locador_id: string | null;
+};
 export type Locador = { id: string; nome: string; cpf_cnpj: string | null; telefone: string | null; chave_pix: string | null; tipo_chave_pix: keyof typeof ROTULOS.tipoChavePix | null; banco: string | null; nome_titular_pix: string | null };
 
 /** "2026-08-21" → "21/08" (como na planilha; o ano está no filtro de competência) */
@@ -39,7 +44,9 @@ const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const SITUACAO_CLIENTE: Record<string, string> = { a_faturar: "a faturar", faturado: "aguard. cliente", recebido_parcial: "receb. parcial", recebido: "cliente pagou", cancelado: "cancelado" };
 const STATUS_MEDICAO: Record<string, string> = { a_faturar: "A faturar", faturado: "Faturado (aguardando cliente)", recebido_parcial: "Recebido parcial", recebido: "Cliente pagou", cancelado: "Cancelado" };
 
-export function RepassesCliente({ repasses, abatimentos, locadores, placas, podeEditar }: { repasses: Repasse[]; abatimentos: Abatimento[]; locadores: Locador[]; placas: string[]; podeEditar: boolean }) {
+export function RepassesCliente({ repasses, abatimentos, locadores, placas, descontosPendentes = [], podeEditar }: {
+  repasses: Repasse[]; abatimentos: Abatimento[]; locadores: Locador[]; placas: string[]; descontosPendentes?: DescontoPendente[]; podeEditar: boolean;
+}) {
   const router = useRouter();
   const [pagando, setPagando] = React.useState<Repasse | null>(null);
   const [lancando, setLancando] = React.useState(false);
@@ -102,7 +109,42 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, pode
         <FiltroSelectUrl param="locador" rotulo="Parceiro" opcoes={locadores.map((l) => ({ value: l.id, label: l.nome }))} />
       </BarraFiltros>
 
-      {repasses.length === 0 && <Vazio icone={Wallet} titulo="Nenhum repasse" descricao="Repasses são criados automaticamente nas medições de veículos sublocados." />}
+      {descontosPendentes.length > 0 && (
+        <Card>
+          <CardContent className="space-y-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="font-semibold">Descontos aguardando repasse</p>
+              <p className="text-sm">Total a descontar: <Moeda valor={somar(descontosPendentes.map((d) => d.saldo))} className="font-semibold text-status-critico" /></p>
+            </div>
+            <p className="text-xs text-muted-foreground">Despesas marcadas “descontar do locador” que ainda não têm repasse para abater. O desconto entra sozinho no próximo repasse da placa, criado quando a fatura do veículo for lançada.</p>
+            <Table className="text-sm">
+              <TableHeader><TableRow className="hover:bg-transparent">
+                <TableHead>Placa</TableHead><TableHead>Despesa</TableHead><TableHead>Vencimento</TableHead>
+                <TableHead className="text-right">Valor</TableHead><TableHead className="text-right">A descontar</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {descontosPendentes.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell className="whitespace-nowrap"><span className="font-mono font-semibold">{d.placa ? formatPlaca(d.placa) : "—"}</span>
+                      <p className="text-xs text-muted-foreground">{d.empresa_apelido}</p></TableCell>
+                    <TableCell><Link className="hover:underline" href={`/pagar?id=${d.id}`}>{d.descricao ?? "Despesa"}</Link>
+                      {d.fornecedor_nome && <p className="text-xs text-muted-foreground">{d.fornecedor_nome}</p>}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatData(d.vencimento)}</TableCell>
+                    <TableCell className="text-right"><Moeda valor={d.valor} />
+                      {d.valor_locador != null && <p className="text-xs text-muted-foreground">para o locador {formatBRL(d.valor_locador)}</p>}</TableCell>
+                    <TableCell className="text-right"><Moeda valor={-d.saldo} className="text-status-critico" />
+                      {d.valor_abatido > 0 && <p className="text-xs text-muted-foreground">já descontado {formatBRL(d.valor_abatido)}</p>}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {repasses.length === 0 && <Vazio icone={Wallet} titulo="Nenhum repasse" descricao={descontosPendentes.length
+        ? "Esta placa ainda não tem repasse: ele é criado quando a fatura (medição) do veículo sublocado é lançada. Os descontos acima entram nele."
+        : "Repasses são criados automaticamente nas medições de veículos sublocados."} />}
 
       {/* uma linha por caminhão, ordenada por parceiro, como na planilha "Valor Repasse" */}
       {repasses.length > 0 && (

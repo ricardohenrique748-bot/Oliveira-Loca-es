@@ -122,3 +122,24 @@ export const multaSchema = z.object({
   if (m.status === "paga" && !m.pago_em) ctx.addIssue({ code: "custom", message: "Informe a data do pagamento", path: ["pago_em"] });
 });
 export type MultaForm = z.input<typeof multaSchema>;
+
+/** Licenciamento confirmado pelo CRLV-e do exercício (nunca presumido pelo calendário) */
+export const confirmacaoLicenciamentoSchema = z.object({
+  veiculo_id: uuidObr("o veículo"),
+  exercicio: z.number({ invalid_type_error: "Informe o exercício" }).int().min(2000).max(2100),
+  verificado_em: dataObr("a data da verificação"),
+  fonte: z.string().trim().min(1).max(200).default("CRLV-e conferido"),
+  anexo_url: textoOpc,
+});
+export type ConfirmacaoLicenciamento = z.input<typeof confirmacaoLicenciamentoSchema>;
+
+/** Calendário oficial de um ano: vencimento por grupo (pesado/leve) e final da placa */
+export const calendarioLicenciamentoSchema = z.object({
+  ano: z.number().int().min(2020).max(2100),
+  fonte: z.string().trim().min(1, "Informe a fonte (ex.: Detran-SP)").max(200),
+  linhas: z.array(z.object({
+    grupo: z.enum(["pesado", "leve"]),
+    final: z.number().int().min(0).max(9),
+    vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
+  })).length(20, "Preencha os 10 finais dos dois calendários"),
+});

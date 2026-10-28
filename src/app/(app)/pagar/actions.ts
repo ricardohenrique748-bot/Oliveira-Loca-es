@@ -20,6 +20,9 @@ export async function criarContaPagar(dados: unknown) {
       veiculo_id: c.tipo === "veiculo" ? c.veiculo_id : null, forma_pagamento: c.forma_pagamento, conta_bancaria_id: c.conta_bancaria_id,
       descontar_locador: c.tipo === "veiculo" && c.descontar_locador, anexo_url: c.anexo_url, observacoes: c.observacoes, created_by: s.userId,
     };
+    // valor para o locador: só com "descontar do locador"; em parcelas, na mesma proporção do valor de cada uma
+    const locador = comum.descontar_locador && c.valor_locador ? c.valor_locador / c.valor : null;
+    const comLocador = (l: TablesInsert<"contas_pagar">) => ({ ...l, valor_locador: locador ? Math.round(Number(l.valor) * locador * 100) / 100 : null });
     let linhas: TablesInsert<"contas_pagar">[];
     if (repeticao === "parcelada") {
       const grupo = crypto.randomUUID();
@@ -35,7 +38,7 @@ export async function criarContaPagar(dados: unknown) {
     } else {
       linhas = [{ ...comum, descricao: c.descricao, vencimento: c.vencimento, valor: c.valor }];
     }
-    checar(await supabase.from("contas_pagar").insert(linhas));
+    checar(await supabase.from("contas_pagar").insert(linhas.map(comLocador)));
     return { criadas: linhas.length };
   }, REVALIDAR);
 }
@@ -54,6 +57,7 @@ export async function editarContaPagar(id: string, dados: unknown) {
       veiculo_id: c.tipo === "veiculo" ? c.veiculo_id : null, forma_pagamento: c.forma_pagamento, conta_bancaria_id: c.conta_bancaria_id,
       descontar_locador: c.tipo === "veiculo" && c.descontar_locador, observacoes: c.observacoes,
     };
+    const descontar = comuns.descontar_locador;
 
     if (escopo === "seguintes" && atual.grupo_parcela_id) {
       const { data: grupo } = await supabase.from("contas_pagar").select("id, parcela_num, parcela_total, descricao, vencimento, valor, pago_em")
@@ -77,6 +81,9 @@ export async function editarContaPagar(id: string, dados: unknown) {
       }, "seguintes");
       for (const [k, p] of plano.entries()) {
         const alt: TablesUpdate<"contas_pagar"> = { ...comuns };
+        // valor para o locador na mesma proporção do valor (parcelas com valores diferentes)
+        const valorParcela = p.alteracoes.valor ?? lista.find((g) => g.id === p.id)?.valor ?? c.valor;
+        alt.valor_locador = descontar && c.valor_locador ? Math.round(valorParcela * (c.valor_locador / c.valor) * 100) / 100 : null;
         if (p.alteracoes.valor !== undefined) alt.valor = p.alteracoes.valor;
         if (p.alteracoes.vencimento) alt.vencimento = p.alteracoes.vencimento;
         if (p.alteracoes.descricao) alt.descricao = ehParcelada ? p.alteracoes.descricao : c.descricao;
@@ -86,7 +93,8 @@ export async function editarContaPagar(id: string, dados: unknown) {
       }
       return { alteradas: plano.length };
     }
-    checar(await supabase.from("contas_pagar").update({ ...comuns, descricao: c.descricao, vencimento: c.vencimento, valor: c.valor, anexo_url: c.anexo_url }).eq("id", id));
+    checar(await supabase.from("contas_pagar").update({ ...comuns, descricao: c.descricao, vencimento: c.vencimento, valor: c.valor, anexo_url: c.anexo_url,
+      valor_locador: descontar ? c.valor_locador : null }).eq("id", id));
     return { alteradas: 1 };
   }, REVALIDAR, "Conta atualizada");
 }

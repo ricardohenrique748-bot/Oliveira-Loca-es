@@ -127,8 +127,20 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
 
   const totalItens = somar(itens.map(subtotal));
   const valorAvulsa = Math.max(0, somar([totalItens, acrescimos, -descontos]));
-  const invalidoAvulsa = !empresa || !cliente
-    || itens.some((i) => !i.descricao.trim() || !i.inicio || !i.fim || i.fim < i.inicio || i.quantidade <= 0 || i.valorUnitario <= 0);
+  // avulsa: o que falta para lançar (o botão fica ativo e avisa, em vez de só ficar apagado)
+  const faltaAvulsa = (() => {
+    if (!empresa) return "Selecione a empresa";
+    if (!cliente) return "Selecione o cliente";
+    for (const [k, i] of itens.entries()) {
+      const n = itens.length > 1 ? ` do item ${k + 1}` : "";
+      if (!i.descricao.trim()) return `Descreva o serviço${n}`;
+      if (!i.inicio || !i.fim) return `Informe o início e o fim${n}`;
+      if (i.fim < i.inicio) return `O fim${n} está antes do início`;
+      if (i.quantidade <= 0) return `Informe a quantidade${n}`;
+      if (i.valorUnitario <= 0) return `Informe o valor${n}`;
+    }
+    return null;
+  })();
   const valor = info ? calcularValorMedicao({ valorMensal: info.valor_mensal, dias, acrescimos, descontos, baseDias: baseCobranca(info.tipo_cobranca, baseDias) }).valorFinal : 0;
   const avulsa = cobrancaAvulsa(info?.tipo_cobranca);
   const invalido = !info || !inicio || !fim || fim < inicio || dias < 1;
@@ -146,6 +158,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   };
 
   const lancarAvulsa = async () => {
+    if (faltaAvulsa) return toast.error(faltaAvulsa);
     setCarregando(true);
     const r = await lancarFaturaAvulsa({
       empresa_id: empresa, cliente_id: cliente,
@@ -159,7 +172,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     onOpenChange(false);
     onLancado(r.dados.competencia);
   };
-  const bloqueado = semContrato ? invalidoAvulsa : invalido;
+  const bloqueado = semContrato ? false : invalido;
 
   return (
     <Dialog open={aberto} onOpenChange={onOpenChange}>

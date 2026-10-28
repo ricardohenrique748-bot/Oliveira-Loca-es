@@ -11,7 +11,12 @@ import { ValidadeBadge } from "@/components/app/validade";
 import { multaSchema, type MultaForm } from "@/lib/schemas/manutencao";
 import { somar } from "@/lib/calculos";
 import { formatData, formatPlaca } from "@/lib/format";
+import { Eye } from "lucide-react";
+import { Badge } from "@/components/ui/basicos";
+import { Button } from "@/components/ui/button";
 import { excluirMulta, salvarMulta } from "../actions";
+import { DetalheMulta } from "./detalhe";
+import * as React from "react";
 
 export type LinhaMulta = {
   id: string; veiculo_id: string; placa: string; renavam: string | null; empresa_apelido: string; contrato_id: string | null; contrato_numero: string | null;
@@ -42,13 +47,16 @@ const colunas: ColumnDef<LinhaMulta, unknown>[] = [
     : <span className="text-muted-foreground">Sem contrato</span> },
   { accessorKey: "valor", header: "Valor", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number} /> },
   { accessorKey: "vencimento", header: "Vencimento", cell: ({ row: { original: m } }) =>
-    m.status === "pendente" ? <ValidadeBadge validade={m.vencimento} /> : m.status === "paga" ? <span className="text-xs">Paga em {formatData(m.pago_em)}</span> : formatData(m.vencimento) },
+    // sem data: não estima nem avisa; o usuário preenche ao abrir a multa
+    m.status === "pendente" && !m.vencimento ? <Badge variant="alerta">Vencimento não informado</Badge>
+      : m.status === "pendente" ? <ValidadeBadge validade={m.vencimento} /> : m.status === "paga" ? <span className="text-xs">Paga em {formatData(m.pago_em)}</span> : formatData(m.vencimento) },
   { accessorKey: "responsavel", header: "Quem paga", meta: { ocultarMobile: true }, cell: ({ getValue }) => ROTULO_RESP[getValue() as string] },
   { accessorKey: "status_exibicao", header: "Status", cell: ({ getValue }) => <StatusBadge status={getValue() as string} /> },
   { accessorKey: "anexo_url", header: "Anexo", meta: { ocultarMobile: true }, cell: ({ getValue }) => <LinkAnexo referencia={getValue() as string | null} rotulo="Abrir" /> },
 ];
 
-export function MultasCliente({ linhas, veiculos, veiculoInicial, podeEditar }: { linhas: LinhaMulta[]; veiculos: Opcao[]; veiculoInicial: string | null; podeEditar: boolean }) {
+export function MultasCliente({ linhas, veiculos, veiculoInicial, abrirNovo, podeEditar }: { linhas: LinhaMulta[]; veiculos: Opcao[]; veiculoInicial: string | null; abrirNovo?: boolean; podeEditar: boolean }) {
+  const [detalhe, setDetalhe] = React.useState<LinhaMulta | null>(null);
   const campos: Campo<MultaForm>[] = [
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", opcoes: veiculos, obrigatorio: true, col: 2 },
     { nome: "data_infracao", rotulo: "Data da infração", tipo: "data", obrigatorio: true, col: 2 },
@@ -70,8 +78,9 @@ export function MultasCliente({ linhas, veiculos, veiculoInicial, podeEditar }: 
   return (
     <div className="space-y-4">
       <CrudSimples<LinhaMulta, MultaForm>
-        titulo="Multas" entidade="multa" busca={false} tamanhoForm="lg"
+        titulo="Multas" entidade="multa" feminino abrirNovo={abrirNovo} busca={false} tamanhoForm="lg"
         descricao="Infrações por veículo. Consulte no portal da SENATRAN / DETRAN e lance aqui; alertas a partir de 10 dias do vencimento."
+        acoesLinha={(m) => <Button variant="ghost" size="icon-sm" aria-label="Detalhes da multa" title="Detalhes" onClick={() => setDetalhe(m)}><Eye /></Button>}
         linhas={linhas} colunas={colunas} campos={campos} schema={multaSchema as never}
         filtros={<>
           <FiltroSelectUrl param="veiculo" rotulo="Veículo" opcoes={veiculos} />
@@ -92,6 +101,7 @@ export function MultasCliente({ linhas, veiculos, veiculoInicial, podeEditar }: 
           { titulo: "Pago em", valor: (m) => m.pago_em, tipo: "data" },
         ] }}
       />
+      <DetalheMulta multa={detalhe} onOpenChange={(v) => !v && setDetalhe(null)} />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Card className="p-3"><p className="text-xs text-muted-foreground">A pagar</p><p className="text-lg font-semibold"><Moeda valor={somar(abertas.map((m) => m.valor))} /></p><p className="text-xs text-muted-foreground">{abertas.length} multa(s)</p></Card>
         <Card className="p-3"><p className="text-xs text-muted-foreground">Vencidas</p><p className="text-lg font-semibold text-status-critico"><Moeda valor={somar(vencidas.map((m) => m.valor))} /></p><p className="text-xs text-muted-foreground">{vencidas.length} multa(s)</p></Card>

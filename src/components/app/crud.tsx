@@ -37,12 +37,16 @@ export interface CrudProps<T extends { id: string }, V extends FieldValues> {
   filtros?: React.ReactNode;
   busca?: string | false;
   acoesLinha?: (r: T) => React.ReactNode;
+  /** botões a mais no cabeçalho, antes do "Novo" */
+  acoesCabecalho?: React.ReactNode;
   hrefLinha?: (r: T) => string;
   cartaoMobile?: (r: T) => React.ReactNode;
   tamanhoForm?: "sm" | "md" | "lg" | "xl";
   semCabecalho?: boolean;
   /** abre o formulário de novo automaticamente quando ?novo=1 */
   abrirNovo?: boolean;
+  /** entidade feminina: "Nova multa" em vez de "Novo multa" */
+  feminino?: boolean;
   /** repassados ao formulário */
   extraForm?: (valores: V) => React.ReactNode;
   rotuloAvancado?: string;
@@ -53,6 +57,7 @@ export function CrudSimples<T extends { id: string }, V extends FieldValues>(p: 
   const router = useRouter();
   const [editando, setEditando] = React.useState<T | null>(null);
   const [aberto, setAberto] = React.useState(!!p.abrirNovo);
+  const novoRotulo = `${p.feminino ? "Nova" : "Novo"} ${p.entidade}`;
   const [excluindo, setExcluindo] = React.useState<T | null>(null);
 
   const abrir = (r: T | null) => { setEditando(r); setAberto(true); };
@@ -95,13 +100,13 @@ export function CrudSimples<T extends { id: string }, V extends FieldValues>(p: 
     <div className="space-y-4">
       {!p.semCabecalho && (
         <Cabecalho titulo={p.titulo} descricao={p.descricao}
-          acoes={p.podeEditar && <Button onClick={() => abrir(null)}><Plus /> Novo {p.entidade}</Button>} />
+          acoes={(p.acoesCabecalho || p.podeEditar) && <>{p.acoesCabecalho}{p.podeEditar && <Button onClick={() => abrir(null)}><Plus /> {novoRotulo}</Button>}</>} />
       )}
       {(p.busca !== false || p.filtros) && (
         <BarraFiltros>
           {p.busca !== false && <BuscaUrl placeholder={p.busca || "Buscar…"} />}
           {p.filtros}
-          {p.semCabecalho && p.podeEditar && <Button className="ml-auto" size="sm" onClick={() => abrir(null)}><Plus /> Novo {p.entidade}</Button>}
+          {p.semCabecalho && p.podeEditar && <Button className="ml-auto" size="sm" onClick={() => abrir(null)}><Plus /> {novoRotulo}</Button>}
         </BarraFiltros>
       )}
       <DataTable
@@ -118,7 +123,7 @@ export function CrudSimples<T extends { id: string }, V extends FieldValues>(p: 
       <FormularioDialog<V>
         aberto={aberto}
         onOpenChange={setAberto}
-        titulo={editando ? `Editar ${p.entidade}` : `Novo ${p.entidade}`}
+        titulo={editando ? `Editar ${p.entidade}` : novoRotulo}
         tamanho={p.tamanhoForm}
         campos={p.campos}
         schema={p.schema}

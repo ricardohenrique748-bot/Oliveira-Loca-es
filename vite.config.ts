@@ -28,6 +28,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     envPrefix: ["VITE_", "NEXT_PUBLIC_"],
+    // só o index.html da raiz: dist-demo/, dist-comercial/ e android/ têm cópias geradas que quebram a varredura
+    optimizeDeps: { entries: ["index.html"] },
     build: demo ? { modulePreload: false, cssCodeSplit: false, rollupOptions: { output: { inlineDynamicImports: true } } } : undefined,
     server: {
       port: 3000,

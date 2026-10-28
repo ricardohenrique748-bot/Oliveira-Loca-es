@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dataObr, dataOpc, moedaObr, textoObr, textoOpc, uuidObr, uuidOpc } from "./cadastros";
+import { dataObr, dataOpc, moedaObr, moedaOpc, textoObr, textoOpc, uuidObr, uuidOpc } from "./cadastros";
 
 /** Anexos podem ser vários, um por linha (ver CampoAnexo multiplo). */
 const anexosOpc = z.string().trim().max(5000).nullish().transform((v) => (v ? v : null));
@@ -16,13 +16,16 @@ const base = {
   forma_pagamento: z.enum(["boleto", "debito_automatico", "cartao", "pix", "transferencia"]),
   conta_bancaria_id: uuidOpc,
   descontar_locador: z.boolean().default(false),
+  /** quanto é descontado do sublocador no repasse (vazio = o valor da despesa) */
+  valor_locador: moedaOpc,
   anexo_url: anexosOpc,
   observacoes: textoOpc,
 };
 
-function regrasVeiculo<T extends { tipo: string; veiculo_id: string | null; descontar_locador: boolean }>(v: T, ctx: z.RefinementCtx) {
+function regrasVeiculo<T extends { tipo: string; veiculo_id: string | null; descontar_locador: boolean; valor_locador: number | null }>(v: T, ctx: z.RefinementCtx) {
   if (v.tipo === "veiculo" && !v.veiculo_id) ctx.addIssue({ code: "custom", path: ["veiculo_id"], message: "Despesa de veículo exige a placa" });
   if (v.descontar_locador && !v.veiculo_id) ctx.addIssue({ code: "custom", path: ["descontar_locador"], message: "Só despesas de veículo podem ser descontadas do locador" });
+  if (v.valor_locador != null && v.valor_locador <= 0) ctx.addIssue({ code: "custom", path: ["valor_locador"], message: "Informe um valor maior que zero ou deixe vazio" });
 }
 
 export const contaPagarNovaSchema = z.object({

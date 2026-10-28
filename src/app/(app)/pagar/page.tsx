@@ -22,7 +22,7 @@ export default function PagarPage() {
 
     let q = supabase.from("contas_pagar_v").select(`id, empresa_id, empresa_apelido, fornecedor_id, fornecedor_nome, descricao, categoria_id, categoria_nome, tipo,
       veiculo_id, placa, vencimento, valor, parcela_num, parcela_total, grupo_parcela_id, recorrente, forma_pagamento, conta_bancaria_id, banco, conta_apelido,
-      descontar_locador, repasse_id, ordem_servico_id, pago_em, valor_pago, anexo_url, observacoes, status, valor_abatido`);
+      descontar_locador, valor_locador, repasse_id, ordem_servico_id, pago_em, valor_pago, anexo_url, observacoes, status, valor_abatido`);
     if (p.get("id")) q = q.eq("id", p.get("id")!);
     else if (p.get("status") === "vencido") q = q.eq("status", "vencido");
     else q = q.gte("vencimento", inicio).lte("vencimento", fimDoMes(inicio));

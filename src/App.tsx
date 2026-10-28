@@ -33,6 +33,7 @@ import PlanosPage from "@/app/(app)/manutencao/planos/page";
 import LeiturasPage from "@/app/(app)/manutencao/leituras/page";
 import DocumentosPage from "@/app/(app)/manutencao/documentos/page";
 import MultasPage from "@/app/(app)/manutencao/multas/page";
+import LicenciamentoPage from "@/app/(app)/manutencao/licenciamento/page";
 import PneusPage from "@/app/(app)/manutencao/pneus/page";
 import RelatoriosPage from "@/app/(app)/relatorios/page";
 import ConfiguracoesPage from "@/app/(app)/configuracoes/page";
@@ -101,6 +102,7 @@ export function App() {
         <Route path="/manutencao/leituras" element={<LeiturasPage />} />
         <Route path="/manutencao/documentos" element={<DocumentosPage />} />
         <Route path="/manutencao/multas" element={<MultasPage />} />
+        <Route path="/manutencao/licenciamento" element={<LicenciamentoPage />} />
         <Route path="/manutencao/pneus" element={<PneusPage />} />
 
         {/* Gestão */}

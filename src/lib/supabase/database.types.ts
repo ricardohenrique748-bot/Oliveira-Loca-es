@@ -195,6 +195,33 @@ export type Database = {
           },
         ]
       }
+      calendario_licenciamento: {
+        Row: {
+          ano: number
+          final: number
+          fonte: string | null
+          grupo: string
+          updated_at: string
+          vencimento: string
+        }
+        Insert: {
+          ano: number
+          final: number
+          fonte?: string | null
+          grupo: string
+          updated_at?: string
+          vencimento: string
+        }
+        Update: {
+          ano?: number
+          final?: number
+          fonte?: string | null
+          grupo?: string
+          updated_at?: string
+          vencimento?: string
+        }
+        Relationships: []
+      }
       categorias_despesa: {
         Row: {
           ativo: boolean
@@ -383,6 +410,7 @@ export type Database = {
           tipo: Database["public"]["Enums"]["tipo_despesa"]
           updated_at: string
           valor: number
+          valor_locador: number | null
           valor_pago: number | null
           veiculo_id: string | null
           vencimento: string
@@ -410,6 +438,7 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["tipo_despesa"]
           updated_at?: string
           valor: number
+          valor_locador?: number | null
           valor_pago?: number | null
           veiculo_id?: string | null
           vencimento: string
@@ -437,6 +466,7 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["tipo_despesa"]
           updated_at?: string
           valor?: number
+          valor_locador?: number | null
           valor_pago?: number | null
           veiculo_id?: string | null
           vencimento?: string
@@ -922,6 +952,7 @@ export type Database = {
           final: boolean
           forma_pagamento: Database["public"]["Enums"]["forma_pagamento"]
           id: string
+          itens: Json
           nfse_ambiente: string | null
           nfse_chave: string | null
           nfse_dps: number | null
@@ -933,7 +964,6 @@ export type Database = {
           periodo_inicio: string
           status: Database["public"]["Enums"]["status_medicao"]
           unidade: string | null
-          itens: Json
           updated_at: string
           valor_base: number
           valor_final: number
@@ -957,6 +987,7 @@ export type Database = {
           final?: boolean
           forma_pagamento?: Database["public"]["Enums"]["forma_pagamento"]
           id?: string
+          itens?: Json
           nfse_ambiente?: string | null
           nfse_chave?: string | null
           nfse_dps?: number | null
@@ -968,7 +999,6 @@ export type Database = {
           periodo_inicio: string
           status?: Database["public"]["Enums"]["status_medicao"]
           unidade?: string | null
-          itens?: Json
           updated_at?: string
           valor_base?: number
           valor_final?: number
@@ -992,6 +1022,7 @@ export type Database = {
           final?: boolean
           forma_pagamento?: Database["public"]["Enums"]["forma_pagamento"]
           id?: string
+          itens?: Json
           nfse_ambiente?: string | null
           nfse_chave?: string | null
           nfse_dps?: number | null
@@ -1003,7 +1034,6 @@ export type Database = {
           periodo_inicio?: string
           status?: Database["public"]["Enums"]["status_medicao"]
           unidade?: string | null
-          itens?: Json
           updated_at?: string
           valor_base?: number
           valor_final?: number
@@ -1977,6 +2007,7 @@ export type Database = {
       veiculos: {
         Row: {
           ano: number | null
+          calendario_licenciamento: string
           chassi: string | null
           cor: string | null
           created_at: string
@@ -1986,6 +2017,9 @@ export type Database = {
           horimetro_atual: number
           id: string
           km_atual: number
+          licenciado_exercicio: number | null
+          licenciamento_fonte: string | null
+          licenciamento_verificado_em: string | null
           locador_id: string | null
           marca: string | null
           modelo: string | null
@@ -1999,6 +2033,7 @@ export type Database = {
         }
         Insert: {
           ano?: number | null
+          calendario_licenciamento?: string
           chassi?: string | null
           cor?: string | null
           created_at?: string
@@ -2008,6 +2043,9 @@ export type Database = {
           horimetro_atual?: number
           id?: string
           km_atual?: number
+          licenciado_exercicio?: number | null
+          licenciamento_fonte?: string | null
+          licenciamento_verificado_em?: string | null
           locador_id?: string | null
           marca?: string | null
           modelo?: string | null
@@ -2021,6 +2059,7 @@ export type Database = {
         }
         Update: {
           ano?: number | null
+          calendario_licenciamento?: string
           chassi?: string | null
           cor?: string | null
           created_at?: string
@@ -2030,6 +2069,9 @@ export type Database = {
           horimetro_atual?: number
           id?: string
           km_atual?: number
+          licenciado_exercicio?: number | null
+          licenciamento_fonte?: string | null
+          licenciamento_verificado_em?: string | null
           locador_id?: string | null
           marca?: string | null
           modelo?: string | null
@@ -2092,7 +2134,30 @@ export type Database = {
           updated_at: string | null
           valor: number | null
           valor_abatido: number | null
+          valor_locador: number | null
           valor_pago: number | null
+          veiculo_id: string | null
+          vencimento: string | null
+        }
+        Relationships: []
+      }
+      licenciamento_v: {
+        Row: {
+          calendario_fonte: string | null
+          calendario_licenciamento: string | null
+          dias_para_vencer: number | null
+          empresa_apelido: string | null
+          empresa_id: string | null
+          exercicio: number | null
+          final: number | null
+          licenciado_exercicio: number | null
+          licenciamento_fonte: string | null
+          licenciamento_verificado_em: string | null
+          placa: string | null
+          renavam: string | null
+          situacao: string | null
+          status: Database["public"]["Enums"]["status_veiculo"] | null
+          tipo: Database["public"]["Enums"]["tipo_veiculo"] | null
           veiculo_id: string | null
           vencimento: string | null
         }
@@ -2124,6 +2189,7 @@ export type Database = {
           final: boolean | null
           forma_pagamento: Database["public"]["Enums"]["forma_pagamento"] | null
           id: string | null
+          itens: Json | null
           locador_id: string | null
           margem: number | null
           numero_nf: string | null
@@ -2144,7 +2210,6 @@ export type Database = {
           status_exibicao: string | null
           tipo_cobranca: string | null
           unidade: string | null
-          itens: Json | null
           updated_at: string | null
           valor_base: number | null
           valor_final: number | null
