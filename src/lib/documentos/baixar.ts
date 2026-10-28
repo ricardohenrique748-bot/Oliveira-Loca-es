@@ -124,7 +124,7 @@ export function baixarReciboRepassePDF(ids: string[], ajustes?: DadosReciboRepas
 }
 
 /** Recibo das despesas "descontar do locador" de uma placa sem fatura (mesmo modelo do recibo de repasse). */
-export function baixarReciboDescontosPDF(contaIds: string[]) {
+export function baixarReciboDescontosPDF(contaIds: string[], ajustes?: DadosReciboRepasse["ajustes"]) {
   return gerar(async () => {
     const supabase = createClient();
     const { data: cs, error } = await supabase.from("contas_pagar_v")
@@ -142,7 +142,7 @@ export function baixarReciboDescontosPDF(contaIds: string[]) {
     for (const x of [loc, emp]) if (x.error) throw x.error;
     if (!loc.data || !emp.data) return null;
     return montarReciboDescontos({
-      placa: c0.placa ?? "", empresa: emp.data, locador: loc.data as DadosReciboRepasse["locador"], data: hojeSP(),
+      placa: c0.placa ?? "", empresa: emp.data, locador: loc.data as DadosReciboRepasse["locador"], data: hojeSP(), ajustes,
       descontos: (cs ?? []).map((c) => ({ descricao: c.descricao ?? "Despesa", data: c.vencimento,
         valor: Math.round(((c.valor_locador ?? c.valor ?? 0) - (c.valor_abatido ?? 0)) * 100) / 100 })).filter((x) => x.valor > 0),
     });

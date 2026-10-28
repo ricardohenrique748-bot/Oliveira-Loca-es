@@ -19,8 +19,7 @@ import { ROTULOS } from "@/lib/schemas/cadastros";
 import { cn } from "@/lib/utils";
 import { InputMoeda } from "@/components/app/campos";
 import { alterarValorRepasse, buscarRepassesPendentes, pagarRepasse } from "./actions";
-import { DialogoReciboRepasse } from "./recibo";
-import { baixarReciboDescontosPDF } from "@/lib/documentos/baixar";
+import { DialogoReciboDescontos, DialogoReciboRepasse } from "./recibo";
 
 export type Repasse = {
   id: string; medicao_id: string; locador_id: string; locador_nome: string; empresa_id: string; empresa_apelido: string; veiculo_id: string; placa: string;
@@ -38,6 +37,8 @@ export type DescontoPendente = {
 };
 export type Locador = { id: string; nome: string; cpf_cnpj: string | null; telefone: string | null; chave_pix: string | null; tipo_chave_pix: keyof typeof ROTULOS.tipoChavePix | null; banco: string | null; nome_titular_pix: string | null };
 
+const SEM_DESCONTOS: DescontoPendente[] = [];
+
 /** "2026-08-21" → "21/08" (como na planilha; o ano está no filtro de competência) */
 const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
@@ -53,6 +54,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
   const [lancando, setLancando] = React.useState(false);
   // recibo do repasse para o locador assinar (acréscimos/descontos só no PDF)
   const [recibo, setRecibo] = React.useState<Repasse | null>(null);
+  const [reciboDescontos, setReciboDescontos] = React.useState<{ placa: string | null; ds: DescontoPendente[] } | null>(null);
   const [abertos, setAbertos] = React.useState<Set<string>>(new Set());
   // descontos sem repasse: uma linha por placa na própria tabela, "aguardando fatura"
   const aguardando = React.useMemo(() => {
@@ -222,7 +224,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                         </TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon-sm" title="Recibo dos descontos (PDF)" aria-label={`Recibo dos descontos ${g.placa ? formatPlaca(g.placa) : ""}`}
-                            onClick={() => baixarReciboDescontosPDF(g.ds.map((d) => d.id))}><FileSignature /></Button>
+                            onClick={() => setReciboDescontos(g)}><FileSignature /></Button>
                         </TableCell>
                       </TableRow>
                       {aberto && g.ds.map((d) => (
@@ -256,6 +258,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
 
       <DialogoReciboRepasse repasse={recibo} mesmaPlaca={recibo ? repasses.filter((x) => x.veiculo_id === recibo.veiculo_id && x.status !== "cancelado") : []}
         onOpenChange={(v) => !v && setRecibo(null)} />
+      <DialogoReciboDescontos placa={reciboDescontos?.placa ?? null} descontos={reciboDescontos?.ds ?? SEM_DESCONTOS} onOpenChange={(v) => !v && setReciboDescontos(null)} />
       <DialogoLancar aberto={lancando} onOpenChange={setLancando} onEscolher={(r) => { setLancando(false); setPagando(r); }} />
       <DialogoPagar repasse={pagando} locador={pagando ? locadorDe(pagando.locador_id, pagando.locador_nome) : null} onOpenChange={(v) => !v && setPagando(null)} onFeito={() => router.refresh()} />
     </div>

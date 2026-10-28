@@ -73,6 +73,8 @@ export interface DadosReciboDescontos {
   locador: DadosReciboRepasse["locador"];
   descontos: { descricao: string; data: string | null; valor: number }[];
   data: string;
+  /** digitados na hora de gerar: só saem no recibo */
+  ajustes?: { acrescimos: ItemRecibo[]; descontos: ItemRecibo[] };
 }
 
 /**
@@ -82,7 +84,15 @@ export interface DadosReciboDescontos {
 export function montarReciboDescontos(d: DadosReciboDescontos): Documento {
   const placa = formatPlaca(d.placa);
   const ds = [...d.descontos].sort((a, b) => (a.data ?? "").localeCompare(b.data ?? ""));
-  const total = somar(ds.map((x) => x.valor));
+  const acrescimos = d.ajustes?.acrescimos ?? [], extras = d.ajustes?.descontos ?? [];
+  // saldo: negativo = a descontar do locador; positivo = a favor dele
+  const saldo = somar([...acrescimos.map((a) => a.valor), ...ds.map((x) => -x.valor), ...extras.map((x) => -x.valor)]);
+  const total = Math.abs(saldo);
+  const linhas = [
+    ...ds.map((x) => [`(-) ${x.descricao}`, formatData(x.data), `- ${formatBRL(x.valor)}`]),
+    ...extras.map((x) => [`(-) ${x.descricao}`, "", `- ${formatBRL(x.valor)}`]),
+    ...acrescimos.map((x) => [`(+) ${x.descricao}`, "", formatBRL(x.valor)]),
+  ];
   const l = d.locador;
   const pix = l.chave_pix ? `${l.tipo_chave_pix ? `${ROTULOS.tipoChavePix[l.tipo_chave_pix]}: ` : ""}${l.chave_pix}${l.nome_titular_pix ? ` (${l.nome_titular_pix})` : ""}` : "";
 
@@ -93,11 +103,14 @@ export function montarReciboDescontos(d: DadosReciboDescontos): Documento {
     { t: "secao", texto: "Pagador" },
     { t: "campos", colunas: 2, pares: [["Razão social", d.empresa.razao_social], ["CNPJ", d.empresa.cnpj ?? ""]] },
     { t: "secao", texto: "Discriminação" },
-    { t: "tabela", cabecalho: ["Descrição", "Data", "Valor"], linhas: ds.map((x) => [`(-) ${x.descricao}`, formatData(x.data), `- ${formatBRL(x.valor)}`]),
-      direita: [2], larguras: [0, 40, 30], total: ["Total a descontar", "", `- ${formatBRL(total)}`] },
+    { t: "tabela", cabecalho: ["Descrição", "Data", "Valor"], linhas, direita: [2], larguras: [0, 40, 30],
+      total: saldo <= 0 ? ["Total a descontar", "", `- ${formatBRL(total)}`] : ["Saldo a favor do locador", "", formatBRL(total)] },
     { t: "espaco", mm: 4 },
-    { t: "paragrafo", texto: `Estou ciente de que as despesas acima, do veículo placa ${placa}, no total de ${formatBRL(total)} (${valorPorExtenso(total)}), `
-      + `serão descontadas do próximo repasse da locação a ser pago por ${d.empresa.razao_social}${d.empresa.cnpj ? `, CNPJ ${d.empresa.cnpj}` : ""}.` },
+    { t: "paragrafo", texto: saldo <= 0
+      ? `Estou ciente de que os valores acima, do veículo placa ${placa}, no total de ${formatBRL(total)} (${valorPorExtenso(total)}), `
+        + `serão descontados do próximo repasse da locação a ser pago por ${d.empresa.razao_social}${d.empresa.cnpj ? `, CNPJ ${d.empresa.cnpj}` : ""}.`
+      : `Estou ciente dos valores acima, do veículo placa ${placa}, que resultam em saldo de ${formatBRL(total)} (${valorPorExtenso(total)}) a meu favor, `
+        + `a ser considerado no próximo repasse da locação pago por ${d.empresa.razao_social}${d.empresa.cnpj ? `, CNPJ ${d.empresa.cnpj}` : ""}.` },
     { t: "espaco", mm: 2 },
     { t: "paragrafo", alinhar: "direita", texto: `${d.empresa.cidade ? `${d.empresa.cidade}${d.empresa.uf ? `/${d.empresa.uf}` : ""}, ` : ""}${formatData(d.data)}` },
     { t: "espaco", mm: 10 },
