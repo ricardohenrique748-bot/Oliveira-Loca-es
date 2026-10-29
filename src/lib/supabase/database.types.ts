@@ -116,7 +116,8 @@ export type Database = {
           seu_numero: string
           status: string
           txid: string | null
-          juros_mes_pct: number | null
+          juros: number | null
+          juros_tipo: "pct_dia" | "pct_mes" | "valor_dia" | null
           multa_pct: number | null
           negativacao_dias: number | null
           protesto_dias: number | null
@@ -142,7 +143,8 @@ export type Database = {
           seu_numero: string
           status?: string
           txid?: string | null
-          juros_mes_pct?: number | null
+          juros?: number | null
+          juros_tipo?: "pct_dia" | "pct_mes" | "valor_dia" | null
           multa_pct?: number | null
           negativacao_dias?: number | null
           protesto_dias?: number | null
@@ -168,7 +170,8 @@ export type Database = {
           seu_numero?: string
           status?: string
           txid?: string | null
-          juros_mes_pct?: number | null
+          juros?: number | null
+          juros_tipo?: "pct_dia" | "pct_mes" | "valor_dia" | null
           multa_pct?: number | null
           negativacao_dias?: number | null
           protesto_dias?: number | null
@@ -354,7 +357,8 @@ export type Database = {
           codigo_beneficiario: string | null
           boleto_apos_vencimento: "protesto" | "negativacao" | null
           boleto_dias_apos_vencimento: number | null
-          boleto_juros_mes_pct: number | null
+          boleto_juros: number | null
+          boleto_juros_tipo: "pct_dia" | "pct_mes" | "valor_dia"
           boleto_multa_pct: number | null
           conta: string | null
           created_at: string
@@ -372,7 +376,8 @@ export type Database = {
           codigo_beneficiario?: string | null
           boleto_apos_vencimento?: "protesto" | "negativacao" | null
           boleto_dias_apos_vencimento?: number | null
-          boleto_juros_mes_pct?: number | null
+          boleto_juros?: number | null
+          boleto_juros_tipo?: "pct_dia" | "pct_mes" | "valor_dia"
           boleto_multa_pct?: number | null
           conta?: string | null
           created_at?: string
@@ -390,7 +395,8 @@ export type Database = {
           codigo_beneficiario?: string | null
           boleto_apos_vencimento?: "protesto" | "negativacao" | null
           boleto_dias_apos_vencimento?: number | null
-          boleto_juros_mes_pct?: number | null
+          boleto_juros?: number | null
+          boleto_juros_tipo?: "pct_dia" | "pct_mes" | "valor_dia"
           boleto_multa_pct?: number | null
           conta?: string | null
           created_at?: string

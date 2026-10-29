@@ -1,7 +1,7 @@
 /**
  * Boletos Sicredi a partir das medições faturadas.
  * POST { acao: "emitir", medicao_id, conta_bancaria_id?, vencimento?, encargos? }
- *      encargos: { multa_pct, juros_mes_pct, apos_vencimento: "protesto" | "negativacao" | null, dias_apos_vencimento }
+ *      encargos: { multa_pct, juros, juros_tipo: "pct_dia" | "pct_mes" | "valor_dia", apos_vencimento: "protesto" | "negativacao" | null, dias_apos_vencimento }
  * POST { acao: "pdf", boleto_id }                → { pdf_base64 }
  * POST { acao: "atualizar", boleto_ids? }        → consulta os boletos em aberto; pagos viram recebimento
  * POST { acao: "baixar", boleto_id }             → cancela (baixa) o boleto no banco
@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
 type Ctx = { usuario: SupabaseClient; admin: SupabaseClient; userId: string };
 
 // ---------- emitir ----------
-type EncargosCorpo = { multa_pct?: number | null; juros_mes_pct?: number | null; apos_vencimento?: string | null; dias_apos_vencimento?: number | null };
+type EncargosCorpo = { multa_pct?: number | null; juros?: number | null; juros_tipo?: string | null; apos_vencimento?: string | null; dias_apos_vencimento?: number | null };
 
 async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: string; conta_bancaria_id?: string; vencimento?: string; encargos?: EncargosCorpo }) {
   const { data: m } = await usuario.from("medicoes_v")
@@ -84,7 +84,7 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
 
   const conta = await contaCobranca(usuario, m.empresa_id, corpo.conta_bancaria_id);
   const pagador = await pagadorDoCliente(usuario, admin, m.cliente_id);
-  const encargos = validarEncargos(corpo.encargos);
+  const encargos = validarEncargos(corpo.encargos, valor);
 
   const seuNumero = (digitos(m.numero_nf) || m.id.replace(/-/g, "").slice(0, 10)).slice(-10);
   const b = await criarBoleto(conta.beneficiario, {
@@ -97,7 +97,7 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
     medicao_id: m.id, empresa_id: m.empresa_id, conta_bancaria_id: conta.id, ambiente: ambiente(), seu_numero: seuNumero,
     nosso_numero: b.nossoNumero, linha_digitavel: b.linhaDigitavel, codigo_barras: b.codigoBarras, pix_copia_cola: b.qrCode, txid: b.txid,
     valor, data_vencimento: vencimento, created_by: userId,
-    multa_pct: encargos.multaPct, juros_mes_pct: encargos.jurosMesPct, protesto_dias: encargos.protestoDias, negativacao_dias: encargos.negativacaoDias,
+    multa_pct: encargos.multaPct, juros: encargos.juros, juros_tipo: encargos.juros ? encargos.jurosTipo : null, protesto_dias: encargos.protestoDias, negativacao_dias: encargos.negativacaoDias,
   }).select().single();
   if (error) {
     // o boleto já existe no banco: não deixar órfão
@@ -108,14 +108,22 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
 }
 
 /** Mesmas regras do cadastro da conta (limites do Manual API Cobrança 4.0). */
-function validarEncargos(e: EncargosCorpo = {}): Encargos {
+function validarEncargos(e: EncargosCorpo = {}, valorBoleto: number): Encargos {
   const pct = (v: unknown, rotulo: string) => {
     if (v == null || v === "" || Number(v) === 0) return null;
     const n = Number(v);
     if (!(n > 0 && n < 100)) throw new ErroUso(`${rotulo}: informe um percentual entre 0 e 100.`);
     return Math.round(n * 100) / 100;
   };
-  const r: Encargos = { multaPct: pct(e.multa_pct, "Multa"), jurosMesPct: pct(e.juros_mes_pct, "Juros"), protestoDias: null, negativacaoDias: null };
+  const jurosTipo = e.juros_tipo === "valor_dia" || e.juros_tipo === "pct_mes" ? e.juros_tipo : "pct_dia";
+  let juros: number | null = null;
+  if (jurosTipo === "valor_dia") {
+    const n = Number(e.juros ?? 0);
+    if (n < 0 || !Number.isFinite(n)) throw new ErroUso("Juros: informe um valor por dia maior que zero.");
+    if (n >= valorBoleto) throw new ErroUso("Juros: o valor por dia precisa ser menor que o valor do boleto.");
+    juros = n > 0 ? Math.round(n * 100) / 100 : null;
+  } else juros = pct(e.juros, "Juros");
+  const r: Encargos = { multaPct: pct(e.multa_pct, "Multa"), juros, jurosTipo, protestoDias: null, negativacaoDias: null };
   if (e.apos_vencimento === "protesto" || e.apos_vencimento === "negativacao") {
     const [min, max] = e.apos_vencimento === "protesto" ? [3, 99] : [46, 99];
     const d = Number(e.dias_apos_vencimento);

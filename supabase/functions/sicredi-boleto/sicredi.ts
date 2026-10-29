@@ -31,7 +31,8 @@ export interface Pagador {
 /** Cobrados após o vencimento. Sem dataInicioJuros/Multa: com elas o Sicredi tira o QR Code PIX. */
 export interface Encargos {
   multaPct: number | null;
-  jurosMesPct: number | null;
+  juros: number | null; // por dia de atraso, conforme jurosTipo
+  jurosTipo: "pct_dia" | "pct_mes" | "valor_dia";
   protestoDias: number | null; // 3–99, exclusivo com negativação
   negativacaoDias: number | null; // 46–99, exige Serasa no cadastro do beneficiário
 }
@@ -147,7 +148,8 @@ export async function criarBoleto(b: Beneficiario, dados: {
       dataVencimento: dados.vencimento,
       valor: Number(dados.valor.toFixed(2)),
       ...(e?.multaPct ? { tipoMulta: "PERCENTUAL", multa: e.multaPct } : {}),
-      ...(e?.jurosMesPct ? { tipoJuros: "PERCENTUAL", tipoJurosPercentual: "MENSAL", juros: e.jurosMesPct } : {}),
+      ...(e?.juros ? (e.jurosTipo === "valor_dia" ? { tipoJuros: "VALOR", juros: e.juros }
+        : { tipoJuros: "PERCENTUAL", tipoJurosPercentual: e.jurosTipo === "pct_mes" ? "MENSAL" : "DIARIO", juros: e.juros }) : {}),
       ...(e?.protestoDias ? { diasProtestoAuto: e.protestoDias } : e?.negativacaoDias ? { diasNegativacaoAuto: e.negativacaoDias } : {}),
       ...(dados.mensagens?.length ? { mensagens: dados.mensagens.slice(0, 4).map((m) => m.slice(0, 80)) } : {}),
     }),

@@ -5,11 +5,11 @@ import { StatusBadge } from "@/components/app/comuns";
 import { Badge } from "@/components/ui/basicos";
 import type { Campo } from "@/components/app/formulario";
 import type { Opcao } from "@/components/ui/select";
-import { APOS_VENCIMENTO, contaBancariaSchema, type ContaBancariaForm } from "@/lib/schemas/cadastros";
+import { APOS_VENCIMENTO, JUROS_TIPOS, contaBancariaSchema, type ContaBancariaForm } from "@/lib/schemas/cadastros";
 import { salvarContaBancaria, excluirContaBancaria } from "../actions";
 
 type Linha = { id: string; empresa_id: string; empresa: string; banco: ContaBancariaForm["banco"]; agencia: string | null; conta: string | null; posto: string | null; codigo_beneficiario: string | null; apelido: string; ativo: boolean }
-  & Pick<ContaBancariaForm, "boleto_multa_pct" | "boleto_juros_mes_pct" | "boleto_apos_vencimento" | "boleto_dias_apos_vencimento">;
+  & Pick<ContaBancariaForm, "boleto_multa_pct" | "boleto_juros" | "boleto_juros_tipo" | "boleto_apos_vencimento" | "boleto_dias_apos_vencimento">;
 
 const boletoSicredi = (v: ContaBancariaForm) => v.banco === "Sicredi" && !!v.codigo_beneficiario;
 
@@ -33,8 +33,9 @@ export function ContasCliente({ linhas, empresas, empresaPadrao, podeEditar }: {
     { nome: "ativo", rotulo: "Ativa", tipo: "checkbox", col: 2 },
     { nome: "posto", rotulo: "Posto", col: 2, placeholder: "Ex.: 02", ajuda: "Do contrato de cobrança", visivel: (v) => v.banco === "Sicredi" },
     { nome: "codigo_beneficiario", rotulo: "Código do beneficiário", col: 4, ajuda: "Preenchido = esta conta emite boletos pelo sistema", visivel: (v) => v.banco === "Sicredi" },
-    { nome: "boleto_multa_pct", rotulo: "Multa por atraso (%)", tipo: "decimal", col: 3, placeholder: "Ex.: 2", ajuda: "Padrão dos boletos; dá para mudar na emissão", visivel: boletoSicredi },
-    { nome: "boleto_juros_mes_pct", rotulo: "Juros ao mês (%)", tipo: "decimal", col: 3, placeholder: "Ex.: 1", visivel: boletoSicredi },
+    { nome: "boleto_multa_pct", rotulo: "Multa (%)", tipo: "decimal", col: 2, placeholder: "Ex.: 2", ajuda: "Cobrada uma vez ao vencer", visivel: boletoSicredi },
+    { nome: "boleto_juros", rotulo: "Juros por dia de atraso", tipo: "decimal", col: 2, placeholder: "Ex.: 0,33", ajuda: "Padrão; dá para mudar na emissão", visivel: boletoSicredi },
+    { nome: "boleto_juros_tipo", rotulo: "Unidade dos juros", tipo: "select", opcoes: [...JUROS_TIPOS], col: 2, visivel: boletoSicredi },
     { nome: "boleto_apos_vencimento", rotulo: "Se não pagar", tipo: "select", opcoes: [...APOS_VENCIMENTO], vazio: "Não protestar nem negativar", col: 4, visivel: boletoSicredi },
     { nome: "boleto_dias_apos_vencimento", rotulo: "Dias após o vencimento", tipo: "numero", col: 2,
       ajuda: "Protesto: 3 a 99 · Serasa: 46 a 99", visivel: (v) => boletoSicredi(v) && !!v.boleto_apos_vencimento },
@@ -44,9 +45,9 @@ export function ContasCliente({ linhas, empresas, empresaPadrao, podeEditar }: {
       titulo="Contas bancárias" descricao="Bradesco, Sicredi e Inter de cada empresa — usadas em recebimentos e pagamentos." entidade="conta"
       linhas={linhas} colunas={colunas} campos={campos} schema={contaBancariaSchema} busca={false}
       novo={{ empresa_id: empresaPadrao ?? empresas[0]?.value, banco: "Bradesco", agencia: null, conta: null, posto: null, codigo_beneficiario: null, apelido: "", ativo: true,
-        boleto_multa_pct: null, boleto_juros_mes_pct: null, boleto_apos_vencimento: null, boleto_dias_apos_vencimento: null }}
+        boleto_multa_pct: null, boleto_juros: null, boleto_juros_tipo: "pct_dia", boleto_apos_vencimento: null, boleto_dias_apos_vencimento: null }}
       paraForm={(r) => ({ empresa_id: r.empresa_id, banco: r.banco, agencia: r.agencia, conta: r.conta, posto: r.posto, codigo_beneficiario: r.codigo_beneficiario, apelido: r.apelido, ativo: r.ativo,
-        boleto_multa_pct: r.boleto_multa_pct, boleto_juros_mes_pct: r.boleto_juros_mes_pct, boleto_apos_vencimento: r.boleto_apos_vencimento, boleto_dias_apos_vencimento: r.boleto_dias_apos_vencimento })}
+        boleto_multa_pct: r.boleto_multa_pct, boleto_juros: r.boleto_juros, boleto_juros_tipo: r.boleto_juros_tipo, boleto_apos_vencimento: r.boleto_apos_vencimento, boleto_dias_apos_vencimento: r.boleto_dias_apos_vencimento })}
       salvar={salvarContaBancaria} excluir={excluirContaBancaria} podeEditar={podeEditar}
       exportar={{ nome: "contas_bancarias", colunas: [
         { titulo: "Apelido", valor: (r) => r.apelido }, { titulo: "Empresa", valor: (r) => r.empresa }, { titulo: "Banco", valor: (r) => r.banco },

@@ -19,7 +19,7 @@ import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { formatBRL, formatData, formatPct, formatPeriodo, formatPlaca, hojeSP, linkEmail, linkWhatsApp, preencherTemplate } from "@/lib/format";
 import { somar } from "@/lib/calculos";
-import { APOS_VENCIMENTO, DIAS_APOS_VENCIMENTO } from "@/lib/schemas/cadastros";
+import { APOS_VENCIMENTO, DIAS_APOS_VENCIMENTO, JUROS_TIPOS, type JurosTipo } from "@/lib/schemas/cadastros";
 import {
   atualizarBoletos, baixarEmLote, baixarPdfBoleto, buscarFaturasAbertas, cancelarBoleto, emitirBoleto, type EncargosBoleto, estornarRecebimento, listarRecebimentos, registrarRecebimento, type Boleto,
 } from "./actions";
@@ -34,7 +34,7 @@ export type ContatoCobranca = { cliente_id: string; obra_id: string | null; nome
 /** boleto: conta Sicredi com código do beneficiário (emite boleto pelo sistema) */
 type Conta = Opcao & { empresa_id: string; boleto?: boolean; encargos?: EncargosBoleto };
 
-const SEM_ENCARGOS: EncargosBoleto = { multa_pct: null, juros_mes_pct: null, apos_vencimento: null, dias_apos_vencimento: null };
+const SEM_ENCARGOS: EncargosBoleto = { multa_pct: null, juros: null, juros_tipo: "pct_dia", apos_vencimento: null, dias_apos_vencimento: null };
 
 const FAIXAS = [
   { chave: "a_vencer", rotulo: "A vencer", tom: undefined },
@@ -341,6 +341,14 @@ function DialogoBaixa({ medicao: m, contas, podeEditar, onOpenChange, onFeito }:
   );
 }
 
+/** juros de um dia de atraso em R$ (% ao mês: o Sicredi rateia por 30 dias) */
+function jurosPorDia(valor: number, juros: number, tipo: JurosTipo) {
+  return tipo === "valor_dia" ? juros : tipo === "pct_dia" ? valor * juros / 100 : valor * juros / 100 / 30;
+}
+function descreverJuros(juros: number, tipo: JurosTipo) {
+  return tipo === "valor_dia" ? `${formatBRL(juros)} por dia` : `${formatPct(juros, 2)} ${tipo === "pct_dia" ? "ao dia" : "ao mês"}`;
+}
+
 /** 47 dígitos → "74891.12115 00397.367899 03123.451001 1 87340000000050" (formato impresso no boleto). */
 function formatLinhaDigitavel(l: string) {
   const d = l.replace(/\D/g, "");
@@ -426,7 +434,7 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
               {(() => {
                 const itens = [
                   b.multa_pct && `Multa ${formatPct(b.multa_pct)}`,
-                  b.juros_mes_pct && `Juros ${formatPct(b.juros_mes_pct)} ao mês`,
+                  b.juros && `Juros ${descreverJuros(b.juros, b.juros_tipo ?? "pct_mes")}`,
                   b.protesto_dias && `Protesto ${b.protesto_dias} dias após o vencimento`,
                   b.negativacao_dias && `Serasa ${b.negativacao_dias} dias após o vencimento`,
                 ].filter(Boolean);
@@ -466,12 +474,21 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
               </div>
               <fieldset className="space-y-3 rounded-md border p-3">
                 <legend className="px-1 text-xs font-medium text-muted-foreground">Após o vencimento</legend>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
                   <div className="space-y-1.5"><Label htmlFor="bol-multa">Multa (%)</Label>
                     <InputNumero id="bol-multa" casas={2} placeholder="Sem multa" value={encargos.multa_pct} onChange={(v) => enc({ multa_pct: v })} /></div>
-                  <div className="space-y-1.5"><Label htmlFor="bol-juros">Juros ao mês (%)</Label>
-                    <InputNumero id="bol-juros" casas={2} placeholder="Sem juros" value={encargos.juros_mes_pct} onChange={(v) => enc({ juros_mes_pct: v })} /></div>
+                  <div className="space-y-1.5"><Label htmlFor="bol-juros">Juros por dia de atraso</Label>
+                    <div className="flex gap-2">
+                      <InputNumero id="bol-juros" casas={2} placeholder="Sem juros" value={encargos.juros} onChange={(v) => enc({ juros: v })} className="min-w-0 flex-1" />
+                      <SelectSimples aria-label="Unidade dos juros" value={encargos.juros_tipo} opcoes={[...JUROS_TIPOS]} className="w-32 shrink-0"
+                        onChange={(v) => enc({ juros_tipo: (v ?? "pct_dia") as JurosTipo })} />
+                    </div></div>
                 </div>
+                {m && (encargos.multa_pct || encargos.juros) ? <p className="text-xs text-muted-foreground">
+                  Se atrasar: {[
+                    encargos.multa_pct && `multa de ${formatBRL(m.saldo * encargos.multa_pct / 100)} (uma vez)`,
+                    encargos.juros && `+ ${formatBRL(jurosPorDia(m.saldo, encargos.juros, encargos.juros_tipo))} por dia`,
+                  ].filter(Boolean).join(" ")}</p> : null}
                 <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
                   <div className="space-y-1.5"><Label>Se não pagar</Label>
                     <SelectSimples aria-label="Se não pagar" value={encargos.apos_vencimento} vazio="Não protestar nem negativar" opcoes={[...APOS_VENCIMENTO]}

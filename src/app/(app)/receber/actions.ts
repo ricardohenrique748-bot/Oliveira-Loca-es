@@ -5,6 +5,7 @@ import type { LinhaReceber } from "./client";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { recebimentoSchema } from "@/lib/schemas/operacao";
+import type { JurosTipo } from "@/lib/schemas/cadastros";
 
 const REVALIDAR = ["/receber", "/medicoes", "/repasses", "/dashboard"];
 
@@ -71,7 +72,7 @@ export async function buscarFaturasAbertas(busca: string) {
 export type Boleto = {
   id: string; medicao_id: string; nosso_numero: string; linha_digitavel: string; pix_copia_cola: string | null; valor: number;
   data_vencimento: string; status: "emitido" | "pago" | "baixado"; data_pagamento: string | null; ambiente: "sandbox" | "producao";
-  multa_pct: number | null; juros_mes_pct: number | null; protesto_dias: number | null; negativacao_dias: number | null;
+  multa_pct: number | null; juros: number | null; juros_tipo: JurosTipo | null; protesto_dias: number | null; negativacao_dias: number | null;
 };
 
 async function sicredi<T>(corpo: Record<string, unknown>): Promise<T> {
@@ -86,8 +87,8 @@ async function sicredi<T>(corpo: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-/** Multa e juros em %, protesto/negativação em dias após o vencimento; a Edge Function aplica os limites do Sicredi. */
-export type EncargosBoleto = { multa_pct: number | null; juros_mes_pct: number | null; apos_vencimento: "protesto" | "negativacao" | null; dias_apos_vencimento: number | null };
+/** Multa em % (uma vez), juros por dia de atraso conforme juros_tipo, protesto/negativação em dias após o vencimento; a Edge Function aplica os limites do Sicredi. */
+export type EncargosBoleto = { multa_pct: number | null; juros: number | null; juros_tipo: JurosTipo; apos_vencimento: "protesto" | "negativacao" | null; dias_apos_vencimento: number | null };
 
 export async function emitirBoleto(medicaoId: string, contaId: string | null, vencimento: string, encargos: EncargosBoleto) {
   return executar(() => sicredi<Boleto>({ acao: "emitir", medicao_id: z.string().uuid().parse(medicaoId), conta_bancaria_id: contaId ?? undefined, vencimento, encargos }),

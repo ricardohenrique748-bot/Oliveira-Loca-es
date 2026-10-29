@@ -54,7 +54,7 @@ export default function ReceberPage() {
       q.order(ordem, { ascending: !p.desc, nullsFirst: false }).range(p.de, p.ate),
       qa,
       supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("ativo", true).order("nome_fantasia"),
-      supabase.from("contas_bancarias").select("id, apelido, empresa_id, banco, codigo_beneficiario, boleto_multa_pct, boleto_juros_mes_pct, boleto_apos_vencimento, boleto_dias_apos_vencimento").eq("ativo", true).order("apelido"),
+      supabase.from("contas_bancarias").select("id, apelido, empresa_id, banco, codigo_beneficiario, boleto_multa_pct, boleto_juros, boleto_juros_tipo, boleto_apos_vencimento, boleto_dias_apos_vencimento").eq("ativo", true).order("apelido"),
     ]);
     const ids = [...new Set((linhas ?? []).map((m) => m.cliente_id!))];
     const medicoes = (linhas ?? []).map((m) => m.id!);
@@ -63,7 +63,7 @@ export default function ReceberPage() {
         ? supabase.from("contatos").select("cliente_id, obra_id, nome, email, whatsapp").in("cliente_id", ids).eq("recebe_fatura", true)
         : Promise.resolve({ data: [] }),
       medicoes.length
-        ? supabase.from("boletos").select("id, medicao_id, nosso_numero, linha_digitavel, pix_copia_cola, valor, data_vencimento, status, data_pagamento, ambiente, multa_pct, juros_mes_pct, protesto_dias, negativacao_dias")
+        ? supabase.from("boletos").select("id, medicao_id, nosso_numero, linha_digitavel, pix_copia_cola, valor, data_vencimento, status, data_pagamento, ambiente, multa_pct, juros, juros_tipo, protesto_dias, negativacao_dias")
           .in("medicao_id", medicoes).in("status", ["emitido", "pago"]).order("created_at", { ascending: false })
         : Promise.resolve({ data: [] }),
     ]);
@@ -85,7 +85,7 @@ export default function ReceberPage() {
       aging: resumo,
       clientes: (clientes ?? []).map((c) => ({ value: c.id, label: c.nome_fantasia ?? c.razao_social })),
       contas: (contas ?? []).map((c) => ({ value: c.id, label: c.apelido, empresa_id: c.empresa_id, boleto: c.banco === "Sicredi" && !!c.codigo_beneficiario,
-        encargos: { multa_pct: c.boleto_multa_pct, juros_mes_pct: c.boleto_juros_mes_pct, apos_vencimento: c.boleto_apos_vencimento, dias_apos_vencimento: c.boleto_dias_apos_vencimento } })),
+        encargos: { multa_pct: c.boleto_multa_pct, juros: c.boleto_juros, juros_tipo: c.boleto_juros_tipo, apos_vencimento: c.boleto_apos_vencimento, dias_apos_vencimento: c.boleto_dias_apos_vencimento } })),
       contatos: (contatos ?? []) as ContatoCobranca[],
       templates: { email: cfg.template_cobranca_email, whatsapp: cfg.template_cobranca_whatsapp },
       podeEditar: podeEscrever(s.perfil, "receber"),

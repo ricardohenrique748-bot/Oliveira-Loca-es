@@ -64,15 +64,24 @@ export const APOS_VENCIMENTO = [
   { value: "protesto", label: "Protestar em cartório" },
   { value: "negativacao", label: "Negativar no Serasa" },
 ] as const;
+/** No Sicredi a multa é cobrada uma vez; o que corre por dia de atraso são os juros. */
+export const JUROS_TIPOS = [
+  { value: "pct_dia", label: "% ao dia" },
+  { value: "valor_dia", label: "R$ por dia" },
+  { value: "pct_mes", label: "% ao mês" },
+] as const;
+export type JurosTipo = (typeof JUROS_TIPOS)[number]["value"];
 /** limites do Sicredi (Manual API Cobrança 4.0) */
 export const DIAS_APOS_VENCIMENTO = { protesto: [3, 99], negativacao: [46, 99] } as const;
 const encargosBoletoCampos = {
   boleto_multa_pct: pctOpc,
-  boleto_juros_mes_pct: pctOpc,
+  boleto_juros: z.number().gt(0, "Deve ser maior que zero").nullish().transform((v) => v ?? null),
+  boleto_juros_tipo: z.enum(["pct_dia", "pct_mes", "valor_dia"]).default("pct_dia"),
   boleto_apos_vencimento: z.enum(["protesto", "negativacao"]).nullish().transform((v) => v ?? null),
   boleto_dias_apos_vencimento: z.number().int().nullish().transform((v) => v ?? null),
 };
-function validarEncargosBoleto(v: { boleto_apos_vencimento: "protesto" | "negativacao" | null; boleto_dias_apos_vencimento: number | null }, ctx: z.RefinementCtx) {
+function validarEncargosBoleto(v: { boleto_juros: number | null; boleto_juros_tipo: JurosTipo; boleto_apos_vencimento: "protesto" | "negativacao" | null; boleto_dias_apos_vencimento: number | null }, ctx: z.RefinementCtx) {
+  if (v.boleto_juros != null && v.boleto_juros_tipo !== "valor_dia" && v.boleto_juros >= 100) ctx.addIssue({ code: "custom", path: ["boleto_juros"], message: "Deve ser menor que 100%" });
   if (!v.boleto_apos_vencimento) return;
   const [min, max] = DIAS_APOS_VENCIMENTO[v.boleto_apos_vencimento];
   const d = v.boleto_dias_apos_vencimento;
