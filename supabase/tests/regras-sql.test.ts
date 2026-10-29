@@ -503,6 +503,15 @@ describe("RLS por perfil e empresa", () => {
   });
 });
 
+describe("veículo não pode ser excluído", () => {
+  it("nem admin nem SQL direto apagam a placa (use o status Vendido)", async () => {
+    const [v] = await q<{ id: string }>("select id from public.veiculos limit 1");
+    await expect(db.query("delete from public.veiculos where id = $1", [v.id])).rejects.toThrow(/não pode ser excluído/);
+    await expect(comoUsuario(db, U.admin, () => q("delete from public.veiculos where id = $1 returning 1", [v.id]))).rejects.toThrow(/não pode ser excluído/);
+    expect(await q("select 1 from public.veiculos where id = $1", [v.id])).toHaveLength(1);
+  });
+});
+
 describe("licenciamento pelo documento do veículo", () => {
   it("sem documento = não cadastrado; com documento, emissão e vencimento dele; vale o de vencimento mais longe", async () => {
     // hoje = 2026-10-16

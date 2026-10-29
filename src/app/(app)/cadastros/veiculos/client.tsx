@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/basicos";
 import type { Opcao } from "@/components/ui/select";
 import { opcoesDe, ROTULOS, veiculoSchema, type VeiculoForm } from "@/lib/schemas/cadastros";
 import { formatHoras, formatKm, formatPlaca } from "@/lib/format";
-import { salvarVeiculo, excluirVeiculo } from "../actions";
+import { salvarVeiculo } from "../actions";
 import { camposVeiculo, STATUS_VEICULO } from "./campos";
 
 export type LinhaVeiculo = {
@@ -43,7 +43,7 @@ export function VeiculosCliente({ linhas, total, pagina, tamanho, empresas, empr
       </>}
       novo={{ placa: "", renavam: null, chassi: null, cor: null, tipo: "caminhao", marca: null, modelo: null, ano: null, proprietario: "proprio", locador_id: null, empresa_id: empresaPadrao ?? empresas[0]?.value, km_atual: 0, horimetro_atual: 0, status: "disponivel", foto_url: null, observacoes: null }}
       paraForm={(v) => ({ placa: v.placa, renavam: v.renavam, chassi: v.chassi, cor: v.cor, tipo: v.tipo, marca: v.marca, modelo: v.modelo, ano: v.ano, proprietario: v.proprietario, locador_id: v.locador_id, empresa_id: v.empresa_id, km_atual: v.km_atual, horimetro_atual: v.horimetro_atual, status: v.status, foto_url: v.foto_url, observacoes: v.observacoes })}
-      salvar={salvarVeiculo} excluir={excluirVeiculo} podeEditar={podeEditar}
+      salvar={salvarVeiculo} podeEditar={podeEditar}
       exportar={{ nome: "veiculos", colunas: [
         { titulo: "Placa", valor: (v) => v.placa }, { titulo: "Tipo", valor: (v) => ROTULOS.tipoVeiculo[v.tipo] }, { titulo: "Marca", valor: (v) => v.marca },
         { titulo: "Modelo", valor: (v) => v.modelo, largura: 22 }, { titulo: "Ano", valor: (v) => v.ano, tipo: "numero" }, { titulo: "Empresa", valor: (v) => v.empresa },

@@ -338,6 +338,13 @@ function DialogoBaixa({ medicao: m, contas, podeEditar, onOpenChange, onFeito }:
   );
 }
 
+/** 47 dígitos → "74891.12115 00397.367899 03123.451001 1 87340000000050" (formato impresso no boleto). */
+function formatLinhaDigitavel(l: string) {
+  const d = l.replace(/\D/g, "");
+  if (d.length !== 47) return l;
+  return `${d.slice(0, 5)}.${d.slice(5, 10)} ${d.slice(10, 15)}.${d.slice(15, 21)} ${d.slice(21, 26)}.${d.slice(26, 32)} ${d[32]} ${d.slice(33)}`;
+}
+
 /** Sem boleto em aberto: formulário de emissão. Com boleto: linha digitável, PIX, PDF e cancelamento. */
 function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }: {
   medicao: LinhaReceber | null; contas: Conta[]; podeEditar: boolean; onOpenChange: (v: boolean) => void; onFeito: () => void;
@@ -394,19 +401,24 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
         {m && b && (
           <div className="space-y-4">
             {b.ambiente === "sandbox" && <Badge variant="alerta">Ambiente de testes — este boleto não vale para pagamento</Badge>}
-            <div className="grid grid-cols-3 gap-2 rounded-md bg-muted p-3 text-sm">
-              <div><p className="text-xs text-muted-foreground">Valor</p><Moeda valor={b.valor} className="font-bold" /></div>
-              <div><p className="text-xs text-muted-foreground">Vencimento</p>{formatData(b.data_vencimento)}</div>
-              <div><p className="text-xs text-muted-foreground">Nosso número</p><span className="num">{b.nosso_numero}</span></div>
+            <div className="rounded-md bg-muted p-3 text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <Moeda valor={b.valor} className="text-2xl font-bold" />
+                <Badge variant="info">Aguardando pagamento</Badge>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-foreground/10 pt-3">
+                <div><p className="text-xs text-muted-foreground">Vencimento</p><span className="font-medium">{formatData(b.data_vencimento)}</span></div>
+                <div><p className="text-xs text-muted-foreground">Nosso número</p><span className="num font-medium">{b.nosso_numero}</span></div>
+              </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Linha digitável</Label>
-              <div className="flex items-center gap-2"><code className="num min-w-0 flex-1 break-all rounded-md border px-3 py-2 text-xs">{b.linha_digitavel}</code><BotaoCopiar texto={b.linha_digitavel} /></div>
+              <div className="flex items-center justify-between gap-2"><Label>Linha digitável</Label><BotaoCopiar texto={b.linha_digitavel} /></div>
+              <code className="num block rounded-md border px-3 py-2.5 text-sm tracking-wide">{formatLinhaDigitavel(b.linha_digitavel)}</code>
             </div>
             {b.pix_copia_cola && (
               <div className="space-y-1.5">
-                <Label>PIX copia e cola</Label>
-                <div className="flex items-center gap-2"><code className="min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-xs" title={b.pix_copia_cola}>{b.pix_copia_cola}</code><BotaoCopiar texto={b.pix_copia_cola} /></div>
+                <div className="flex items-center justify-between gap-2"><Label>PIX copia e cola</Label><BotaoCopiar texto={b.pix_copia_cola} /></div>
+                <code className="line-clamp-2 break-all rounded-md border px-3 py-2.5 text-xs text-muted-foreground" title={b.pix_copia_cola}>{b.pix_copia_cola}</code>
               </div>
             )}
             <p className="text-xs text-muted-foreground">Os botões de e-mail e WhatsApp da fatura já incluem a linha digitável e o PIX.</p>
@@ -435,12 +447,11 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
           )
         )}
         <DialogFooter className="flex-wrap gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          {b && <>
-            {podeEditar && <Button variant="outline" onClick={() => setCancelar(true)} disabled={!!ocupado}><Ban /> Cancelar boleto</Button>}
+          {b ? <>
+            {podeEditar && <Button variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive sm:mr-auto" onClick={() => setCancelar(true)} disabled={!!ocupado}><Ban /> Cancelar boleto</Button>}
             {podeEditar && <Button variant="outline" onClick={consultar} disabled={!!ocupado}>{ocupado === "atualizar" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Consultar pagamento</Button>}
             <Button onClick={pdf} disabled={!!ocupado}>{ocupado === "pdf" ? <Loader2 className="animate-spin" /> : <FileDown />} Baixar PDF</Button>
-          </>}
+          </> : <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>}
           {m && !b && podeEditar && contasEmpresa.length > 0 && (
             <Button onClick={emitir} disabled={!!ocupado || !conta || !vencimento}>{ocupado === "emitir" ? <Loader2 className="animate-spin" /> : <Barcode />} Gerar boleto</Button>
           )}

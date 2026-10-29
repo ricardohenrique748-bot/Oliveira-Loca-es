@@ -65,6 +65,3 @@ export async function excluirCategoria(id: string) {
 export async function salvarVeiculo(id: string | null, dados: unknown) {
   return salvarRegistro({ tabela: "veiculos", modulo: "veiculos", id, dados, schema: veiculoSchema, revalidar: [`${R}/veiculos`, "/manutencao"] });
 }
-export async function excluirVeiculo(id: string) {
-  return excluirRegistro({ tabela: "veiculos", modulo: "veiculos", id, revalidar: [`${R}/veiculos`] });
-}
