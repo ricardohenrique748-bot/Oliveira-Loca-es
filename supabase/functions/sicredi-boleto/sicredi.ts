@@ -145,7 +145,7 @@ export async function criarBoleto(b: Beneficiario, dados: {
     nossoNumero: String(d.nossoNumero),
     linhaDigitavel: String(d.linhaDigitavel),
     codigoBarras: d.codigoBarras ?? null,
-    qrCode: d.qrCode ?? null,
+    qrCode: d.qrCode?.trim() || null, // sandbox devolve o copia-e-cola com "\n\n" no fim
     txid: d.txid ?? null,
   };
 }

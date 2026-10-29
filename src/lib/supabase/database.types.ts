@@ -2149,9 +2149,13 @@ export type Database = {
       }
       licenciamento_v: {
         Row: {
+          anexo_url: string | null
           calendario_fonte: string | null
           calendario_licenciamento: string | null
+          data_emissao: string | null
           dias_para_vencer: number | null
+          documento_id: string | null
+          documento_numero: string | null
           empresa_apelido: string | null
           empresa_id: string | null
           exercicio: number | null
@@ -2164,6 +2168,7 @@ export type Database = {
           situacao: string | null
           status: Database["public"]["Enums"]["status_veiculo"] | null
           tipo: Database["public"]["Enums"]["tipo_veiculo"] | null
+          validade: string | null
           veiculo_id: string | null
           vencimento: string | null
         }

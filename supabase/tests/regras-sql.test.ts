@@ -503,30 +503,36 @@ describe("RLS por perfil e empresa", () => {
   });
 });
 
-describe("licenciamento pelo calendário de SP", () => {
-  it("vencimento pelo final da placa; licenciado só com o exercício confirmado; alerta no prazo", async () => {
-    // hoje = 2026-10-16: caminhão final 4 vence 31/10 (vencendo), final 2 venceu 30/09
-    const [vence] = await q<{ id: string }>(
+describe("licenciamento pelo documento do veículo", () => {
+  it("sem documento = não cadastrado; com documento, emissão e vencimento dele; vale o de vencimento mais longe", async () => {
+    // hoje = 2026-10-16
+    const [v] = await q<{ id: string }>(
       `insert into public.veiculos (empresa_id, placa, tipo, proprietario, status) values ($1, 'TST1A24', 'caminhao', 'proprio', 'disponivel') returning id`, [OLIVEIRA]);
-    const [venceu] = await q<{ id: string }>(
+    const l = async (id: string) => (await q<{ situacao: string; dias_para_vencer: number | null; data_emissao: string | null; validade: string | null }>(
+      "select situacao, dias_para_vencer, data_emissao::text, validade::text from public.licenciamento_v where veiculo_id = $1", [id]))[0];
+    const doc = (emissao: string | null, validade: string | null) => db.query(
+      "insert into public.documentos_veiculo (veiculo_id, tipo, data_emissao, validade) values ($1, 'licenciamento', $2, $3)", [v.id, emissao, validade]);
+
+    // a placa termina em 4 (calendário: 31/10), mas sem documento não há vencimento
+    expect(await l(v.id)).toEqual({ situacao: "nao_cadastrado", dias_para_vencer: null, data_emissao: null, validade: null });
+
+    await doc(null, null);
+    expect(await l(v.id)).toMatchObject({ situacao: "sem_vencimento" });
+
+    await doc("2025-09-01", "2026-09-30");
+    expect(await l(v.id)).toEqual({ situacao: "vencido", dias_para_vencer: -16, data_emissao: "2025-09-01", validade: "2026-09-30" });
+
+    await doc("2025-10-20", "2026-10-31");
+    expect(await l(v.id)).toEqual({ situacao: "vencendo", dias_para_vencer: 15, data_emissao: "2025-10-20", validade: "2026-10-31" });
+
+    await doc("2026-10-10", "2027-10-31");
+    expect(await l(v.id)).toMatchObject({ situacao: "em_dia", data_emissao: "2026-10-10", validade: "2027-10-31" });
+
+    // outros tipos de documento não contam como licenciamento
+    const [w] = await q<{ id: string }>(
       `insert into public.veiculos (empresa_id, placa, tipo, proprietario, status) values ($1, 'TST1A22', 'caminhao', 'proprio', 'disponivel') returning id`, [OLIVEIRA]);
-    const l = async (id: string) => (await q<{ final: number; vencimento: string; situacao: string; dias_para_vencer: number }>(
-      "select final, vencimento::text, situacao, dias_para_vencer from public.licenciamento_v where veiculo_id = $1", [id]))[0];
-    expect(await l(vence.id)).toEqual({ final: 4, vencimento: "2026-10-31", situacao: "vencendo", dias_para_vencer: 15 });
-    expect(await l(venceu.id)).toMatchObject({ final: 2, vencimento: "2026-09-30", situacao: "vencido" });
-
-    // carro (calendário de leves): final 4 venceu em agosto
-    await db.query("update public.veiculos set calendario_licenciamento = 'leve' where id = $1", [vence.id]);
-    expect(await l(vence.id)).toMatchObject({ vencimento: "2026-08-31", situacao: "vencido" });
-
-    // CRLV-e do exercício conferido: licenciado
-    await db.query("update public.veiculos set licenciado_exercicio = 2026, licenciamento_verificado_em = '2026-10-16' where id = $1", [venceu.id]);
-    expect(await l(venceu.id)).toMatchObject({ situacao: "licenciado" });
-
-    await db.query("select app.job_gerar_alertas()");
-    const alertas = await q<{ referencia_id: string; tipo: string }>(
-      "select referencia_id, tipo from public.alertas where tipo like 'licenciamento%' and referencia_id in ($1, $2)", [vence.id, venceu.id]);
-    expect(alertas).toEqual([{ referencia_id: vence.id, tipo: "licenciamento_vencido" }]);
+    await db.query("insert into public.documentos_veiculo (veiculo_id, tipo, validade) values ($1, 'seguro', '2027-01-01')", [w.id]);
+    expect(await l(w.id)).toMatchObject({ situacao: "nao_cadastrado" });
   });
 });
 
@@ -534,38 +540,29 @@ describe("alertas de licenciamento: prazos, duplicidade e agendador", () => {
   const dia = (d: string) => db.exec(`create or replace function app.hoje() returns date language sql stable as $$ select '${d}'::date $$`);
   afterAll(() => dia(HOJE));
 
-  it("avisa de 30 dias antes até vencer, uma vez por dia, e para quando o CRLV é confirmado", async () => {
-    // caminhão final 6 → vence 30/11/2026
+  it("sem documento não avisa; com documento, avisa de 30 dias antes até vencer, uma vez por dia", async () => {
+    // caminhão final 6: pelo calendário venceria 30/11, mas sem documento não há aviso
     const [v] = await q<{ id: string }>(
       `insert into public.veiculos (empresa_id, placa, tipo, proprietario, status) values ($1, 'ALR1T56', 'caminhao', 'proprio', 'disponivel') returning id`, [OLIVEIRA]);
-    const alertasDe = async (d: string) => q<{ tipo: string; severidade: string; titulo: string }>(
-      "select tipo, severidade::text, titulo from public.alertas where referencia_id = $1 and data_ref = $2::date", [v.id, d]);
-    const rodar = async (d: string) => { await dia(d); await db.query("select app.job_gerar_alertas()"); return alertasDe(d); };
+    const rodar = async (d: string, ref: string) => {
+      await dia(d);
+      await db.query("select app.job_gerar_alertas()");
+      return q<{ tipo: string; severidade: string; titulo: string }>(
+        "select tipo, severidade::text, titulo from public.alertas where referencia_id = $1 and data_ref = $2::date", [ref, d]);
+    };
+    expect(await rodar("2026-11-30", v.id)).toEqual([]);
 
-    expect(await rodar("2026-10-30")).toEqual([]); // 31 dias antes: ainda não
-    expect(await rodar("2026-10-31")).toEqual([{ tipo: "licenciamento_vencendo", severidade: "info", titulo: "Licenciamento 2026 ALR1T56 vence em 30 dias" }]);
-    expect(await rodar("2026-11-15")).toEqual([{ tipo: "licenciamento_vencendo", severidade: "alerta", titulo: "Licenciamento 2026 ALR1T56 vence em 15 dias" }]);
-    expect(await rodar("2026-11-30")).toEqual([{ tipo: "licenciamento_vencendo", severidade: "alerta", titulo: "Licenciamento 2026 ALR1T56 vence hoje" }]);
-    // rodar de novo no mesmo dia (agendador + "rodar jobs" manual) não duplica
-    expect(await rodar("2026-11-30")).toHaveLength(1);
-    expect(await rodar("2026-12-01")).toEqual([{ tipo: "licenciamento_vencido", severidade: "critico", titulo: "Licenciamento 2026 ALR1T56 vencido" }]);
-
-    // CRLV-e 2026 conferido: some do dia seguinte em diante
-    await db.query("update public.veiculos set licenciado_exercicio = 2026, licenciamento_verificado_em = '2026-12-01' where id = $1", [v.id]);
-    expect(await rodar("2026-12-02")).toEqual([]);
-  });
-
-  it("documento de licenciamento digitado à mão não gera alerta em dobro (o calendário prevalece)", async () => {
-    await dia(HOJE);
-    // caminhão final 4 → calendário vence 31/10; documento manual com outra validade (20/10)
-    const [v] = await q<{ id: string }>(
-      `insert into public.veiculos (empresa_id, placa, tipo, proprietario, status) values ($1, 'DUP1C24', 'caminhao', 'proprio', 'disponivel') returning id`, [OLIVEIRA]);
     const [d] = await q<{ id: string }>(
-      "insert into public.documentos_veiculo (veiculo_id, tipo, validade) values ($1, 'licenciamento', '2026-10-20') returning id", [v.id]);
-    await db.query("select app.job_gerar_alertas()");
-    expect(await q("select 1 from public.alertas where referencia_id = $1", [d.id])).toHaveLength(0);
-    expect(await q<{ titulo: string }>("select titulo from public.alertas where referencia_id = $1", [v.id]))
-      .toEqual([{ titulo: "Licenciamento 2026 DUP1C24 vence em 15 dias" }]);
+      "insert into public.documentos_veiculo (veiculo_id, tipo, data_emissao, validade) values ($1, 'licenciamento', '2025-11-20', '2026-11-30') returning id", [v.id]);
+    expect(await rodar("2026-10-30", d.id)).toEqual([]); // 31 dias antes: ainda não
+    expect(await rodar("2026-10-31", d.id)).toEqual([{ tipo: "documento_vencendo", severidade: "info", titulo: "Licenciamento ALR1T56 vence em 30 dias" }]);
+    expect(await rodar("2026-11-15", d.id)).toEqual([{ tipo: "documento_vencendo", severidade: "alerta", titulo: "Licenciamento ALR1T56 vence em 15 dias" }]);
+    expect(await rodar("2026-11-30", d.id)).toEqual([{ tipo: "documento_vencendo", severidade: "critico", titulo: "Licenciamento ALR1T56 vence hoje" }]);
+    // rodar de novo no mesmo dia (agendador + "rodar jobs" manual) não duplica
+    expect(await rodar("2026-11-30", d.id)).toHaveLength(1);
+    expect(await rodar("2026-12-01", d.id)).toEqual([{ tipo: "documento_vencendo", severidade: "critico", titulo: "Licenciamento ALR1T56 vencido" }]);
+    // nada de aviso previsto pelo calendário para o veículo
+    expect(await q("select 1 from public.alertas where referencia_id = $1 and tipo like 'licenciamento%'", [v.id])).toHaveLength(0);
   });
 
   it("o agendador continua gerando os alertas anteriores (cadeia de funções intacta)", async () => {

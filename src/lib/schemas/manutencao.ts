@@ -72,17 +72,42 @@ export const fecharOSSchema = z.object({
 });
 export type FecharOSForm = z.input<typeof fecharOSSchema>;
 
-export const documentoSchema = z.object({
+/** Laudos técnicos do caminhão: lançados um a um ou todos de uma vez ("todos_laudos"), com a mesma emissão e vencimento */
+export const LAUDOS = ["laudo_viabilidade", "plano_manutencao", "checklist_fotografico", "os_preventiva", "laudo_dieletrico", "apreciacao_riscos_hrn",
+  "laudo_escada", "laudo_guarda_corpo", "checklist_detalhado", "laudo_opacidade", "plano_inspecao"] as const;
+export type TipoLaudo = (typeof LAUDOS)[number];
+
+const vencimentoAposEmissao = { path: ["validade"], message: "O vencimento não pode ser antes da emissão" };
+const docBase = z.object({
   veiculo_id: uuidObr("o veículo"),
-  tipo: z.enum(["licenciamento", "seguro", "tacografo", "inspecao_icamento", "antt", "laudo_viabilidade", "plano_manutencao", "checklist_fotografico",
-    "os_preventiva", "laudo_dieletrico", "apreciacao_riscos_hrn", "laudo_escada", "laudo_guarda_corpo", "checklist_detalhado", "laudo_opacidade", "plano_inspecao", "outro"]),
+  tipo: z.enum(["licenciamento", "seguro", "tacografo", "inspecao_icamento", "antt", ...LAUDOS, "outro"]),
   numero: textoOpc,
   data_emissao: dataOpc,
   validade: dataOpc,
   anexo_url: textoOpc,
   observacoes: textoOpc,
-}).refine((d) => !d.data_emissao || !d.validade || d.validade >= d.data_emissao, { path: ["validade"], message: "O vencimento não pode ser antes da emissão" });
-export type DocumentoForm = z.input<typeof documentoSchema>;
+});
+export const documentoSchema = docBase.refine((d) => !d.data_emissao || !d.validade || d.validade >= d.data_emissao, vencimentoAposEmissao);
+
+/** Formulário de documento: além dos tipos, "todos_laudos" lança vários laudos de uma vez (um anexo por laudo) */
+export const documentoFormSchema = docBase.extend({
+  tipo: z.enum([...docBase.shape.tipo.options, "todos_laudos"]),
+  laudos: z.record(z.string(), textoOpc).nullish(),
+  // só para a tela saber que é edição (não vai ao banco: o salvar usa o id da linha)
+  id: z.string().nullish(),
+})
+  .refine((d) => !d.data_emissao || !d.validade || d.validade >= d.data_emissao, vencimentoAposEmissao)
+  .refine((d) => d.tipo !== "todos_laudos" || Object.values(d.laudos ?? {}).some(Boolean), { path: ["tipo"], message: "Anexe pelo menos um laudo" });
+export type DocumentoForm = z.input<typeof documentoFormSchema>;
+
+export const laudosLoteSchema = z.object({
+  veiculo_id: uuidObr("o veículo"),
+  numero: textoOpc,
+  data_emissao: dataOpc,
+  validade: dataOpc,
+  observacoes: textoOpc,
+  laudos: z.record(z.enum(LAUDOS), textoOpc),
+}).refine((d) => !d.data_emissao || !d.validade || d.validade >= d.data_emissao, vencimentoAposEmissao);
 
 export const pneuSchema = z.object({
   veiculo_id: uuidOpc,
@@ -124,24 +149,3 @@ export const multaSchema = z.object({
   if (m.status === "paga" && !m.pago_em) ctx.addIssue({ code: "custom", message: "Informe a data do pagamento", path: ["pago_em"] });
 });
 export type MultaForm = z.input<typeof multaSchema>;
-
-/** Licenciamento confirmado pelo CRLV-e do exercício (nunca presumido pelo calendário) */
-export const confirmacaoLicenciamentoSchema = z.object({
-  veiculo_id: uuidObr("o veículo"),
-  exercicio: z.number({ invalid_type_error: "Informe o exercício" }).int().min(2000).max(2100),
-  verificado_em: dataObr("a data da verificação"),
-  fonte: z.string().trim().min(1).max(200).default("CRLV-e conferido"),
-  anexo_url: textoOpc,
-});
-export type ConfirmacaoLicenciamento = z.input<typeof confirmacaoLicenciamentoSchema>;
-
-/** Calendário oficial de um ano: vencimento por grupo (pesado/leve) e final da placa */
-export const calendarioLicenciamentoSchema = z.object({
-  ano: z.number().int().min(2020).max(2100),
-  fonte: z.string().trim().min(1, "Informe a fonte (ex.: Detran-SP)").max(200),
-  linhas: z.array(z.object({
-    grupo: z.enum(["pesado", "leve"]),
-    final: z.number().int().min(0).max(9),
-    vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
-  })).length(20, "Preencha os 10 finais dos dois calendários"),
-});

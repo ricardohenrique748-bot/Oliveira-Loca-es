@@ -4,7 +4,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { excluirRegistro, salvarRegistro } from "@/lib/crud";
 import { createClient } from "@/lib/supabase/server";
-import { abrirOSSchema, calendarioLicenciamentoSchema, confirmacaoLicenciamentoSchema, documentoSchema, editarOSSchema, fecharOSSchema, itemOSSchema, leituraSchema, multaSchema, planoSchema, pneuSchema } from "@/lib/schemas/manutencao";
+import { abrirOSSchema, documentoSchema, editarOSSchema, fecharOSSchema, itemOSSchema, laudosLoteSchema, leituraSchema, multaSchema, planoSchema, pneuSchema, type TipoLaudo } from "@/lib/schemas/manutencao";
 
 const M = "/manutencao";
 const REV = [M, `${M}/ordens`, `${M}/planos`, "/dashboard", "/cadastros/veiculos"];
@@ -107,6 +107,20 @@ export async function fecharOS(id: string, dados: unknown) {
 export async function salvarDocumento(id: string | null, dados: unknown) {
   return salvarRegistro({ tabela: "documentos_veiculo", modulo: "manutencao", id, dados, schema: documentoSchema, revalidar: [`${M}/documentos`, M] });
 }
+/** Vários laudos de uma vez: um documento por laudo anexado, todos com a mesma emissão e vencimento. */
+export async function salvarLaudos(dados: unknown) {
+  return executar(async () => {
+    await exigirEscrita("manutencao");
+    const d = laudosLoteSchema.parse(dados);
+    const linhas = Object.entries(d.laudos).filter(([, anexo]) => anexo).map(([tipo, anexo]) => ({
+      veiculo_id: d.veiculo_id, tipo: tipo as TipoLaudo, numero: d.numero, data_emissao: d.data_emissao, validade: d.validade, anexo_url: anexo, observacoes: d.observacoes,
+    }));
+    if (!linhas.length) throw new Error("Anexe pelo menos um laudo");
+    const supabase = await createClient();
+    checar(await supabase.from("documentos_veiculo").insert(linhas));
+    return { criados: linhas.length };
+  }, [`${M}/documentos`, M], "Laudos cadastrados");
+}
 export async function excluirDocumento(id: string) {
   return excluirRegistro({ tabela: "documentos_veiculo", modulo: "manutencao", id, revalidar: [`${M}/documentos`, M] });
 }
@@ -117,58 +131,6 @@ export async function salvarMulta(id: string | null, dados: unknown) {
 }
 export async function excluirMulta(id: string) {
   return excluirRegistro({ tabela: "multas", modulo: "manutencao", id, revalidar: [`${M}/multas`, M, "/cadastros/veiculos"] });
-}
-
-// ---------- Licenciamento ----------
-/** Alerta de licenciamento do dia já gerado para o veículo deixa de valer (confirmado ou com outra data): marca como lido. */
-async function baixarAlertasLicenciamento(supabase: Awaited<ReturnType<typeof createClient>>, veiculoId: string) {
-  checar(await supabase.from("alertas").update({ lida: true })
-    .eq("referencia_id", veiculoId).in("tipo", ["licenciamento_vencendo", "licenciamento_vencido"]).eq("lida", false));
-}
-
-/** Confirma o licenciamento do exercício com base no CRLV-e (evidência: exercício impresso no documento). */
-export async function confirmarLicenciamento(dados: unknown) {
-  return executar(async () => {
-    await exigirEscrita("manutencao");
-    const d = confirmacaoLicenciamentoSchema.parse(dados);
-    const supabase = await createClient();
-    checar(await supabase.from("veiculos").update({
-      licenciado_exercicio: d.exercicio, licenciamento_verificado_em: d.verificado_em, licenciamento_fonte: d.fonte,
-    }).eq("id", d.veiculo_id));
-    await baixarAlertasLicenciamento(supabase, d.veiculo_id);
-    // o CRLV-e anexado fica nos documentos do veículo, sem validade: o vencimento quem controla é o calendário
-    // (com validade, o módulo de documentos geraria um segundo alerta, com outra data)
-    if (d.anexo_url) {
-      checar(await supabase.from("documentos_veiculo").insert({
-        veiculo_id: d.veiculo_id, tipo: "licenciamento", numero: `CRLV-e ${d.exercicio}`, validade: null, anexo_url: d.anexo_url,
-        observacoes: `Licenciamento ${d.exercicio} conferido em ${d.verificado_em.split("-").reverse().join("/")}`,
-      }));
-    }
-  }, [`${M}/licenciamento`, `${M}/documentos`, M], "Licenciamento confirmado");
-}
-
-/** Calendário de licenciamento que o veículo segue (caminhões e tratores × leves). */
-export async function definirCalendarioVeiculo(veiculoId: string, grupo: unknown) {
-  return executar(async () => {
-    await exigirEscrita("manutencao");
-    const g = z.enum(["pesado", "leve"]).parse(grupo);
-    const supabase = await createClient();
-    const id = z.string().uuid().parse(veiculoId);
-    checar(await supabase.from("veiculos").update({ calendario_licenciamento: g }).eq("id", id));
-    await baixarAlertasLicenciamento(supabase, id);
-  }, [`${M}/licenciamento`]);
-}
-
-/** Cadastra/atualiza o calendário oficial de um ano (publicado pelo Detran-SP). */
-export async function salvarCalendarioLicenciamento(dados: unknown) {
-  return executar(async () => {
-    await exigirEscrita("manutencao");
-    const c = calendarioLicenciamentoSchema.parse(dados);
-    const supabase = await createClient();
-    checar(await supabase.from("calendario_licenciamento").upsert(
-      c.linhas.map((l) => ({ ano: c.ano, grupo: l.grupo, final: l.final, vencimento: l.vencimento, fonte: c.fonte })),
-      { onConflict: "ano,grupo,final" }));
-  }, [`${M}/licenciamento`], "Calendário salvo");
 }
 
 // ---------- Pneus ----------
