@@ -102,7 +102,7 @@ export function CrudSimples<T extends { id: string }, V extends FieldValues>(p: 
         <Cabecalho titulo={p.titulo} descricao={p.descricao}
           acoes={(p.acoesCabecalho || p.podeEditar) && <>{p.acoesCabecalho}{p.podeEditar && <Button onClick={() => abrir(null)}><Plus /> {novoRotulo}</Button>}</>} />
       )}
-      {(p.busca !== false || p.filtros) && (
+      {(p.busca !== false || p.filtros || (p.semCabecalho && p.podeEditar)) && (
         <BarraFiltros>
           {p.busca !== false && <BuscaUrl placeholder={p.busca || "Buscar…"} />}
           {p.filtros}

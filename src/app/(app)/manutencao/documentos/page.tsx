@@ -21,7 +21,7 @@ export default function DocumentosPage() {
     if (s.empresaId) qv = qv.eq("empresa_id", s.empresaId);
     const { data: veiculos } = await qv;
     const ids = (veiculos ?? []).map((v) => v.id);
-    let q = supabase.from("documentos_veiculo").select("id, veiculo_id, tipo, numero, validade, anexo_url, observacoes").in("veiculo_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
+    let q = supabase.from("documentos_veiculo").select("id, veiculo_id, tipo, numero, data_emissao, validade, anexo_url, observacoes").in("veiculo_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
     if (p.get("veiculo")) q = q.eq("veiculo_id", p.get("veiculo")!);
     if (p.get("tipo")) q = q.eq("tipo", p.get("tipo") as "seguro");
     const prazo = p.get("prazo");

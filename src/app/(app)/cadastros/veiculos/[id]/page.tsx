@@ -33,7 +33,7 @@ export default function VeiculoDetalhePage() {
       veContratos ? supabase.from("contratos").select("id, numero, status, valor_mensal, valor_repasse_mensal, data_inicio, data_desmobilizacao, clientes(razao_social, nome_fantasia), obras(nome)").eq("veiculo_id", id).order("data_inicio", { ascending: false }) : vazio,
       veMedicoes ? supabase.from("medicoes_v").select("id, periodo_inicio, periodo_fim, dias, valor_final, numero_nf, status_exibicao, cliente_fantasia, repasse_liquido, margem").eq("veiculo_id", id).order("periodo_inicio", { ascending: false }).limit(36) : vazio,
       supabase.from("ordens_servico").select("id, numero, tipo, status, data_abertura, data_fechamento, descricao_problema, custo_total, horas_parado, fornecedores(nome)").eq("veiculo_id", id).order("data_abertura", { ascending: false }),
-      supabase.from("documentos_veiculo").select("id, tipo, numero, validade, anexo_url").eq("veiculo_id", id).order("validade"),
+      supabase.from("documentos_veiculo").select("id, veiculo_id, tipo, numero, data_emissao, validade, anexo_url, observacoes").eq("veiculo_id", id).order("validade", { nullsFirst: false }),
       supabase.from("leituras").select("id, data, km, horimetro, origem").eq("veiculo_id", id).order("data", { ascending: false }).limit(60),
       supabase.from("vw_preventivas_status").select("plano_id, servico, status, pct, criterio, proxima_km, proxima_horas, proxima_data, restante").eq("veiculo_id", id),
       veResultado ? supabase.from("vw_margem_placa_mes").select("mes, receita, repasse, manutencao, outras_despesas, margem, margem_pct").eq("veiculo_id", id).order("mes", { ascending: false }).limit(24) : vazio,
@@ -65,7 +65,7 @@ export default function VeiculoDetalhePage() {
       leituras: leituras.data ?? [],
       planos: (planos.data ?? []) as never,
       resultado: (resultado.data ?? []) as never,
-      permissoes: { editar: podeEscrever(s.perfil, "veiculos"), contratos: veContratos, medicoes: veMedicoes, resultado: veResultado },
+      permissoes: { editar: podeEscrever(s.perfil, "veiculos"), documentos: podeEscrever(s.perfil, "manutencao"), contratos: veContratos, medicoes: veMedicoes, resultado: veResultado },
     };
   }, [id, sessao?.empresaId]);
 

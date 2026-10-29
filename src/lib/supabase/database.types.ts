@@ -686,6 +686,7 @@ export type Database = {
           anexo_url: string | null
           created_at: string
           created_by: string | null
+          data_emissao: string | null
           id: string
           numero: string | null
           observacoes: string | null
@@ -698,6 +699,7 @@ export type Database = {
           anexo_url?: string | null
           created_at?: string
           created_by?: string | null
+          data_emissao?: string | null
           id?: string
           numero?: string | null
           observacoes?: string | null
@@ -710,6 +712,7 @@ export type Database = {
           anexo_url?: string | null
           created_at?: string
           created_by?: string | null
+          data_emissao?: string | null
           id?: string
           numero?: string | null
           observacoes?: string | null
@@ -2020,6 +2023,7 @@ export type Database = {
           licenciado_exercicio: number | null
           licenciamento_fonte: string | null
           licenciamento_verificado_em: string | null
+          locado_avulsa_ate: string | null
           locador_id: string | null
           marca: string | null
           modelo: string | null
@@ -2046,6 +2050,7 @@ export type Database = {
           licenciado_exercicio?: number | null
           licenciamento_fonte?: string | null
           licenciamento_verificado_em?: string | null
+          locado_avulsa_ate?: string | null
           locador_id?: string | null
           marca?: string | null
           modelo?: string | null
@@ -2072,6 +2077,7 @@ export type Database = {
           licenciado_exercicio?: number | null
           licenciamento_fonte?: string | null
           licenciamento_verificado_em?: string | null
+          locado_avulsa_ate?: string | null
           locador_id?: string | null
           marca?: string | null
           modelo?: string | null
@@ -2572,7 +2578,7 @@ export type Database = {
       status_veiculo: "disponivel" | "locado" | "manutencao" | "parado" | "vendido"
       tipo_chave_pix: "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
       tipo_despesa: "fixa" | "variavel" | "veiculo"
-      tipo_documento: "licenciamento" | "seguro" | "tacografo" | "inspecao_icamento" | "antt" | "outro"
+      tipo_documento: "licenciamento" | "seguro" | "tacografo" | "inspecao_icamento" | "antt" | "outro" | "laudo_viabilidade" | "plano_manutencao" | "checklist_fotografico" | "os_preventiva" | "laudo_dieletrico" | "apreciacao_riscos_hrn" | "laudo_escada" | "laudo_guarda_corpo" | "checklist_detalhado" | "laudo_opacidade" | "plano_inspecao"
       tipo_item_os: "peca" | "servico"
       tipo_os: "preventiva" | "corretiva" | "pneu" | "inspecao"
       tipo_veiculo: "caminhao" | "guindaste" | "trator" | "munck" | "carro" | "outro"
@@ -2608,7 +2614,7 @@ export const Constants = {
       status_veiculo: ["disponivel", "locado", "manutencao", "parado", "vendido"],
       tipo_chave_pix: ["cpf", "cnpj", "email", "telefone", "aleatoria"],
       tipo_despesa: ["fixa", "variavel", "veiculo"],
-      tipo_documento: ["licenciamento", "seguro", "tacografo", "inspecao_icamento", "antt", "outro"],
+      tipo_documento: ["licenciamento", "seguro", "tacografo", "inspecao_icamento", "antt", "outro", "laudo_viabilidade", "plano_manutencao", "checklist_fotografico", "os_preventiva", "laudo_dieletrico", "apreciacao_riscos_hrn", "laudo_escada", "laudo_guarda_corpo", "checklist_detalhado", "laudo_opacidade", "plano_inspecao"],
       tipo_item_os: ["peca", "servico"],
       tipo_os: ["preventiva", "corretiva", "pneu", "inspecao"],
       tipo_veiculo: ["caminhao", "guindaste", "trator", "munck", "carro", "outro"],

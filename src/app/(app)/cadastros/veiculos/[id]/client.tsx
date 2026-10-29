@@ -18,6 +18,7 @@ import { ValidadeBadge } from "@/components/app/validade";
 import { salvarVeiculo } from "../../actions";
 import { camposVeiculo } from "../campos";
 import { atualizarFotoVeiculo } from "./actions";
+import { DocumentosCliente, type LinhaDoc } from "../../../manutencao/documentos/client";
 
 type Veiculo = {
   id: string; placa: string; renavam: string | null; chassi: string | null; cor: string | null; tipo: VeiculoForm["tipo"]; marca: string | null; modelo: string | null; ano: number | null; proprietario: VeiculoForm["proprietario"];
@@ -27,7 +28,7 @@ type Veiculo = {
 type Contrato = { id: string; numero: string | null; status: string; valor_mensal: number; valor_repasse_mensal: number | null; data_inicio: string; data_desmobilizacao: string | null; cliente: string; obra: string | null };
 type Medicao = { id: string; periodo_inicio: string; periodo_fim: string; dias: number; valor_final: number; numero_nf: string | null; status_exibicao: string; cliente_fantasia: string; repasse_liquido: number | null; margem: number };
 type OS = { id: string; numero: number; tipo: keyof typeof ROTULOS.tipoOS; status: string; data_abertura: string; data_fechamento: string | null; descricao_problema: string; custo_total: number; horas_parado: number; fornecedor: string | null };
-type Doc = { id: string; tipo: keyof typeof ROTULOS.tipoDocumento; numero: string | null; validade: string | null; anexo_url: string | null };
+type Doc = Omit<LinhaDoc, "placa">;
 type Leitura = { id: string; data: string; km: number | null; horimetro: number | null; origem: string };
 type Plano = { plano_id: string; servico: string; status: string; pct: number; criterio: string | null; proxima_km: number | null; proxima_horas: number | null; proxima_data: string | null; restante: number | null };
 type Resultado = { mes: string; receita: number; repasse: number; manutencao: number; outras_despesas: number; margem: number; margem_pct: number | null };
@@ -61,12 +62,6 @@ const colOS: ColumnDef<OS, unknown>[] = [
   { accessorKey: "custo_total", header: "Custo", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number} /> },
   { accessorKey: "status", header: "Status", cell: ({ getValue }) => <StatusBadge status={getValue() as string} /> },
 ];
-const colDocs: ColumnDef<Doc, unknown>[] = [
-  { accessorKey: "tipo", header: "Documento", meta: { tituloMobile: true }, cell: ({ row }) => ROTULOS.tipoDocumento[row.original.tipo] },
-  { accessorKey: "numero", header: "Número" },
-  { accessorKey: "validade", header: "Validade", cell: ({ getValue }) => <ValidadeBadge validade={getValue() as string | null} /> },
-  { accessorKey: "anexo_url", header: "Anexo", cell: ({ getValue }) => <LinkAnexo referencia={getValue() as string | null} rotulo="Abrir" /> },
-];
 type Multa = {
   id: string; data_infracao: string; descricao: string | null; auto_infracao: string | null; valor: number; vencimento: string | null;
   status: string; status_exibicao: string; cliente_nome: string | null; pago_em: string | null;
@@ -99,7 +94,7 @@ const colResultado: ColumnDef<Resultado, unknown>[] = [
 export function FichaVeiculo({ veiculo: v, empresas, locadores, contratos, medicoes, ordens, documentos, multas, leituras, planos, resultado, permissoes }: {
   veiculo: Veiculo; empresas: Opcao[]; locadores: Opcao[]; contratos: Contrato[]; medicoes: Medicao[]; ordens: OS[]; documentos: Doc[]; multas: Multa[];
   leituras: Leitura[]; planos: Plano[]; resultado: Resultado[];
-  permissoes: { editar: boolean; contratos: boolean; medicoes: boolean; resultado: boolean };
+  permissoes: { editar: boolean; documentos: boolean; contratos: boolean; medicoes: boolean; resultado: boolean };
 }) {
   const router = useRouter();
   const total = resultado.reduce((a, r) => ({ receita: a.receita + r.receita, margem: a.margem + r.margem, custo: a.custo + r.manutencao + r.outras_despesas }), { receita: 0, margem: 0, custo: 0 });
@@ -184,7 +179,8 @@ export function FichaVeiculo({ veiculo: v, empresas, locadores, contratos, medic
           <DataTable colunas={colOS} dados={ordens} getId={(o) => o.id} aoClicarLinha={(o) => router.push(`/manutencao/ordens/${o.id}`)} />
         </TabsContent>
         <TabsContent value="documentos">
-          <DataTable colunas={colDocs} dados={documentos} getId={(d) => d.id} topo={<Button asChild size="sm" variant="outline"><Link href={`/manutencao/documentos?veiculo=${v.id}`}>Gerenciar documentos</Link></Button>} />
+          <DocumentosCliente linhas={documentos.map((d) => ({ ...d, placa: v.placa }))} veiculos={[{ value: v.id, label: v.placa }]} veiculoInicial={v.id}
+            veiculoFixo={v.id} podeEditar={permissoes.documentos} />
         </TabsContent>
         <TabsContent value="multas">
           <DataTable colunas={colMultas} dados={multas} getId={(m) => m.id} topo={<Button asChild size="sm" variant="outline"><Link href={`/manutencao/multas?veiculo=${v.id}`}>Gerenciar multas</Link></Button>} />

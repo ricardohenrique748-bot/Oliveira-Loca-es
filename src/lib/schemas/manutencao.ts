@@ -74,12 +74,14 @@ export type FecharOSForm = z.input<typeof fecharOSSchema>;
 
 export const documentoSchema = z.object({
   veiculo_id: uuidObr("o veículo"),
-  tipo: z.enum(["licenciamento", "seguro", "tacografo", "inspecao_icamento", "antt", "outro"]),
+  tipo: z.enum(["licenciamento", "seguro", "tacografo", "inspecao_icamento", "antt", "laudo_viabilidade", "plano_manutencao", "checklist_fotografico",
+    "os_preventiva", "laudo_dieletrico", "apreciacao_riscos_hrn", "laudo_escada", "laudo_guarda_corpo", "checklist_detalhado", "laudo_opacidade", "plano_inspecao", "outro"]),
   numero: textoOpc,
+  data_emissao: dataOpc,
   validade: dataOpc,
   anexo_url: textoOpc,
   observacoes: textoOpc,
-});
+}).refine((d) => !d.data_emissao || !d.validade || d.validade >= d.data_emissao, { path: ["validade"], message: "O vencimento não pode ser antes da emissão" });
 export type DocumentoForm = z.input<typeof documentoSchema>;
 
 export const pneuSchema = z.object({

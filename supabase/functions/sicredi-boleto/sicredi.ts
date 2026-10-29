@@ -114,6 +114,9 @@ export async function criarBoleto(b: Beneficiario, dados: {
   pagador: Pagador; seuNumero: string; vencimento: string; valor: number; mensagens?: string[];
 }): Promise<BoletoCriado> {
   const p = dados.pagador;
+  // manual 4.0: telefone até 11 dígitos (DDD + número, sem +55); email até 40
+  const telefone = (p.telefone ?? "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  const email = p.email && p.email.length <= 40 ? p.email : null;
   const r = await chamar(b, "/cobranca/boleto/v1/boletos", {
     method: "POST",
     body: JSON.stringify({
@@ -127,8 +130,8 @@ export async function criarBoleto(b: Beneficiario, dados: {
         cidade: p.cidade.slice(0, 25),
         uf: p.uf,
         cep: p.cep,
-        ...(p.email ? { email: p.email } : {}),
-        ...(p.telefone ? { telefone: p.telefone } : {}),
+        ...(email ? { email } : {}),
+        ...(telefone.length >= 10 && telefone.length <= 11 ? { telefone } : {}),
       },
       especieDocumento: "DUPLICATA_MERCANTIL_INDICACAO",
       seuNumero: dados.seuNumero,

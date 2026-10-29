@@ -166,7 +166,13 @@ export const ROTULOS = {
   tipoDespesa: { fixa: "Fixa", variavel: "Variável", veiculo: "Veículo" },
   formaPagamento: { boleto: "Boleto", debito_automatico: "Débito automático", cartao: "Cartão", pix: "PIX", transferencia: "Transferência" },
   tipoOS: { preventiva: "Preventiva", corretiva: "Corretiva", pneu: "Pneu", inspecao: "Inspeção" },
-  tipoDocumento: { licenciamento: "Licenciamento", seguro: "Seguro", tacografo: "Tacógrafo", inspecao_icamento: "Inspeção de içamento", antt: "ANTT", outro: "Outro" },
+  tipoDocumento: {
+    licenciamento: "Licenciamento", seguro: "Seguro", tacografo: "Tacógrafo", inspecao_icamento: "Inspeção de içamento", antt: "ANTT",
+    laudo_viabilidade: "Laudo de viabilidade técnica", plano_manutencao: "Plano de manutenção", checklist_fotografico: "Checklist e registro fotográfico",
+    os_preventiva: "OS de manutenções preventivas", laudo_dieletrico: "Laudo dielétrico", apreciacao_riscos_hrn: "Apreciação de riscos HRN",
+    laudo_escada: "Laudo da escada de acesso", laudo_guarda_corpo: "Laudo do guarda-corpo", checklist_detalhado: "Checklist detalhado",
+    laudo_opacidade: "Laudo de opacidade (fumaça preta)", plano_inspecao: "Procedimento operacional / plano de inspeção", outro: "Outro",
+  },
 } as const;
 
 export function opcoesDe<T extends Record<string, string>>(r: T) {
