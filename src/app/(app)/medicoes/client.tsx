@@ -35,7 +35,7 @@ export type LinhaMedicao = {
   cliente_id: string; cliente_fantasia: string; obra_nome: string | null; placa: string | null; proprietario: string | null; prazo_pagamento_dias: number | null;
   dia_corte_inicio: number; valor_recebido: number; repasse_liquido: number | null; margem: number;
   contrato_numero: string | number | null; cliente_nome: string | null; veiculo_tipo: string | null; saldo: number;
-  tipo_cobranca: TipoCobrancaFatura | null; descricao: string | null; unidade: string | null; forma_pagamento: string | null; acrescimos_itens: ItemFatura[] | null; descontos_itens: ItemFatura[] | null;
+  tipo_cobranca: TipoCobrancaFatura | null; descricao: string | null; unidade: string | null; numero_os: string | null; forma_pagamento: string | null; acrescimos_itens: ItemFatura[] | null; descontos_itens: ItemFatura[] | null;
   /** fatura avulsa com vários itens (vazio = um item só, nas colunas dias / unidade / valor_mensal) */
   itens: ItemAvulsoSalvo[] | null;
 };
@@ -260,7 +260,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                       {m.contrato_numero != null && <span className="font-mono text-sm font-semibold hover:underline">{m.contrato_numero}</span>}
                       {m.contrato_id
                         ? <span className={cn("font-mono", m.contrato_numero != null ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{formatPlaca(m.placa)}</span>
-                        : <><Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Avulsa</Badge>{m.placa && <span className="font-mono text-sm font-semibold">{formatPlaca(m.placa)}</span>}<span className={cn("truncate", m.placa ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{m.descricao}</span></>}
+                        : <><Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Avulsa</Badge>{m.numero_os && <span className="shrink-0 font-mono text-sm font-semibold">OS {m.numero_os}</span>}{m.placa && <span className="font-mono text-sm font-semibold">{formatPlaca(m.placa)}</span>}<span className={cn("truncate", m.placa ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{m.descricao}</span></>}
                       {m.proprietario === "locador" && <Badge variant="info" className="px-1.5 py-0 text-[10px]">Sub</Badge>}
                       {m.final && <Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Final</Badge>}
                     </div>
@@ -503,20 +503,21 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
     }
   };
   // dias, acréscimos e descontos saíram da grade: ajustam-se aqui
-  const [ajuste, setAjuste] = React.useState({ dias: 0, forma: "boleto" as FormaFatura, acrescimos: [] as ItemFatura[], descontos: [] as ItemFatura[] });
+  const [ajuste, setAjuste] = React.useState({ dias: 0, os: "", forma: "boleto" as FormaFatura, acrescimos: [] as ItemFatura[], descontos: [] as ItemFatura[] });
   const [salvando, setSalvando] = React.useState(false);
   const [horas, setHoras] = React.useState<number | null>(null);
   const formaAtual = (m?.forma_pagamento ?? "boleto") as FormaFatura;
   const salvos = React.useMemo(() => JSON.stringify([itensDe(m, "acrescimos"), itensDe(m, "descontos")]), [m]);
   React.useEffect(() => {
     setHoras(null);
-    if (m) setAjuste({ dias: m.dias, forma: (m.forma_pagamento ?? "boleto") as FormaFatura, acrescimos: itensDe(m, "acrescimos"), descontos: itensDe(m, "descontos") });
+    if (m) setAjuste({ dias: m.dias, os: m.numero_os ?? "", forma: (m.forma_pagamento ?? "boleto") as FormaFatura, acrescimos: itensDe(m, "acrescimos"), descontos: itensDe(m, "descontos") });
   }, [m]);
   const ed = !!m && podeEditar && (m.status === "a_faturar" || m.status === "faturado");
   const acrescimos = somar(ajuste.acrescimos.map((i) => i.valor ?? 0));
   const descontos = somar(ajuste.descontos.map((i) => i.valor ?? 0));
   const mudouItens = JSON.stringify([ajuste.acrescimos, ajuste.descontos]) !== salvos;
-  const mudou = !!m && (ajuste.dias !== m.dias || ajuste.forma !== formaAtual || mudouItens);
+  const mudouOS = !!m && ajuste.os.trim() !== (m.numero_os ?? "");
+  const mudou = !!m && (ajuste.dias !== m.dias || mudouOS || ajuste.forma !== formaAtual || mudouItens);
   const total = m ? calcularValorMedicao({ valorMensal: m.valor_mensal, dias: ajuste.dias, acrescimos, descontos, baseDias: baseCobranca(m.tipo_cobranca, baseDias) }).valorFinal : 0;
   const salvarAjuste = async () => {
     if (!m) return;
@@ -525,6 +526,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
       id: m.id, ...(ajuste.dias !== m.dias ? { dias: ajuste.dias } : {}),
       acrescimos_itens: preenchidos(ajuste.acrescimos), descontos_itens: preenchidos(ajuste.descontos),
       ...(ajuste.forma !== formaAtual ? { forma_pagamento: ajuste.forma } : {}),
+      ...(mudouOS ? { numero_os: ajuste.os.trim() || null } : {}),
     }]));
     setSalvando(false);
     if (r.ok) onSalvo();
@@ -538,7 +540,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
         {m && <>
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2">
-              Fatura <span className="font-mono">{m.contrato_id ? m.contrato_numero ?? formatPlaca(m.placa) : "avulsa"}</span> <StatusBadge status={m.status_exibicao} />
+              Fatura <span className="font-mono">{m.contrato_id ? m.contrato_numero ?? formatPlaca(m.placa) : m.numero_os ? `avulsa · OS ${m.numero_os}` : "avulsa"}</span> <StatusBadge status={m.status_exibicao} />
               {m.final && <Badge variant="neutro">Final</Badge>}
             </DialogTitle>
             <DialogDescription>{m.empresa_apelido} · {m.cliente_fantasia}{m.obra_nome ? ` · ${m.obra_nome}` : ""} · {formatCompetencia(m.competencia.slice(0, 7), true)}</DialogDescription>
@@ -548,7 +550,10 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             {item("Obra", m.obra_nome)}
             {m.contrato_id
               ? item("Contrato", <Link className="underline" href={`/contratos/${m.contrato_id}`}>{m.contrato_numero ?? "Abrir contrato"}</Link>)
-              : item("Contrato", "Sem contrato (avulsa)")}
+              : ed
+                ? <label className="space-y-0.5"><span className="block text-xs text-muted-foreground">OS <span className="font-normal">(sem contrato)</span></span>
+                    <Input className="h-8" maxLength={30} placeholder="Nº da OS" value={ajuste.os} onChange={(e) => setAjuste((a) => ({ ...a, os: e.target.value }))} /></label>
+                : item("OS", m.numero_os ?? "Sem contrato (avulsa)")}
             {item("Período", m.contrato_id ? `${formatPeriodo(m.periodo_inicio, m.periodo_fim)} (${m.dias} dias)` : formatPeriodo(m.periodo_inicio, m.periodo_fim))}
             {m.contrato_id
               ? item("Veículo", `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)

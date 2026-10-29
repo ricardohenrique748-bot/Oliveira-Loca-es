@@ -16,7 +16,9 @@ export interface DadosFatura {
   numero_nf: string | null; data_emissao: string | null; data_vencimento: string | null;
   forma_pagamento: FormaFatura; acrescimos_itens: ItemFatura[]; descontos_itens: ItemFatura[]; observacoes: string | null;
   placa: string | null; veiculo_tipo: keyof typeof ROTULOS.tipoVeiculo | null; obra: string | null; descricao?: string | null;
-  /** só na avulsa: mes | semana | dia | hora */
+  /** só na avulsa: OS do cliente, no lugar do contrato */
+  numero_os?: string | null;
+  /** só na avulsa: mes | semana | dia | hora | km */
   unidade?: string | null;
   /** avulsa com vários itens: uma linha por item */
   itens?: ItemAvulsoSalvo[] | null;
@@ -61,7 +63,7 @@ export function montarFatura(d: DadosFatura): Documento {
     ] },
     { t: "secao", texto: "Dados da fatura" },
     { t: "campos", colunas: 2, pares: [
-      ["Contrato", d.contrato_numero ?? (avulsa ? "Sem contrato" : "")], ["Placa", d.placa ? formatPlaca(d.placa) : ""],
+      avulsa && !d.contrato_numero ? ["OS", d.numero_os ?? ""] : ["Contrato", d.contrato_numero ?? ""], ["Placa", d.placa ? formatPlaca(d.placa) : ""],
       ["Nota fiscal", d.numero_nf ?? ""], ["Pagamento", FORMAS_FATURA[d.forma_pagamento] ?? d.forma_pagamento],
       ["Emissão", formatData(d.data_emissao)], ["Vencimento", formatData(d.data_vencimento)],
     ] },
@@ -82,7 +84,7 @@ export function montarFatura(d: DadosFatura): Documento {
   return {
     // placa + mês da competência: "fatura_DWK9E10_outubro_2026"
     arquivo: `fatura_${d.placa ? formatPlaca(d.placa) : "avulsa"}_${competencia.replace(" de ", "_")}`,
-    cabecalho: `Fatura${d.numero_nf ? ` · NF ${d.numero_nf}` : ""} · ${d.contrato_numero ?? (d.placa ? formatPlaca(d.placa) : d.cliente.razao_social)}`,
+    cabecalho: `Fatura${d.numero_nf ? ` · NF ${d.numero_nf}` : ""} · ${d.contrato_numero ?? (d.numero_os ? `OS ${d.numero_os}` : d.placa ? formatPlaca(d.placa) : d.cliente.razao_social)}`,
     rodape: [], // fatura sem rodapé de empresa/contato
     blocos,
   };

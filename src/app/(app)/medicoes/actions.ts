@@ -215,7 +215,7 @@ export async function lancarFaturaAvulsa(dados: unknown) {
       acrescimos: d.acrescimos, descontos: d.descontos, observacoes: d.observacoes ?? null, data_vencimento: d.data_vencimento,
       acrescimos_itens: d.acrescimos > 0 ? [{ descricao: "Acréscimos", valor: d.acrescimos }] : [],
       descontos_itens: d.descontos > 0 ? [{ descricao: "Descontos", valor: d.descontos }] : [],
-      forma_pagamento: d.forma_pagamento,
+      forma_pagamento: d.forma_pagamento, numero_os: d.numero_os || null,
     }).select("id").single());
     return { id: nova!.id, competencia: periodoFim.slice(0, 7) };
   }, REVALIDAR, "Fatura lançada");

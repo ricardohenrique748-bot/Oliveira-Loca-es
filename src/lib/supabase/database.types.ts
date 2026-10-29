@@ -992,6 +992,7 @@ export type Database = {
           nfse_emitida_em: string | null
           nfse_erro: string | null
           numero_nf: string | null
+          numero_os: string | null
           observacoes: string | null
           periodo_fim: string
           periodo_inicio: string
@@ -1027,6 +1028,7 @@ export type Database = {
           nfse_emitida_em?: string | null
           nfse_erro?: string | null
           numero_nf?: string | null
+          numero_os?: string | null
           observacoes?: string | null
           periodo_fim: string
           periodo_inicio: string
@@ -1062,6 +1064,7 @@ export type Database = {
           nfse_emitida_em?: string | null
           nfse_erro?: string | null
           numero_nf?: string | null
+          numero_os?: string | null
           observacoes?: string | null
           periodo_fim?: string
           periodo_inicio?: string
@@ -2234,6 +2237,7 @@ export type Database = {
           locador_id: string | null
           margem: number | null
           numero_nf: string | null
+          numero_os: string | null
           obra_id: string | null
           obra_nome: string | null
           observacoes: string | null

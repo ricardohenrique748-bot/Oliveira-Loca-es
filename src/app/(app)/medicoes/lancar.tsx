@@ -62,6 +62,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   const [semContrato, setSemContrato] = React.useState(false);
   const [empresa, setEmpresa] = React.useState<string | null>(null);
   const [cliente, setCliente] = React.useState<string | null>(null);
+  const [numeroOS, setNumeroOS] = React.useState("");
   const [itens, setItens] = React.useState<ItemTela[]>(() => [itemNovo()]);
   // "+ Novo cliente": cadastra sem sair do lançamento; o novo entra na lista e já fica escolhido
   const [novoCliente, setNovoCliente] = React.useState(false);
@@ -88,7 +89,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     setContrato(contratoId ?? null); setInfo(null); setAcrescimos(0); setDescontos(0); setObservacoes(""); setForma("boleto"); setDiasManual(false);
     setRecarga((n) => n + 1);
     // avulsa: mantém o modo e a empresa; o resto volta ao padrão
-    setCliente(null); setItens([itemNovo()]); setVencimento("");
+    setCliente(null); setNumeroOS(""); setItens([itemNovo()]); setVencimento("");
   }, [contratoId]);
 
   React.useEffect(() => {
@@ -165,7 +166,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     if (faltaAvulsa) return toast.error(faltaAvulsa);
     setCarregando(true);
     const r = await lancarFaturaAvulsa({
-      empresa_id: empresa, cliente_id: cliente,
+      empresa_id: empresa, cliente_id: cliente, numero_os: numeroOS.trim() || null,
       itens: itens.flatMap((i) => {
         const base = { veiculo_id: i.veiculo, periodo_inicio: i.inicio, periodo_fim: i.fim };
         const servico = { ...base, descricao: i.descricao, quantidade: i.quantidade, unidade: i.unidade, valor_unitario: i.valorUnitario };
@@ -205,10 +206,14 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
                   <SelectSimples id="avulsa-empresa" value={empresa} onChange={setEmpresa} opcoes={empresas ?? []} placeholder="Selecione a empresa…" />
                 </div>
               )}
-              <div className="col-span-2 space-y-1.5">
+              <div className="col-span-2 space-y-1.5 sm:col-span-1">
                 <Label htmlFor="avulsa-cliente">Cliente</Label>
                 <SelectBusca id="avulsa-cliente" busca="Buscar cliente…" value={cliente} onChange={setCliente} opcoes={opcoesCliente} placeholder="Selecione o cliente…"
                   novo={{ rotulo: "Novo cliente", onNovo: () => setNovoCliente(true) }} />
+              </div>
+              <div className="col-span-2 space-y-1.5 sm:col-span-1">
+                <Label htmlFor="avulsa-os">Nº da OS <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                <Input id="avulsa-os" value={numeroOS} maxLength={30} placeholder="Ex.: 1234" onChange={(e) => setNumeroOS(e.target.value)} />
               </div>
             </div>
             <div className="space-y-2">

@@ -75,6 +75,8 @@ export const edicaoMedicaoSchema = z.object({
   acrescimos: z.number().min(0).optional(),
   descontos: z.number().min(0).optional(),
   numero_nf: z.string().trim().max(30).nullable().optional(),
+  /** só na avulsa: OS do cliente a que a fatura se refere */
+  numero_os: z.string().trim().max(30).nullable().optional(),
   data_emissao: dataOpc.optional(),
   data_vencimento: dataOpc.optional(),
   observacoes: z.string().trim().max(1000).nullable().optional(),
@@ -143,6 +145,8 @@ export const lancamentoAvulsoSchema = z.object({
   empresa_id: uuidObr("a empresa"),
   cliente_id: uuidObr("o cliente"),
   itens: z.array(itemAvulsoSchema).min(1, "Inclua ao menos um item").max(50),
+  /** número da OS do cliente (no lugar do contrato) */
+  numero_os: z.string().trim().max(30, "OS com no máximo 30 caracteres").nullable().optional(),
   acrescimos: z.number().min(0).default(0),
   descontos: z.number().min(0).default(0),
   data_vencimento: dataOpc,

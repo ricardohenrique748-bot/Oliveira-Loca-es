@@ -72,7 +72,7 @@ export function baixarFaturaPDF(id: string, baseDias: number) {
   return gerar(async () => {
     const { data: m, error } = await createClient().from("medicoes")
       .select(`periodo_inicio, periodo_fim, dias, valor_mensal, valor_base, acrescimos, descontos, valor_final, numero_nf, data_emissao,
-        data_vencimento, forma_pagamento, acrescimos_itens, descontos_itens, observacoes, descricao, unidade, itens,
+        data_vencimento, forma_pagamento, acrescimos_itens, descontos_itens, observacoes, descricao, unidade, itens, numero_os,
         empresas(${EMPRESA}), clientes(${CLIENTE}), veiculos(placa, tipo), contratos(numero, tipo_cobranca, clientes(${CLIENTE}), obras(nome), veiculos(placa, tipo))`)
       .eq("id", id).maybeSingle();
     if (error) throw error;
