@@ -58,6 +58,27 @@ export const empresaSchema = z.object({
 });
 export type EmpresaForm = z.infer<typeof empresaSchema>;
 
+// ---------- encargos do boleto (padrão na conta Sicredi) ----------
+const pctOpc = z.number().gt(0, "Deve ser maior que zero").lt(100, "Deve ser menor que 100%").nullish().transform((v) => v ?? null);
+export const APOS_VENCIMENTO = [
+  { value: "protesto", label: "Protestar em cartório" },
+  { value: "negativacao", label: "Negativar no Serasa" },
+] as const;
+/** limites do Sicredi (Manual API Cobrança 4.0) */
+export const DIAS_APOS_VENCIMENTO = { protesto: [3, 99], negativacao: [46, 99] } as const;
+const encargosBoletoCampos = {
+  boleto_multa_pct: pctOpc,
+  boleto_juros_mes_pct: pctOpc,
+  boleto_apos_vencimento: z.enum(["protesto", "negativacao"]).nullish().transform((v) => v ?? null),
+  boleto_dias_apos_vencimento: z.number().int().nullish().transform((v) => v ?? null),
+};
+function validarEncargosBoleto(v: { boleto_apos_vencimento: "protesto" | "negativacao" | null; boleto_dias_apos_vencimento: number | null }, ctx: z.RefinementCtx) {
+  if (!v.boleto_apos_vencimento) return;
+  const [min, max] = DIAS_APOS_VENCIMENTO[v.boleto_apos_vencimento];
+  const d = v.boleto_dias_apos_vencimento;
+  if (d == null || d < min || d > max) ctx.addIssue({ code: "custom", path: ["boleto_dias_apos_vencimento"], message: `Entre ${min} e ${max} dias` });
+}
+
 export const contaBancariaSchema = z.object({
   empresa_id: uuidObr("a empresa"),
   banco: z.enum(["Bradesco", "Sicredi", "Inter", "Outro"], { errorMap: () => ({ message: "Selecione o banco" }) }),
@@ -67,7 +88,8 @@ export const contaBancariaSchema = z.object({
   codigo_beneficiario: textoOpc,
   apelido: textoObr("Apelido"),
   ativo: z.boolean().default(true),
-});
+  ...encargosBoletoCampos,
+}).superRefine(validarEncargosBoleto);
 export type ContaBancariaForm = z.infer<typeof contaBancariaSchema>;
 
 export const clienteSchema = z.object({

@@ -15,12 +15,13 @@ import { BotaoCopiar, Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from
 import { KpiCard } from "@/components/app/kpi";
 import { DataTable } from "@/components/app/data-table";
 import { BarraFiltros, BuscaUrl, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
-import { InputMoeda } from "@/components/app/campos";
+import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
-import { formatBRL, formatData, formatPeriodo, formatPlaca, hojeSP, linkEmail, linkWhatsApp, preencherTemplate } from "@/lib/format";
+import { formatBRL, formatData, formatPct, formatPeriodo, formatPlaca, hojeSP, linkEmail, linkWhatsApp, preencherTemplate } from "@/lib/format";
 import { somar } from "@/lib/calculos";
+import { APOS_VENCIMENTO, DIAS_APOS_VENCIMENTO } from "@/lib/schemas/cadastros";
 import {
-  atualizarBoletos, baixarEmLote, baixarPdfBoleto, buscarFaturasAbertas, cancelarBoleto, emitirBoleto, estornarRecebimento, listarRecebimentos, registrarRecebimento, type Boleto,
+  atualizarBoletos, baixarEmLote, baixarPdfBoleto, buscarFaturasAbertas, cancelarBoleto, emitirBoleto, type EncargosBoleto, estornarRecebimento, listarRecebimentos, registrarRecebimento, type Boleto,
 } from "./actions";
 
 export type LinhaReceber = {
@@ -31,7 +32,9 @@ export type LinhaReceber = {
 };
 export type ContatoCobranca = { cliente_id: string; obra_id: string | null; nome: string; email: string | null; whatsapp: string | null };
 /** boleto: conta Sicredi com código do beneficiário (emite boleto pelo sistema) */
-type Conta = Opcao & { empresa_id: string; boleto?: boolean };
+type Conta = Opcao & { empresa_id: string; boleto?: boolean; encargos?: EncargosBoleto };
+
+const SEM_ENCARGOS: EncargosBoleto = { multa_pct: null, juros_mes_pct: null, apos_vencimento: null, dias_apos_vencimento: null };
 
 const FAIXAS = [
   { chave: "a_vencer", rotulo: "A vencer", tom: undefined },
@@ -351,6 +354,7 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
 }) {
   const [conta, setConta] = React.useState<string | null>(null);
   const [vencimento, setVencimento] = React.useState("");
+  const [encargos, setEncargos] = React.useState<EncargosBoleto>(SEM_ENCARGOS);
   const [ocupado, setOcupado] = React.useState<"emitir" | "pdf" | "atualizar" | null>(null);
   const [cancelar, setCancelar] = React.useState(false);
   const contasEmpresa = contas.filter((c) => m && c.empresa_id === m.empresa_id);
@@ -358,15 +362,24 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
 
   React.useEffect(() => {
     if (!m) return;
-    setConta(contasEmpresa[0]?.value ?? null);
+    escolherConta(contasEmpresa[0]?.value ?? null);
     setVencimento(m.data_vencimento && m.data_vencimento >= hojeSP() ? m.data_vencimento : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [m?.id]);
 
+  /** trocar a conta traz a multa/juros/protesto padrão dela */
+  const escolherConta = (id: string | null) => {
+    setConta(id);
+    setEncargos(contas.find((c) => c.value === id)?.encargos ?? SEM_ENCARGOS);
+  };
+  const enc = (v: Partial<EncargosBoleto>) => setEncargos((e) => ({ ...e, ...v }));
+  const limitesDias = encargos.apos_vencimento ? DIAS_APOS_VENCIMENTO[encargos.apos_vencimento] : null;
+  const diasInvalidos = !!limitesDias && (encargos.dias_apos_vencimento == null || encargos.dias_apos_vencimento < limitesDias[0] || encargos.dias_apos_vencimento > limitesDias[1]);
+
   const emitir = async () => {
     if (!m) return;
     setOcupado("emitir");
-    const r = await rodarAcao(emitirBoleto(m.id, conta, vencimento));
+    const r = await rodarAcao(emitirBoleto(m.id, conta, vencimento, encargos));
     setOcupado(null);
     if (r.ok) { onOpenChange(false); onFeito(); }
   };
@@ -410,6 +423,15 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
                 <div><p className="text-xs text-muted-foreground">Vencimento</p><span className="font-medium">{formatData(b.data_vencimento)}</span></div>
                 <div><p className="text-xs text-muted-foreground">Nosso número</p><span className="num font-medium">{b.nosso_numero}</span></div>
               </div>
+              {(() => {
+                const itens = [
+                  b.multa_pct && `Multa ${formatPct(b.multa_pct)}`,
+                  b.juros_mes_pct && `Juros ${formatPct(b.juros_mes_pct)} ao mês`,
+                  b.protesto_dias && `Protesto ${b.protesto_dias} dias após o vencimento`,
+                  b.negativacao_dias && `Serasa ${b.negativacao_dias} dias após o vencimento`,
+                ].filter(Boolean);
+                return itens.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{itens.join(" · ")}</p>;
+              })()}
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2"><Label>Linha digitável</Label><BotaoCopiar texto={b.linha_digitavel} /></div>
@@ -440,8 +462,27 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5"><Label htmlFor="bol-venc">Vencimento</Label><Input id="bol-venc" type="date" min={hojeSP()} value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
                   {m.data_vencimento && m.data_vencimento < hojeSP() && <p className="text-xs text-status-alerta">Fatura venceu em {formatData(m.data_vencimento)} — informe nova data</p>}</div>
-                <div className="space-y-1.5"><Label>Conta de cobrança</Label><SelectSimples value={conta} onChange={setConta} opcoes={contasEmpresa} /></div>
+                <div className="space-y-1.5"><Label>Conta de cobrança</Label><SelectSimples value={conta} onChange={escolherConta} opcoes={contasEmpresa} /></div>
               </div>
+              <fieldset className="space-y-3 rounded-md border p-3">
+                <legend className="px-1 text-xs font-medium text-muted-foreground">Após o vencimento</legend>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5"><Label htmlFor="bol-multa">Multa (%)</Label>
+                    <InputNumero id="bol-multa" casas={2} placeholder="Sem multa" value={encargos.multa_pct} onChange={(v) => enc({ multa_pct: v })} /></div>
+                  <div className="space-y-1.5"><Label htmlFor="bol-juros">Juros ao mês (%)</Label>
+                    <InputNumero id="bol-juros" casas={2} placeholder="Sem juros" value={encargos.juros_mes_pct} onChange={(v) => enc({ juros_mes_pct: v })} /></div>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+                  <div className="space-y-1.5"><Label>Se não pagar</Label>
+                    <SelectSimples aria-label="Se não pagar" value={encargos.apos_vencimento} vazio="Não protestar nem negativar" opcoes={[...APOS_VENCIMENTO]}
+                      onChange={(v) => enc({ apos_vencimento: v as EncargosBoleto["apos_vencimento"], dias_apos_vencimento: v ? encargos.dias_apos_vencimento ?? DIAS_APOS_VENCIMENTO[v as "protesto" | "negativacao"][0] : null })} /></div>
+                  {limitesDias && <div className="space-y-1.5"><Label htmlFor="bol-dias">Após (dias)</Label>
+                    <InputNumero id="bol-dias" value={encargos.dias_apos_vencimento} onChange={(v) => enc({ dias_apos_vencimento: v })} aria-invalid={diasInvalidos} /></div>}
+                </div>
+                {limitesDias && <p className={diasInvalidos ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                  {encargos.apos_vencimento === "protesto" ? "Protesto" : "Negativação no Serasa"}: de {limitesDias[0]} a {limitesDias[1]} dias após o vencimento.
+                  {encargos.apos_vencimento === "negativacao" && " Precisa do Serasa ativo no seu contrato de cobrança."}</p>}
+              </fieldset>
               <p className="text-xs text-muted-foreground">O boleto sai com QR Code PIX e é registrado no Sicredi em nome do cliente (CNPJ e endereço do cadastro).</p>
             </div>
           )
@@ -453,7 +494,7 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
             <Button onClick={pdf} disabled={!!ocupado}>{ocupado === "pdf" ? <Loader2 className="animate-spin" /> : <FileDown />} Baixar PDF</Button>
           </> : <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>}
           {m && !b && podeEditar && contasEmpresa.length > 0 && (
-            <Button onClick={emitir} disabled={!!ocupado || !conta || !vencimento}>{ocupado === "emitir" ? <Loader2 className="animate-spin" /> : <Barcode />} Gerar boleto</Button>
+            <Button onClick={emitir} disabled={!!ocupado || !conta || !vencimento || diasInvalidos}>{ocupado === "emitir" ? <Loader2 className="animate-spin" /> : <Barcode />} Gerar boleto</Button>
           )}
         </DialogFooter>
         <Confirmar aberto={cancelar} onOpenChange={setCancelar} titulo="Cancelar boleto no Sicredi?" destrutivo rotulo="Cancelar boleto"

@@ -28,6 +28,14 @@ export interface Pagador {
   telefone?: string | null;
 }
 
+/** Cobrados após o vencimento. Sem dataInicioJuros/Multa: com elas o Sicredi tira o QR Code PIX. */
+export interface Encargos {
+  multaPct: number | null;
+  jurosMesPct: number | null;
+  protestoDias: number | null; // 3–99, exclusivo com negativação
+  negativacaoDias: number | null; // 46–99, exige Serasa no cadastro do beneficiário
+}
+
 export interface BoletoCriado {
   nossoNumero: string;
   linhaDigitavel: string;
@@ -111,9 +119,10 @@ async function chamar(b: Beneficiario, caminho: string, init: RequestInit & { ac
 
 // ---------- operações ----------
 export async function criarBoleto(b: Beneficiario, dados: {
-  pagador: Pagador; seuNumero: string; vencimento: string; valor: number; mensagens?: string[];
+  pagador: Pagador; seuNumero: string; vencimento: string; valor: number; mensagens?: string[]; encargos?: Encargos;
 }): Promise<BoletoCriado> {
   const p = dados.pagador;
+  const e = dados.encargos;
   // manual 4.0: telefone até 11 dígitos (DDD + número, sem +55); email até 40
   const telefone = (p.telefone ?? "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
   const email = p.email && p.email.length <= 40 ? p.email : null;
@@ -137,6 +146,9 @@ export async function criarBoleto(b: Beneficiario, dados: {
       seuNumero: dados.seuNumero,
       dataVencimento: dados.vencimento,
       valor: Number(dados.valor.toFixed(2)),
+      ...(e?.multaPct ? { tipoMulta: "PERCENTUAL", multa: e.multaPct } : {}),
+      ...(e?.jurosMesPct ? { tipoJuros: "PERCENTUAL", tipoJurosPercentual: "MENSAL", juros: e.jurosMesPct } : {}),
+      ...(e?.protestoDias ? { diasProtestoAuto: e.protestoDias } : e?.negativacaoDias ? { diasNegativacaoAuto: e.negativacaoDias } : {}),
       ...(dados.mensagens?.length ? { mensagens: dados.mensagens.slice(0, 4).map((m) => m.slice(0, 80)) } : {}),
     }),
   });

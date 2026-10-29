@@ -1,6 +1,7 @@
 /**
  * Boletos Sicredi a partir das medições faturadas.
- * POST { acao: "emitir", medicao_id, conta_bancaria_id?, vencimento? }
+ * POST { acao: "emitir", medicao_id, conta_bancaria_id?, vencimento?, encargos? }
+ *      encargos: { multa_pct, juros_mes_pct, apos_vencimento: "protesto" | "negativacao" | null, dias_apos_vencimento }
  * POST { acao: "pdf", boleto_id }                → { pdf_base64 }
  * POST { acao: "atualizar", boleto_ids? }        → consulta os boletos em aberto; pagos viram recebimento
  * POST { acao: "baixar", boleto_id }             → cancela (baixa) o boleto no banco
@@ -8,7 +9,7 @@
  * Permissões: lê com o JWT do usuário (RLS decide o que ele enxerga) e grava com service_role.
  */
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
-import { ambiente, baixarBoleto, type Beneficiario, consultarBoleto, criarBoleto, ErroSicredi, type Pagador, pdfBoleto } from "./sicredi.ts";
+import { ambiente, baixarBoleto, type Beneficiario, consultarBoleto, criarBoleto, type Encargos, ErroSicredi, type Pagador, pdfBoleto } from "./sicredi.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -63,7 +64,9 @@ Deno.serve(async (req) => {
 type Ctx = { usuario: SupabaseClient; admin: SupabaseClient; userId: string };
 
 // ---------- emitir ----------
-async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: string; conta_bancaria_id?: string; vencimento?: string }) {
+type EncargosCorpo = { multa_pct?: number | null; juros_mes_pct?: number | null; apos_vencimento?: string | null; dias_apos_vencimento?: number | null };
+
+async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: string; conta_bancaria_id?: string; vencimento?: string; encargos?: EncargosCorpo }) {
   const { data: m } = await usuario.from("medicoes_v")
     .select("id, empresa_id, cliente_id, status, saldo, data_vencimento, numero_nf, placa, descricao, periodo_inicio, periodo_fim")
     .eq("id", corpo.medicao_id ?? "").maybeSingle();
@@ -81,10 +84,12 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
 
   const conta = await contaCobranca(usuario, m.empresa_id, corpo.conta_bancaria_id);
   const pagador = await pagadorDoCliente(usuario, admin, m.cliente_id);
+  const encargos = validarEncargos(corpo.encargos);
 
   const seuNumero = (digitos(m.numero_nf) || m.id.replace(/-/g, "").slice(0, 10)).slice(-10);
   const b = await criarBoleto(conta.beneficiario, {
     pagador, seuNumero, vencimento, valor,
+    encargos,
     mensagens: [`${m.placa ? `Locação ${m.placa}` : m.descricao ?? "Serviço"} · ${br(m.periodo_inicio)} a ${br(m.periodo_fim)}`, m.numero_nf ? `NF ${m.numero_nf}` : ""].filter(Boolean),
   });
 
@@ -92,6 +97,7 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
     medicao_id: m.id, empresa_id: m.empresa_id, conta_bancaria_id: conta.id, ambiente: ambiente(), seu_numero: seuNumero,
     nosso_numero: b.nossoNumero, linha_digitavel: b.linhaDigitavel, codigo_barras: b.codigoBarras, pix_copia_cola: b.qrCode, txid: b.txid,
     valor, data_vencimento: vencimento, created_by: userId,
+    multa_pct: encargos.multaPct, juros_mes_pct: encargos.jurosMesPct, protesto_dias: encargos.protestoDias, negativacao_dias: encargos.negativacaoDias,
   }).select().single();
   if (error) {
     // o boleto já existe no banco: não deixar órfão
@@ -99,6 +105,26 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
     throw error;
   }
   return boleto;
+}
+
+/** Mesmas regras do cadastro da conta (limites do Manual API Cobrança 4.0). */
+function validarEncargos(e: EncargosCorpo = {}): Encargos {
+  const pct = (v: unknown, rotulo: string) => {
+    if (v == null || v === "" || Number(v) === 0) return null;
+    const n = Number(v);
+    if (!(n > 0 && n < 100)) throw new ErroUso(`${rotulo}: informe um percentual entre 0 e 100.`);
+    return Math.round(n * 100) / 100;
+  };
+  const r: Encargos = { multaPct: pct(e.multa_pct, "Multa"), jurosMesPct: pct(e.juros_mes_pct, "Juros"), protestoDias: null, negativacaoDias: null };
+  if (e.apos_vencimento === "protesto" || e.apos_vencimento === "negativacao") {
+    const [min, max] = e.apos_vencimento === "protesto" ? [3, 99] : [46, 99];
+    const d = Number(e.dias_apos_vencimento);
+    if (!Number.isInteger(d) || d < min || d > max) {
+      throw new ErroUso(`${e.apos_vencimento === "protesto" ? "Protesto" : "Negativação"}: informe de ${min} a ${max} dias após o vencimento.`);
+    }
+    if (e.apos_vencimento === "protesto") r.protestoDias = d; else r.negativacaoDias = d;
+  }
+  return r;
 }
 
 async function contaCobranca(usuario: SupabaseClient, empresaId: string, contaId?: string) {
@@ -189,7 +215,7 @@ async function registrarPagamento({ admin, userId }: Ctx, b: { id: string; medic
     const { data: conta } = await admin.from("boletos").select("conta_bancaria_id").eq("id", b.id).single();
     const { data: r, error } = await admin.from("recebimentos").insert({
       medicao_id: b.medicao_id, data, valor, conta_bancaria_id: conta?.conta_bancaria_id ?? null,
-      observacoes: `Boleto Sicredi ${b.nosso_numero} (baixa automática)`, created_by: userId,
+      observacoes: `Boleto Sicredi ${b.nosso_numero} (baixa automática)${valorPago > valor + 0.005 ? ` · pago ${valorPago.toFixed(2).replace(".", ",")} com multa/juros` : ""}`, created_by: userId,
     }).select("id").single();
     if (error) throw error;
     recebimentoId = r.id;
