@@ -66,7 +66,7 @@ export function montarFatura(d: DadosFatura): Documento {
       ["Emissão", formatData(d.data_emissao)], ["Vencimento", formatData(d.data_vencimento)],
     ] },
     { t: "secao", texto: "Discriminação" },
-    { t: "tabela", cabecalho: ["Descrição", "Período", "Qtd.", diaria ? "Diária" : hora ? "Valor/hora" : avulsa ? ({ mes: "Valor/mês", semana: "Valor/semana", dia: "Diária", hora: "Valor/hora" } as Record<string, string>)[d.unidade ?? ""] ?? "Valor unit." : "Valor mensal", "Valor"], linhas: itens,
+    { t: "tabela", cabecalho: ["Descrição", "Período", "Qtd.", diaria ? "Diária" : hora ? "Valor/hora" : avulsa ? ({ mes: "Valor/mês", semana: "Valor/semana", dia: "Diária", hora: "Valor/hora", km: "Valor/km" } as Record<string, string>)[d.unidade ?? ""] ?? "Valor unit." : "Valor mensal", "Valor"], linhas: itens,
       direita: [2, 3, 4], larguras: [0, 40, 22, 28, 28], total: ["Total da fatura", "", "", "", formatBRL(d.valor_final)] },
     { t: "espaco", mm: 2 },
     ...(d.observacoes ? [{ t: "paragrafo", rotulo: "Observações:", texto: d.observacoes } as Bloco] : []),

@@ -103,7 +103,7 @@ export const lancamentoMedicaoSchema = z.object({
 export type LancamentoMedicao = z.input<typeof lancamentoMedicaoSchema>;
 
 /** Unidade da quantidade na fatura avulsa (espelho do check em medicoes.unidade) */
-export const UNIDADES_AVULSA = { mes: "Mês", semana: "Semana", dia: "Diária", hora: "Hora" } as const;
+export const UNIDADES_AVULSA = { mes: "Mês", semana: "Semana", dia: "Diária", hora: "Hora", km: "Km" } as const;
 export type UnidadeAvulsa = keyof typeof UNIDADES_AVULSA;
 
 /** "3 meses", "1 semana", "8 h"; sem unidade (fatura antiga) só o número */
@@ -115,6 +115,7 @@ export function formatQuantidadeAvulsa(qtd: number, unidade: string | null | und
     case "semana": return `${n} ${["semana", "semanas"][plural]}`;
     case "dia": return `${n} ${["diária", "diárias"][plural]}`;
     case "hora": return `${n} h`;
+    case "km": return `${n} km`;
     default: return n;
   }
 }
@@ -126,7 +127,7 @@ export const itemAvulsoSchema = z.object({
   veiculo_id: uuidOpc,
   /** pode ter fração (7,5 h), até 2 casas */
   quantidade: z.number().positive("Informe a quantidade").max(99_999).refine((q) => Math.round(q * 100) === q * 100, "Quantidade com no máximo 2 casas"),
-  unidade: z.enum(["mes", "semana", "dia", "hora"], { required_error: "Escolha a unidade" }),
+  unidade: z.enum(["mes", "semana", "dia", "hora", "km"], { required_error: "Escolha a unidade" }),
   valor_unitario: z.number({ invalid_type_error: "Informe o valor" }).positive("Informe o valor de cada item").max(999_999_999),
   /** cada item tem o seu período; o da fatura vai do primeiro início ao último fim */
   periodo_inicio: dataObr("o início de cada item"),

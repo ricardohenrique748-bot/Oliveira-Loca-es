@@ -21,17 +21,20 @@ import { dadosLancamento, lancarFaturaAvulsa, lancarMedicao, type ContratoLancam
 
 const OPCOES_FORMA: Opcao[] = Object.entries(FORMAS_FATURA).map(([value, label]) => ({ value, label }));
 const OPCOES_UNIDADE: Opcao[] = Object.entries(UNIDADES_AVULSA).map(([value, label]) => ({ value, label }));
-const VALOR_POR: Record<UnidadeAvulsa, string> = { mes: "Valor por mês", semana: "Valor por semana", dia: "Valor da diária", hora: "Valor da hora" };
+const VALOR_POR: Record<UnidadeAvulsa, string> = { mes: "Valor por mês", semana: "Valor por semana", dia: "Valor da diária", hora: "Valor da hora", km: "Valor por km" };
 
-/** Linha da fatura avulsa na tela; qtdManual = quantidade digitada (não segue mais o período) */
-type ItemTela = { descricao: string; veiculo: string | null; inicio: string; fim: string; quantidade: number; unidade: UnidadeAvulsa; qtdManual: boolean; valorUnitario: number };
+/** Linha da fatura avulsa na tela; qtdManual = quantidade digitada (não segue mais o período);
+ *  km × valorKm (opcional) vira um item a mais na fatura, em km */
+type ItemTela = { descricao: string; veiculo: string | null; inicio: string; fim: string; quantidade: number; unidade: UnidadeAvulsa; qtdManual: boolean; valorUnitario: number; km: number; valorKm: number };
 const itemNovo = (inicio = hojeSP(), fim = inicio, unidade: UnidadeAvulsa = "mes"): ItemTela =>
-  ({ descricao: "", veiculo: null, inicio, fim, quantidade: 1, unidade, qtdManual: false, valorUnitario: 0 });
-const subtotal = (i: ItemTela) => calcularValorMedicao({ valorMensal: i.valorUnitario, dias: i.quantidade, acrescimos: 0, descontos: 0, baseDias: 1 }).valorBase;
+  ({ descricao: "", veiculo: null, inicio, fim, quantidade: 1, unidade, qtdManual: false, valorUnitario: 0, km: 0, valorKm: 0 });
+const multiplicar = (valor: number, qtd: number) => calcularValorMedicao({ valorMensal: valor, dias: qtd, acrescimos: 0, descontos: 0, baseDias: 1 }).valorBase;
+const subtotalKm = (i: ItemTela) => (i.km > 0 ? multiplicar(i.valorKm, i.km) : 0);
+const subtotal = (i: ItemTela) => somar([multiplicar(i.valorUnitario, i.quantidade), subtotalKm(i)]);
 
-/** Quantidade sugerida pelo período (hora: digitada, sem sugestão). */
+/** Quantidade sugerida pelo período (hora e km: digitados, sem sugestão). */
 function quantidadePeriodo(unidade: UnidadeAvulsa, inicio: string, fim: string): number | null {
-  if (unidade === "hora" || !inicio || !fim || fim < inicio) return null;
+  if (unidade === "hora" || unidade === "km" || !inicio || !fim || fim < inicio) return null;
   const dias = diffDias(inicio, fim) + 1;
   return unidade === "dia" ? dias : unidade === "semana" ? Math.ceil(dias / 7) : Math.max(1, Math.round(dias / 30));
 }
@@ -138,6 +141,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
       if (i.fim < i.inicio) return `O fim${n} está antes do início`;
       if (i.quantidade <= 0) return `Informe a quantidade${n}`;
       if (i.valorUnitario <= 0) return `Informe o valor${n}`;
+      if (i.km > 0 && i.valorKm <= 0) return `Informe o valor por km${n}`;
     }
     return null;
   })();
@@ -162,8 +166,11 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     setCarregando(true);
     const r = await lancarFaturaAvulsa({
       empresa_id: empresa, cliente_id: cliente,
-      itens: itens.map((i) => ({ descricao: i.descricao, veiculo_id: i.veiculo, periodo_inicio: i.inicio, periodo_fim: i.fim,
-        quantidade: i.quantidade, unidade: i.unidade, valor_unitario: i.valorUnitario })),
+      itens: itens.flatMap((i) => {
+        const base = { veiculo_id: i.veiculo, periodo_inicio: i.inicio, periodo_fim: i.fim };
+        const servico = { ...base, descricao: i.descricao, quantidade: i.quantidade, unidade: i.unidade, valor_unitario: i.valorUnitario };
+        return i.km > 0 ? [servico, { ...base, descricao: `${i.descricao.trim()} - KM rodado`, quantidade: i.km, unidade: "km" as const, valor_unitario: i.valorKm }] : [servico];
+      }),
       acrescimos, descontos, data_vencimento: vencimento || null, forma_pagamento: forma, observacoes: observacoes || null,
     });
     setCarregando(false);
@@ -180,7 +187,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
         <DialogHeader>
           <DialogTitle>Lançar fatura</DialogTitle>
           <DialogDescription>{semContrato
-            ? "Fatura direto para o cliente, sem contrato. Inclua um ou mais itens: descreva o serviço, escolha a placa se houver, o período e informe a quantidade (por mês, semana, diária ou hora) e o valor."
+            ? "Fatura direto para o cliente, sem contrato. Inclua um ou mais itens: descreva o serviço, escolha a placa se houver, o período e informe a quantidade (por mês, semana, diária ou hora) e o valor. Se cobrar km rodado, informe os km e o valor por km no próprio item."
             : "Escolha o contrato e o período. O sistema sugere o mês seguinte à última fatura do contrato; dias e valor são calculados automaticamente."}</DialogDescription>
         </DialogHeader>
         {podeAvulsa && (
@@ -238,7 +245,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
                       <Label htmlFor={`avulsa-qtd-${k}`} className="text-xs">Quantidade</Label>
                       <div className="flex gap-2">
                         {/* aceita fração (7,5 h); apagado fica vazio em vez de virar 0 */}
-                        <InputNumero id={`avulsa-qtd-${k}`} className="w-20 shrink-0" casas={2} value={it.quantidade || null} placeholder={it.unidade === "hora" ? "h" : "0"}
+                        <InputNumero id={`avulsa-qtd-${k}`} className="w-20 shrink-0" casas={2} value={it.quantidade || null} placeholder={it.unidade === "hora" ? "h" : it.unidade === "km" ? "km" : "0"}
                           onChange={(v) => editarItem(k, { quantidade: Math.max(0, Math.min(99_999, Math.round((v ?? 0) * 100) / 100)), qtdManual: true })} />
                         <SelectSimples aria-label={`Unidade do item ${k + 1}`} className="min-w-0 flex-1" value={it.unidade}
                           onChange={(v) => editarItem(k, { unidade: (v as UnidadeAvulsa | null) ?? "mes", qtdManual: false })} opcoes={OPCOES_UNIDADE} />
@@ -248,8 +255,23 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
                       <Label htmlFor={`avulsa-valor-${k}`} className="text-xs">{VALOR_POR[it.unidade]}</Label>
                       <InputMoeda id={`avulsa-valor-${k}`} permitirVazio={false} value={it.valorUnitario} onChange={(v) => editarItem(k, { valorUnitario: v ?? 0 })} />
                     </div>
-                    <p className="pb-2 text-right text-sm font-semibold sm:min-w-24"><Moeda valor={subtotal(it)} /></p>
+                    <p className="pb-2 text-right text-sm font-semibold sm:min-w-24"><Moeda valor={multiplicar(it.valorUnitario, it.quantidade)} /></p>
                   </div>
+                  {it.unidade !== "km" && (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1.3fr_1fr_auto] sm:items-end">
+                      <p className="hidden pb-2 text-xs text-muted-foreground sm:block">Cobrar km rodado <span className="font-normal">(opcional)</span></p>
+                      <div className="space-y-1">
+                        <Label htmlFor={`avulsa-km-${k}`} className="text-xs">KM rodado</Label>
+                        <InputNumero id={`avulsa-km-${k}`} casas={2} value={it.km || null} placeholder="km"
+                          onChange={(v) => editarItem(k, { km: Math.max(0, Math.min(99_999, Math.round((v ?? 0) * 100) / 100)) })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`avulsa-valorkm-${k}`} className="text-xs">Valor por km</Label>
+                        <InputMoeda id={`avulsa-valorkm-${k}`} permitirVazio={false} value={it.valorKm} onChange={(v) => editarItem(k, { valorKm: v ?? 0 })} />
+                      </div>
+                      <p className="pb-2 text-right text-sm font-semibold sm:min-w-24"><Moeda valor={subtotalKm(it)} /></p>
+                    </div>
+                  )}
                 </div>
               ))}
               <Button size="sm" variant="outline" onClick={() => setItens((lista) => { const u = lista[lista.length - 1]; return [...lista, sugerir(itemNovo(u?.inicio || undefined, u?.fim || undefined, u?.unidade))]; })}>
