@@ -26,6 +26,7 @@ import MedicoesPage from "@/app/(app)/medicoes/page";
 import ReceberPage from "@/app/(app)/receber/page";
 import RepassesPage from "@/app/(app)/repasses/page";
 import PagarPage from "@/app/(app)/pagar/page";
+import EspelhoPage from "@/app/(app)/espelho/page";
 import ManutencaoPage from "@/app/(app)/manutencao/page";
 import OrdensPage from "@/app/(app)/manutencao/ordens/page";
 import OrdemDetalhePage from "@/app/(app)/manutencao/ordens/[id]/page";
@@ -93,6 +94,7 @@ export function App() {
         <Route path="/receber" element={<ReceberPage />} />
         <Route path="/repasses" element={<RepassesPage />} />
         <Route path="/pagar" element={<PagarPage />} />
+        <Route path="/espelho" element={<EspelhoPage />} />
 
         {/* Manutenção / Frota */}
         <Route path="/manutencao" element={<ManutencaoPage />} />

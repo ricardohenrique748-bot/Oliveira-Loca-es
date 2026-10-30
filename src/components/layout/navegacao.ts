@@ -1,6 +1,6 @@
 import {
   BarChart3, Building2, CalendarClock, ClipboardList, FileSpreadsheet, FileText, Gauge, HandCoins, Landmark, LayoutDashboard,
-  Receipt, Settings, Truck, Users, Wallet, Wrench, Tags, UserSquare2, Factory, CircleDot, FileBadge, TriangleAlert, Handshake, CalendarCheck,
+  Copy, Receipt, Settings, Truck, Users, Wallet, Wrench, Tags, UserSquare2, Factory, CircleDot, FileBadge, TriangleAlert, Handshake, CalendarCheck,
   type LucideIcon,
 } from "lucide-react";
 import type { Modulo } from "@/lib/permissoes";
@@ -38,6 +38,7 @@ const MENU_COMPLETO: GrupoMenu[] = [
       { titulo: "Contas a receber", href: "/receber", icone: HandCoins, modulo: "receber", descricao: "Faturas e recebimentos", secao: "Faturamento" },
       { titulo: "Repasses", href: "/repasses", icone: Wallet, modulo: "repasses", descricao: "Pagamentos aos locadores", secao: "Financeiro" },
       { titulo: "Contas a pagar", href: "/pagar", icone: Receipt, modulo: "pagar", descricao: "Despesas e vencimentos", secao: "Financeiro" },
+      { titulo: "Espelho", href: "/espelho", icone: Copy, modulo: "pagar", descricao: "Em construção", secao: "Financeiro" },
     ],
   },
   {
