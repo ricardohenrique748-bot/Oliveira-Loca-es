@@ -6,6 +6,7 @@ import { FilePlus2 } from "lucide-react";
 import { Badge, Card } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Cabecalho } from "@/components/app/comuns";
+import { BuscaUrl } from "@/components/app/url";
 import { DataTable } from "@/components/app/data-table";
 import { FormularioDialog, type Campo } from "@/components/app/formulario";
 import { LinkAnexo } from "@/components/app/anexo";
@@ -79,6 +80,7 @@ export function LicenciamentoCliente({ linhas, podeEditar }: { linhas: LinhaLice
         <Card className="p-3"><p className="text-xs text-muted-foreground">Não cadastrados</p><p className="text-lg font-semibold">{conta(["nao_cadastrado", "sem_vencimento"])}</p></Card>
       </div>
       <DataTable colunas={colunas} dados={linhas} getId={(l) => l.veiculo_id}
+        topo={<BuscaUrl placeholder="Filtrar por placa…" />}
         aoClicarLinha={(l) => router.push(`/cadastros/veiculos/${l.veiculo_id}`)}
         classeLinha={(l) => (l.situacao === "vencido" ? "border-l-2 border-l-status-critico" : undefined)}
         exportar={{ nome: "licenciamento", titulo: "Licenciamento", colunas: [
