@@ -11,6 +11,7 @@ import { addMesesClamp } from "@/lib/calculos";
 import { formatData, formatPlaca } from "@/lib/format";
 import { ValidadeBadge } from "@/components/app/validade";
 import { excluirDocumento, salvarDocumento, salvarLaudos } from "../actions";
+import { ImportarLaudos } from "./importar-laudos";
 
 export type LinhaDoc = {
   id: string; veiculo_id: string; placa: string; tipo: Exclude<DocumentoForm["tipo"], "todos_laudos">; numero: string | null;
@@ -39,10 +40,11 @@ const pacote = (v: DocumentoForm) => v.tipo === TODOS;
 /** "Todos os laudos" fica logo antes dos laudos na lista */
 const opcoesTipo = (novo: boolean) => opcoesDe(ROTULOS.tipoDocumento).flatMap((o) =>
   novo && o.value === LAUDOS[0] ? [{ value: TODOS, label: "Todos os laudos (vários de uma vez)" }, o] : [o]);
-// um anexo por laudo; só os anexados viram documento
-const camposLaudos: Campo<DocumentoForm>[] = LAUDOS.map((t) => (
-  { nome: `laudos.${t}`, rotulo: ROTULOS.tipoDocumento[t], tipo: "anexo", bucket: "anexos", pasta: "documentos", col: 3, visivel: pacote }
-));
+// todos os PDFs num botão só; um anexo por laudo e só os anexados viram documento
+const campoLaudos: Campo<DocumentoForm> = {
+  nome: "laudos", rotulo: "Laudos (PDFs)", tipo: "personalizado", col: 6, visivel: pacote,
+  render: ({ value, onChange }) => <ImportarLaudos value={value} onChange={onChange} />,
+};
 
 /** Salva um documento, ou um por laudo anexado quando o tipo é "Todos os laudos". */
 async function salvar(id: string | null, v: DocumentoForm) {
@@ -62,7 +64,7 @@ export function DocumentosCliente({ linhas, veiculos, veiculoInicial, podeEditar
     { nome: "data_emissao", rotulo: "Data de emissão", tipo: "data", col: 3 },
     { nome: "validade", rotulo: "Data de vencimento", tipo: "data", col: 3, ajuda: "Sugerida 12 meses após a emissão" },
     { nome: "anexo_url", rotulo: "Anexo (PDF/foto)", tipo: "anexo", bucket: "anexos", pasta: "documentos", col: 6, visivel: (v) => !pacote(v) },
-    ...camposLaudos,
+    campoLaudos,
     { nome: "observacoes", rotulo: "Observações", tipo: "textarea", col: 6 },
   ];
   return (
