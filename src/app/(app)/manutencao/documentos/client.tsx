@@ -5,7 +5,7 @@ import { CrudSimples } from "@/components/app/crud";
 import { FiltroSelectUrl } from "@/components/app/url";
 import type { Campo } from "@/components/app/formulario";
 import { LinkAnexo } from "@/components/app/anexo";
-import { documentoFormSchema, LAUDOS, type DocumentoForm } from "@/lib/schemas/manutencao";
+import { documentoFormSchema, type DocumentoForm } from "@/lib/schemas/manutencao";
 import { opcoesDe, ROTULOS } from "@/lib/schemas/cadastros";
 import { addMesesClamp } from "@/lib/calculos";
 import { formatData, formatPlaca } from "@/lib/format";
@@ -37,9 +37,12 @@ const sugerirVencimento = (campo: string, v: DocumentoForm) =>
 
 const TODOS = "todos_laudos";
 const pacote = (v: DocumentoForm) => v.tipo === TODOS;
-/** "Todos os laudos" fica logo antes dos laudos na lista */
-const opcoesTipo = (novo: boolean) => opcoesDe(ROTULOS.tipoDocumento).flatMap((o) =>
-  novo && o.value === LAUDOS[0] ? [{ value: TODOS, label: "Todos os laudos (vários de uma vez)" }, o] : [o]);
+/** Lançamento: só os três documentos principais e "Todos os laudos". Na edição, o tipo atual continua na lista. */
+const PRINCIPAIS = ["licenciamento", "seguro", "tacografo"];
+const opcoesTipo = (v: DocumentoForm) => [
+  ...opcoesDe(ROTULOS.tipoDocumento).filter((o) => PRINCIPAIS.includes(o.value) || (v.id && o.value === v.tipo)),
+  ...(v.id ? [] : [{ value: TODOS, label: "Todos os laudos (vários de uma vez)" }]),
+];
 // todos os PDFs num botão só; um anexo por laudo e só os anexados viram documento
 const campoLaudos: Campo<DocumentoForm> = {
   nome: "laudos", rotulo: "Laudos (PDFs)", tipo: "personalizado", col: 6, visivel: pacote,
@@ -59,7 +62,7 @@ export function DocumentosCliente({ linhas, veiculos, veiculoInicial, podeEditar
 }) {
   const campos: Campo<DocumentoForm>[] = [
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", opcoes: veiculos, obrigatorio: true, col: 3, visivel: () => !veiculoFixo },
-    { nome: "tipo", rotulo: "Documento", tipo: "select", opcoes: (v) => opcoesTipo(!v.id), col: veiculoFixo ? 4 : 3 },
+    { nome: "tipo", rotulo: "Documento", tipo: "select", opcoes: opcoesTipo, col: veiculoFixo ? 4 : 3 },
     { nome: "numero", rotulo: "Número", col: veiculoFixo ? 2 : 3, placeholder: "ART, apólice…" },
     { nome: "data_emissao", rotulo: "Data de emissão", tipo: "data", col: 3 },
     { nome: "validade", rotulo: "Data de vencimento", tipo: "data", col: 3, ajuda: "Sugerida 12 meses após a emissão" },
