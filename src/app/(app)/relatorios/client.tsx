@@ -4,12 +4,12 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronRight, FileSpreadsheet, FileText, Loader2, X } from "lucide-react";
 import { Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { SelectBusca } from "@/components/ui/select-busca";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/overlays";
 import { Cabecalho, Moeda, StatusBadge, rotuloStatus } from "@/components/app/comuns";
 import { DataTable } from "@/components/app/data-table";
 import { BarraFiltros, useUrlParams } from "@/components/app/url";
+import { SeletorMes } from "@/components/app/seletor-mes";
 import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
 import { formatCompetencia, formatData, formatHoras, formatPct, formatPlaca } from "@/lib/format";
 import { somar } from "@/lib/calculos";
@@ -89,7 +89,6 @@ const RELATORIOS: Record<Relatorio, { titulo: string; descricao: string; colunas
 /** parâmetro da URL de cada filtro (prefixo evita colidir com r/de/ate) */
 const PARAM = (chave: string) => `f_${chave}`;
 const TODOS_FILTROS = [...new Set(Object.values(RELATORIOS).flatMap((r) => r.filtros))];
-const MES_VALIDO = /^(19|20)\d{2}-(0[1-9]|1[0-2])$/;
 
 /** texto da opção do filtro, no mesmo formato da célula */
 function rotuloFiltro(c: Col, v: string) {
@@ -102,15 +101,11 @@ function rotuloFiltro(c: Col, v: string) {
   }
 }
 
-/** campo de mês: só aplica quando o mês está completo e válido (digitar o ano dígito a dígito não dispara recarga) */
-function CampoMes({ id, rotulo, valor, onChange }: { id: string; rotulo: string; valor: string; onChange: (v: string) => void }) {
-  const [texto, setTexto] = React.useState(valor);
-  React.useEffect(() => setTexto(valor), [valor]);
+/** campo de mês com calendário (grade de meses do ano) */
+function CampoMes({ id, rotulo, valor, onChange, min, max }: { id: string; rotulo: string; valor: string; onChange: (v: string) => void; min?: string; max?: string }) {
   return (
     <div className="flex flex-col gap-1"><Label htmlFor={id} className="text-xs text-muted-foreground">{rotulo}</Label>
-      <Input id={id} type="month" className="h-9 w-40" value={texto}
-        onChange={(e) => { const v = e.target.value; setTexto(v); if (MES_VALIDO.test(v) && v !== valor) onChange(v); }}
-        onBlur={() => setTexto(valor)} /></div>
+      <SeletorMes id={id} value={valor} min={min} max={max} onChange={(v) => v !== valor && onChange(v)} /></div>
   );
 }
 
@@ -195,8 +190,8 @@ export function RelatoriosCliente({ carregando, relatorio, linhas: todas, totais
       </Tabs>
       <BarraFiltros>
         {relatorio !== "aging" && <>
-          <CampoMes id="rel-de" rotulo="De" valor={de} onChange={(v) => url.set({ de: v })} />
-          <CampoMes id="rel-ate" rotulo="Até" valor={ate} onChange={(v) => url.set({ ate: v })} />
+          <CampoMes id="rel-de" rotulo="De" valor={de} max={ate} onChange={(v) => url.set({ de: v })} />
+          <CampoMes id="rel-ate" rotulo="Até" valor={ate} min={de} onChange={(v) => url.set({ ate: v })} />
         </>}
         {filtros.map((f) => (
           <div key={f.col.chave} className="flex flex-col gap-1"><Label htmlFor={`rel-f-${f.col.chave}`} className="text-xs text-muted-foreground">{f.col.titulo}</Label>

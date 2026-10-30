@@ -13,6 +13,7 @@ import type { Opcao } from "@/components/ui/select";
 import { Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
+import { SeletorMes } from "@/components/app/seletor-mes";
 import { baseCobranca, cobrancaAvulsa, rotuloValorCobranca, calcularHoraExtra, calcularValorMedicao, calcularVencimento, hojeSP, somar, type TipoCobrancaFatura } from "@/lib/calculos";
 import { formatBRL, formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
@@ -179,8 +180,8 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
         <div className="flex flex-col gap-1">
           <Label htmlFor="comp" className="text-xs text-muted-foreground">Competência (mês de fim do período)</Label>
           <div className="flex gap-1">
-            <Input id="comp" type="month" className="h-9 w-40" value={competencia === "todas" || competencia === "historico" ? "" : competencia}
-              onChange={(e) => url.set({ comp: e.target.value || "todas" })} />
+            <SeletorMes id="comp" value={competencia === "todas" || competencia === "historico" ? "" : competencia}
+              onChange={(v) => url.set({ comp: v })} />
             <Button variant={competencia === "todas" ? "default" : "outline"} size="sm" onClick={() => url.set({ comp: competencia === "todas" ? competenciaPadrao : "todas", pagina: null })}>
               Todas pendentes
             </Button>
