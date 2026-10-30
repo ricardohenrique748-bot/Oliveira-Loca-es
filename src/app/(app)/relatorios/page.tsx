@@ -21,8 +21,10 @@ export default function RelatoriosPage() {
     const s = await exigirSessao("relatorios");
     const supabase = createClient();
     const atual = competenciaDe(hojeSP());
-    const de = deParam && /^\d{4}-\d{2}$/.test(deParam) ? deParam : addCompetencia(atual, -2);
-    const ate = ateParam && /^\d{4}-\d{2}$/.test(ateParam) ? ateParam : atual;
+    const valida = (v: string | null) => !!v && /^(19|20)\d{2}-(0[1-9]|1[0-2])$/.test(v);
+    let de = valida(deParam) ? deParam! : addCompetencia(atual, -2);
+    let ate = valida(ateParam) ? ateParam! : atual;
+    if (de > ate) [de, ate] = [ate, de];
     const ini = `${de}-01`;
     const fim = fimDoMes(`${ate}-01`);
     const r = (rParam ?? "dre_placa") as Relatorio;
@@ -105,6 +107,7 @@ export default function RelatoriosPage() {
     };
   }, [rParam, deParam, ateParam, sessao?.empresaId]);
 
-  if (loading || !data) return <CarregandoPagina />;
-  return <RelatoriosCliente relatorio={data.r} linhas={data.linhas} totais={data.totais} de={data.de} ate={data.ate} ini={data.ini} fim={data.fim} empresa={data.empresa} empresaId={data.empresaId} />;
+  // ao trocar filtro mantém a tela com os dados anteriores (desmontar perdia o foco dos campos e os filtros locais)
+  if (!data) return <CarregandoPagina />;
+  return <RelatoriosCliente carregando={loading} relatorio={data.r} linhas={data.linhas} totais={data.totais} de={data.de} ate={data.ate} ini={data.ini} fim={data.fim} empresa={data.empresa} empresaId={data.empresaId} />;
 }
