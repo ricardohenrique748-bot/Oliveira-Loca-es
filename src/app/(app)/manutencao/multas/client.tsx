@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { excluirMulta, salvarMulta } from "../actions";
 import { DetalheMulta } from "./detalhe";
+import { ImportarMultasPDF } from "./importar";
 import * as React from "react";
 
 export type LinhaMulta = {
@@ -81,6 +82,7 @@ export function MultasCliente({ linhas, veiculos, veiculoInicial, abrirNovo, pod
         titulo="Multas" entidade="multa" feminino abrirNovo={abrirNovo} busca={false} tamanhoForm="lg"
         descricao="Infrações por veículo. Consulte no portal da SENATRAN / DETRAN e lance aqui; alertas a partir de 10 dias do vencimento."
         acoesLinha={(m) => <Button variant="ghost" size="icon-sm" aria-label="Detalhes da multa" title="Detalhes" onClick={() => setDetalhe(m)}><Eye /></Button>}
+        acoesCabecalho={podeEditar && <ImportarMultasPDF veiculos={veiculos} />}
         linhas={linhas} colunas={colunas} campos={campos} schema={multaSchema as never}
         filtros={<>
           <FiltroSelectUrl param="veiculo" rotulo="Veículo" opcoes={veiculos} />
