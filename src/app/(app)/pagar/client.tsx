@@ -136,7 +136,6 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
         <p className="text-xs text-muted-foreground">{[c.fornecedor_nome, c.categoria_nome].filter(Boolean).join(" · ")}</p>
       </div>
     ) },
-    { accessorKey: "empresa_apelido", header: "Empresa" },
     { id: "placa", header: "Placa", cell: ({ row: { original: c } }) => c.placa ? (
       <span className="whitespace-nowrap"><span className="font-mono">{formatPlaca(c.placa)}</span>{c.descontar_locador && <Badge variant="info" className="ml-1" title={`Descontar do locador${c.valor_locador != null ? `: ${formatBRL(c.valor_locador)}` : ""}`}><UserMinus className="h-3 w-3" /> Locador{c.valor_locador != null && ` ${formatBRL(c.valor_locador)}`}</Badge>}</span>
     ) : <span className="text-muted-foreground">Fixa</span> },
