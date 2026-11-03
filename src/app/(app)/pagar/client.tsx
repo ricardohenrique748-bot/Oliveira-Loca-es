@@ -199,8 +199,9 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
         </div>
       </BarraFiltros>
 
-      {/* tabela com a largura toda; os totais ficam ao lado só em tela bem larga (senão cortava a tabela) */}
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_18rem]">
+      {/* tabela sempre com a largura toda (sem barra de rolagem lateral); os totais ficam embaixo, lado a lado.
+          Ao lado da tabela não cabem: o conteúdo tem largura máxima e a tabela era espremida, escondendo os botões. */}
+      <div className="grid gap-4">
         <div className="min-w-0 space-y-3">
           {visao === "calendario" && <Calendario mes={mes} linhas={linhas} diaSel={diaSel} onDia={(d) => setDiaSel(d === diaSel ? null : d)} />}
           {diaSel && <p className="text-sm">Mostrando <strong>{formatData(diaSel)}</strong> · <button className="underline" onClick={() => setDiaSel(null)}>ver mês todo</button></p>}
@@ -222,7 +223,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
               { titulo: "Descontar locador", valor: (c) => (c.descontar_locador ? "Sim" : "Não") }, { titulo: "Status", valor: (c) => c.status },
             ] }} />
         </div>
-        <aside className="grid content-start gap-4 md:grid-cols-2 2xl:grid-cols-1">
+        <aside className="grid content-start gap-4 md:grid-cols-2">
           <Card>
             <CardHeader><CardTitle className="text-base">Em aberto por conta</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
