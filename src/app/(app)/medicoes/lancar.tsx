@@ -25,9 +25,11 @@ const VALOR_POR: Record<UnidadeAvulsa, string> = { mes: "Valor por mês", semana
 
 /** Linha da fatura avulsa na tela; qtdManual = quantidade digitada (não segue mais o período);
  *  km × valorKm (opcional) vira um item a mais na fatura, em km */
-type ItemTela = { descricao: string; veiculo: string | null; inicio: string; fim: string; quantidade: number; unidade: UnidadeAvulsa; qtdManual: boolean; valorUnitario: number; km: number; valorKm: number };
+type ItemTela = { descricao: string; veiculo: string | null; inicio: string; fim: string; quantidade: number; unidade: UnidadeAvulsa; qtdManual: boolean; valorUnitario: number; km: number; valorKm: number;
+  /** repasse ao locador (placa sublocada) */
+  repasse: number | null };
 const itemNovo = (inicio = hojeSP(), fim = inicio, unidade: UnidadeAvulsa = "mes"): ItemTela =>
-  ({ descricao: "", veiculo: null, inicio, fim, quantidade: 1, unidade, qtdManual: false, valorUnitario: 0, km: 0, valorKm: 0 });
+  ({ descricao: "", veiculo: null, inicio, fim, quantidade: 1, unidade, qtdManual: false, valorUnitario: 0, km: 0, valorKm: 0, repasse: null });
 const multiplicar = (valor: number, qtd: number) => calcularValorMedicao({ valorMensal: valor, dias: qtd, acrescimos: 0, descontos: 0, baseDias: 1 }).valorBase;
 const subtotalKm = (i: ItemTela) => (i.km > 0 ? multiplicar(i.valorKm, i.km) : 0);
 const subtotal = (i: ItemTela) => somar([multiplicar(i.valorUnitario, i.quantidade), subtotalKm(i)]);
@@ -44,7 +46,7 @@ function quantidadePeriodo(unidade: UnidadeAvulsa, inicio: string, fim: string):
  * Sugere o mês seguinte à última medição; dias e valor são recalculados ao mudar o período.
  * Sem contrato (fatura avulsa): cliente e um ou mais itens (descrição, placa, período, quantidade × valor unitário).
  */
-export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contratoId, clientes, veiculos, empresas, empresaPadrao, baseDias, onLancado }: {
+export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contratoId, clientes, veiculos, sublocados, empresas, empresaPadrao, baseDias, onLancado }: {
   aberto: boolean; onOpenChange: (v: boolean) => void;
   /** opções de contrato (quando não vem fixo) */
   contratos?: Opcao[];
@@ -53,6 +55,8 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   clientes?: Opcao[];
   /** placas (opcional na avulsa) */
   veiculos?: Opcao[];
+  /** ids das placas sublocadas (o item delas pode ter repasse ao locador) */
+  sublocados?: string[];
   empresas?: Opcao[];
   empresaPadrao?: string | null;
   baseDias: number;
@@ -169,7 +173,9 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
       empresa_id: empresa, cliente_id: cliente, numero_os: numeroOS.trim() || null,
       itens: itens.flatMap((i) => {
         const base = { veiculo_id: i.veiculo, periodo_inicio: i.inicio, periodo_fim: i.fim };
-        const servico = { ...base, descricao: i.descricao, quantidade: i.quantidade, unidade: i.unidade, valor_unitario: i.valorUnitario };
+        // repasse só em placa sublocada; vai no item do serviço (o do km fica sem)
+        const repasse = i.veiculo && sublocados?.includes(i.veiculo) && i.repasse ? i.repasse : null;
+        const servico = { ...base, descricao: i.descricao, quantidade: i.quantidade, unidade: i.unidade, valor_unitario: i.valorUnitario, valor_repasse: repasse };
         return i.km > 0 ? [servico, { ...base, descricao: `${i.descricao.trim()} - KM rodado`, quantidade: i.km, unidade: "km" as const, valor_unitario: i.valorKm }] : [servico];
       }),
       acrescimos, descontos, data_vencimento: vencimento || null, forma_pagamento: forma, observacoes: observacoes || null,
@@ -262,6 +268,18 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
                     </div>
                     <p className="pb-2 text-right text-sm font-semibold sm:min-w-24"><Moeda valor={multiplicar(it.valorUnitario, it.quantidade)} /></p>
                   </div>
+                  {/* placa sublocada: quanto vai para o locador (vira um repasse previsto) */}
+                  {it.veiculo && sublocados?.includes(it.veiculo) && (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1.3fr_1fr_auto] sm:items-end">
+                      <p className="hidden pb-2 text-xs text-muted-foreground sm:block">Placa sublocada</p>
+                      <p className="pb-2 text-xs text-muted-foreground sm:col-span-1">Vai para Repasses como previsto; libera quando a fatura for recebida.</p>
+                      <div className="space-y-1">
+                        <Label htmlFor={`avulsa-repasse-${k}`} className="text-xs">Repasse ao locador</Label>
+                        <InputMoeda id={`avulsa-repasse-${k}`} value={it.repasse} onChange={(v) => editarItem(k, { repasse: v })} placeholder="0,00" />
+                      </div>
+                      <span />
+                    </div>
+                  )}
                   {it.unidade !== "km" && (
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1.3fr_1fr_auto] sm:items-end">
                       <p className="hidden pb-2 text-xs text-muted-foreground sm:block">Cobrar km rodado <span className="font-normal">(opcional)</span></p>

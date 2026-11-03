@@ -1118,6 +1118,7 @@ export type Database = {
           numero_os: string | null
           observacoes: string | null
           periodo_fim: string
+          repasses_avulsos: Json
           periodo_inicio: string
           status: Database["public"]["Enums"]["status_medicao"]
           unidade: string | null
@@ -1154,6 +1155,7 @@ export type Database = {
           numero_os?: string | null
           observacoes?: string | null
           periodo_fim: string
+          repasses_avulsos?: Json
           periodo_inicio: string
           status?: Database["public"]["Enums"]["status_medicao"]
           unidade?: string | null
@@ -1190,6 +1192,7 @@ export type Database = {
           numero_os?: string | null
           observacoes?: string | null
           periodo_fim?: string
+          repasses_avulsos?: Json
           periodo_inicio?: string
           status?: Database["public"]["Enums"]["status_medicao"]
           unidade?: string | null

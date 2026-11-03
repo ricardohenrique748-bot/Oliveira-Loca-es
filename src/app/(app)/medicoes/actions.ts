@@ -186,7 +186,7 @@ export async function lancarMedicao(dados: unknown) {
   }, REVALIDAR, "Fatura lançada");
 }
 
-/** Lança uma fatura avulsa: sem contrato, direto para o cliente, com um ou mais itens (placa opcional, sem repasse). */
+/** Lança uma fatura avulsa: sem contrato, direto para o cliente, com um ou mais itens (placa opcional; placa sublocada pode ter repasse). */
 export async function lancarFaturaAvulsa(dados: unknown) {
   return executar(async () => {
     await exigirEscrita("medicoes");
@@ -201,9 +201,16 @@ export async function lancarFaturaAvulsa(dados: unknown) {
     const periodoFim = d.itens.map((i) => i.periodo_fim).sort().at(-1)!;
     const placas = new Set(d.itens.map((i) => i.veiculo_id ?? null));
     const ids = [...placas].filter((x): x is string => !!x);
-    const { data: veics } = ids.length ? await supabase.from("veiculos").select("id, placa, status").in("id", ids) : { data: [] };
+    const { data: veics } = ids.length ? await supabase.from("veiculos").select("id, placa, status, proprietario").in("id", ids) : { data: [] };
     const ocupada = veics?.find((v) => v.status !== "disponivel" && v.status !== "parado");
     if (ocupada) throw new Error(`A placa ${formatPlaca(ocupada.placa)} está ${ocupada.status === "locado" ? "locada" : "em manutenção ou vendida"} — escolha um veículo disponível`);
+    // repasse ao locador: só em placa sublocada; um por placa (soma dos itens dela) — o banco cria os repasses
+    const comRepasse = d.itens.filter((i) => i.valor_repasse);
+    const semLocador = comRepasse.find((i) => !i.veiculo_id || veics?.find((v) => v.id === i.veiculo_id)?.proprietario !== "locador");
+    if (semLocador) throw new Error(`Repasse só em placa sublocada: confira o item "${semLocador.descricao}"`);
+    const porPlaca = new Map<string, number>();
+    for (const i of comRepasse) porPlaca.set(i.veiculo_id!, somar([porPlaca.get(i.veiculo_id!) ?? 0, i.valor_repasse!]));
+    const repassesAvulsos = [...porPlaca].map(([veiculo_id, valor]) => ({ veiculo_id, valor }));
     const itens: ItemAvulsoSalvo[] = d.itens.map((i) => ({ ...i, placa: veics?.find((v) => v.id === i.veiculo_id)?.placa ?? null }));
     const cabecalho = varios
       ? { descricao: d.itens.map((i) => i.descricao).join("; ").slice(0, 500), veiculo_id: placas.size === 1 ? primeiro.veiculo_id ?? null : null,
@@ -215,7 +222,7 @@ export async function lancarFaturaAvulsa(dados: unknown) {
       acrescimos: d.acrescimos, descontos: d.descontos, observacoes: d.observacoes ?? null, data_vencimento: d.data_vencimento,
       acrescimos_itens: d.acrescimos > 0 ? [{ descricao: "Acréscimos", valor: d.acrescimos }] : [],
       descontos_itens: d.descontos > 0 ? [{ descricao: "Descontos", valor: d.descontos }] : [],
-      forma_pagamento: d.forma_pagamento, numero_os: d.numero_os || null,
+      forma_pagamento: d.forma_pagamento, numero_os: d.numero_os || null, repasses_avulsos: repassesAvulsos,
     }).select("id").single());
     return { id: nova!.id, competencia: periodoFim.slice(0, 7) };
   }, REVALIDAR, "Fatura lançada");

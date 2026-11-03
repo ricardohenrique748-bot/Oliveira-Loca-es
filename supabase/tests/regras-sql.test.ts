@@ -663,3 +663,48 @@ describe("fatura avulsa deixa o veículo locado", () => {
     await db.query("delete from public.medicoes where id = $1", [m2.id]);
   });
 });
+
+describe("fatura avulsa com repasse ao locador", () => {
+  it("placa sublocada vira repasse previsto; recebida libera; cancelada cancela; aparece em repasses_v", async () => {
+    const [cl] = await q<{ id: string }>("select id from public.clientes limit 1");
+    const [loc] = await q<{ id: string }>("select id from public.locadores limit 1");
+    const [v] = await q<{ id: string }>(
+      `insert into public.veiculos (empresa_id, placa, tipo, proprietario, locador_id, status)
+       values ($1, 'AVR1P01', 'caminhao', 'locador', $2, 'disponivel') returning id`, [OLIVEIRA, loc.id]);
+    const [m] = await q<{ id: string }>(
+      `insert into public.medicoes (contrato_id, cliente_id, empresa_id, veiculo_id, periodo_inicio, periodo_fim, dias, valor_mensal,
+                                    data_vencimento, repasses_avulsos)
+       values (null, $1, $2, $3, '2026-11-02', '2026-11-04', 3, 1000, '2026-12-01', $4::jsonb) returning id`,
+      [cl.id, OLIVEIRA, v.id, JSON.stringify([{ veiculo_id: v.id, valor: 2100 }])]);
+    const repasse = async () => (await q<{ status: string; valor_bruto: string; data_prevista: string }>(
+      "select status::text, valor_bruto::text, data_prevista::text from public.repasses where medicao_id = $1 order by created_at desc limit 1", [m.id]))[0];
+
+    expect(await repasse()).toEqual({ status: "previsto", valor_bruto: "2100.00", data_prevista: "2026-12-01" });
+    const [rv] = await q<{ cliente_nome: string; placa: string }>("select cliente_nome, placa from public.repasses_v where medicao_id = $1", [m.id]);
+    expect(rv.placa).toBe("AVR1P01");
+    expect(rv.cliente_nome).toBeTruthy();
+    const [mv] = await q<{ repasse_bruto: string }>("select repasse_bruto::text from public.medicoes_v where id = $1", [m.id]);
+    expect(mv.repasse_bruto).toBe("2100.00");
+
+    // a quantidade da fatura muda: o repasse digitado continua o mesmo
+    await db.query("update public.medicoes set dias = 5 where id = $1", [m.id]);
+    expect((await repasse()).valor_bruto).toBe("2100.00");
+
+    await db.query("update public.medicoes set status = 'faturado', data_emissao = '2026-11-05' where id = $1", [m.id]);
+    await db.query("update public.medicoes set status = 'recebido' where id = $1", [m.id]);
+    expect((await repasse()).status).toBe("liberado");
+
+    await db.query("update public.medicoes set status = 'cancelado' where id = $1", [m.id]);
+    expect((await repasse()).status).toBe("cancelado");
+  });
+
+  it("placa própria ou sem valor: nenhum repasse", async () => {
+    const [cl] = await q<{ id: string }>("select id from public.clientes limit 1");
+    const [v] = await q<{ id: string }>("select id from public.veiculos where proprietario = 'proprio' limit 1");
+    const [m] = await q<{ id: string }>(
+      `insert into public.medicoes (contrato_id, cliente_id, empresa_id, periodo_inicio, periodo_fim, dias, valor_mensal, repasses_avulsos)
+       values (null, $1, $2, '2026-11-02', '2026-11-02', 1, 500, $3::jsonb) returning id`,
+      [cl.id, OLIVEIRA, JSON.stringify([{ veiculo_id: v.id, valor: 300 }])]);
+    expect(await q("select 1 from public.repasses where medicao_id = $1", [m.id])).toHaveLength(0);
+  });
+});

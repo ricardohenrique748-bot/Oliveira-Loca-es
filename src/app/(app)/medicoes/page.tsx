@@ -46,7 +46,7 @@ export default function MedicoesPage() {
     let qp = supabase.from("contratos").select("veiculos(placa)");
     if (s.empresaId) qp = qp.eq("empresa_id", s.empresaId);
     // placas para a fatura avulsa: só as livres (locada ou em manutenção não aluga de novo)
-    let qv = supabase.from("veiculos").select("id, placa, tipo").in("status", ["disponivel", "parado"]).order("placa");
+    let qv = supabase.from("veiculos").select("id, placa, tipo, proprietario").in("status", ["disponivel", "parado"]).order("placa");
     if (s.empresaId) qv = qv.eq("empresa_id", s.empresaId);
     const [{ data: linhas, count, error: erroLinhas }, { data: clientes }, { data: contratos }, { data: placas }, { data: veiculos }] = await Promise.all([
       (historico ? q.order("periodo_inicio", { ascending: false }).order("placa") : q.order("empresa_apelido").order("cliente_fantasia").order("placa").order("periodo_inicio")).range(p.de, p.ate),
@@ -72,7 +72,9 @@ export default function MedicoesPage() {
       })).sort((a, b) => a.label.localeCompare(b.label)),
       placas: [...new Set((placas ?? []).map((c) => c.veiculos?.placa).filter((x): x is string => !!x))].sort()
         .map((pl) => ({ value: pl, label: formatPlaca(pl) })),
-      veiculos: (veiculos ?? []).map((v) => ({ value: v.id, label: formatPlaca(v.placa) })),
+      veiculos: (veiculos ?? []).map((v) => ({ value: v.id, label: `${formatPlaca(v.placa)}${v.proprietario === "locador" ? " · sublocado" : ""}` })),
+      // placas de locador: o item da fatura avulsa pode ter repasse
+      sublocados: (veiculos ?? []).filter((v) => v.proprietario === "locador").map((v) => v.id),
       empresas: s.empresas.map((e) => ({ value: e.id, label: e.apelido })),
       empresaPadrao: s.empresaId,
       baseDias: Number(cfg.base_dias_mes) || 30,

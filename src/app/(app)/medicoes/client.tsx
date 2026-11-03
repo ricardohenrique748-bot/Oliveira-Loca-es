@@ -63,9 +63,9 @@ const COLUNAS_LEMBRETE: ColunaExport<LinhaLembrete>[] = [
   { titulo: "Responsável (faturamento)", valor: (l) => l.contatos, largura: 50 }, { titulo: "Observações", valor: (l) => l.observacoes, largura: 30 },
 ];
 
-export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, competenciaPadrao, clientes, contratos, placas, veiculos, empresas, empresaPadrao, baseDias, podeEditar }: {
+export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, competenciaPadrao, clientes, contratos, placas, veiculos, sublocados, empresas, empresaPadrao, baseDias, podeEditar }: {
   linhas: LinhaMedicao[]; total: number; pagina: number; tamanho: number; competencia: string; competenciaPadrao: string;
-  clientes: Opcao[]; contratos: Opcao[]; placas: Opcao[]; veiculos: Opcao[]; empresas: Opcao[]; empresaPadrao: string | null; baseDias: number; podeEditar: boolean;
+  clientes: Opcao[]; contratos: Opcao[]; placas: Opcao[]; veiculos: Opcao[]; sublocados: string[]; empresas: Opcao[]; empresaPadrao: string | null; baseDias: number; podeEditar: boolean;
 }) {
   const router = useRouter();
   const url = useUrlParams();
@@ -348,7 +348,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
         </div>
       )}
 
-      <DialogoLancarMedicao aberto={lancarAberto} onOpenChange={setLancarAberto} contratos={contratos} clientes={clientes} veiculos={veiculos} empresas={empresas} empresaPadrao={empresaPadrao} baseDias={baseDias}
+      <DialogoLancarMedicao aberto={lancarAberto} onOpenChange={setLancarAberto} contratos={contratos} clientes={clientes} veiculos={veiculos} sublocados={sublocados} empresas={empresas} empresaPadrao={empresaPadrao} baseDias={baseDias}
         onLancado={(comp) => { url.set({ comp, status: null }); router.refresh(); }} />
       <DialogoDetalhe medicao={detalhe} baseDias={baseDias} podeEditar={podeEditar} onOpenChange={(v) => !v && setDetalhe(null)}
         onSalvo={() => { setDetalhe(null); router.refresh(); }} />

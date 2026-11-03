@@ -125,8 +125,10 @@ export function formatQuantidadeAvulsa(qtd: number, unidade: string | null | und
 /** Item da fatura avulsa: descrição, placa opcional, período, quantidade × valor unitário (espelho de medicoes.itens) */
 export const itemAvulsoSchema = z.object({
   descricao: z.string({ required_error: "Descreva o serviço" }).trim().min(1, "Descreva o serviço de cada item").max(500),
-  /** placa opcional (sem repasse) */
+  /** placa opcional */
   veiculo_id: uuidOpc,
+  /** placa sublocada: quanto vai para o locador (vira repasse; vazio = sem repasse) */
+  valor_repasse: z.number().min(0, "Repasse não pode ser negativo").max(999_999_999).nullish().transform((v) => (v ? v : null)),
   /** pode ter fração (7,5 h), até 2 casas */
   quantidade: z.number().positive("Informe a quantidade").max(99_999).refine((q) => Math.round(q * 100) === q * 100, "Quantidade com no máximo 2 casas"),
   unidade: z.enum(["mes", "semana", "dia", "hora", "km"], { required_error: "Escolha a unidade" }),
