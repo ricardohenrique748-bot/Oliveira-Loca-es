@@ -19,7 +19,8 @@ const base = {
   /** quanto é descontado do sublocador no repasse (vazio = o valor da despesa) */
   valor_locador: moedaOpc,
   anexo_url: anexosOpc,
-  observacoes: textoOpc,
+  /** anotações livres da conta (até 2000 caracteres) */
+  observacoes: z.string().trim().max(2000, "Observações: no máximo 2000 caracteres").nullish().transform((v) => (v ? v : null)),
 };
 
 function regrasVeiculo<T extends { tipo: string; veiculo_id: string | null; descontar_locador: boolean; valor_locador: number | null; rateio?: boolean }>(v: T, ctx: z.RefinementCtx) {

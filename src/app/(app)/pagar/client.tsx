@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, List, MoreHorizontal, Pencil, Plus, Repeat, Trash2, Undo2, UserMinus } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, List, MoreHorizontal, Pencil, Plus, Repeat, StickyNote, Trash2, Undo2, UserMinus } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Checkbox, Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,6 +134,13 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
           {c.ordem_servico_id && <Link href={`/manutencao/ordens/${c.ordem_servico_id}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}><Badge variant="outline" className="ml-1">OS</Badge></Link>}
         </p>
         <p className="text-xs text-muted-foreground">{[c.fornecedor_nome, c.categoria_nome].filter(Boolean).join(" · ")}</p>
+        {/* observação anotada no lançamento: à vista na lista (o texto inteiro aparece ao passar o mouse) */}
+        {c.observacoes && (
+          <p className="mt-0.5 flex max-w-md items-start gap-1 text-xs italic text-muted-foreground" title={c.observacoes}>
+            <StickyNote className="mt-0.5 h-3 w-3 shrink-0" aria-label="Observação" />
+            <span className="line-clamp-2 whitespace-pre-line">{c.observacoes}</span>
+          </p>
+        )}
       </div>
     ) },
     { id: "placa", header: "Placa", cell: ({ row: { original: c } }) => c.placa ? (
