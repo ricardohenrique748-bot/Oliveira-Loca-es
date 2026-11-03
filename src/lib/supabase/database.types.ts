@@ -843,6 +843,11 @@ export type Database = {
           contrato_id: string | null
           created_at: string
           created_by: string | null
+          data_inicio: string | null
+          data_fim: string | null
+          fechamento: Json
+          datas: string[] | null
+          horas_franquia: number | null
           empresa_id: string
           enviado_em: string | null
           id: string
@@ -855,6 +860,7 @@ export type Database = {
           status: string
           token: string
           total_horas: number
+          valor_mensal: number | null
           updated_at: string
           veiculo_id: string
         }
@@ -864,6 +870,11 @@ export type Database = {
           contrato_id?: string | null
           created_at?: string
           created_by?: string | null
+          data_inicio?: string | null
+          data_fim?: string | null
+          fechamento?: Json
+          datas?: string[] | null
+          horas_franquia?: number | null
           empresa_id: string
           enviado_em?: string | null
           id?: string
@@ -876,6 +887,7 @@ export type Database = {
           status?: string
           token?: string
           total_horas?: number
+          valor_mensal?: number | null
           updated_at?: string
           veiculo_id: string
         }
@@ -885,6 +897,11 @@ export type Database = {
           contrato_id?: string | null
           created_at?: string
           created_by?: string | null
+          data_inicio?: string | null
+          data_fim?: string | null
+          fechamento?: Json
+          datas?: string[] | null
+          horas_franquia?: number | null
           empresa_id?: string
           enviado_em?: string | null
           id?: string
@@ -897,6 +914,7 @@ export type Database = {
           status?: string
           token?: string
           total_horas?: number
+          valor_mensal?: number | null
           updated_at?: string
           veiculo_id?: string
         }

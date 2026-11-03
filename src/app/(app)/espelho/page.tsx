@@ -23,7 +23,7 @@ export default function EspelhoPage() {
     const supabase = createClient();
 
     let q = supabase.from("espelhos")
-      .select("id, veiculo_id, cliente_id, obra_id, competencia, total_horas, status, token, enviado_em, respondido_em, respondido_por, motivo_recusa, veiculos(placa, modelo), clientes(razao_social, nome_fantasia, whatsapp, email), obras(nome)");
+      .select("id, veiculo_id, cliente_id, obra_id, competencia, data_inicio, data_fim, datas, total_horas, status, token, enviado_em, respondido_em, respondido_por, motivo_recusa, veiculos(placa, modelo), clientes(razao_social, nome_fantasia, whatsapp, email), obras(nome)");
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     // placa e cliente filtram nas duas abas; Histórico: todos os meses (mais recentes primeiro) e filtro de status
     if (filtroPlaca) q = q.eq("veiculo_id", filtroPlaca);
@@ -46,6 +46,9 @@ export default function EspelhoPage() {
       cliente_id: e.cliente_id,
       obra_id: e.obra_id,
       competencia: e.competencia,
+      data_inicio: e.data_inicio,
+      data_fim: e.data_fim,
+      datas: e.datas,
       total_horas: e.total_horas,
       status: e.status,
       token: e.token,

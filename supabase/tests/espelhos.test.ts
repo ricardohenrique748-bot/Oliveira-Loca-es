@@ -60,13 +60,43 @@ describe("espelhos — cadastro", () => {
     expect(Number(e.total_horas)).toBe(14);
   });
 
-  it("competência precisa ser o dia 1 do mês e não aceita mais de 30 linhas", async () => {
+  it("competência precisa ser o dia 1 do mês e não aceita mais de 62 linhas", async () => {
     await comoUsuario(db, U.admin, async () => {
       await expect(criar("2026-10-15")).rejects.toThrow(/check/);
-      const muitas = JSON.stringify(Array.from({ length: 31 }, (_, i) => ({ dia: i + 1 })));
+      const muitas = JSON.stringify(Array.from({ length: 63 }, (_, i) => ({ dia: i + 1 })));
       await expect(db.query(
         "insert into public.espelhos (empresa_id, veiculo_id, cliente_id, competencia, linhas) values ($1, $2, $3, '2026-07-01', $4::jsonb)",
         [OLIVEIRA, veiculo, cliente, muitas])).rejects.toThrow(/check/);
+    });
+  });
+
+  it("período livre: fim depois do início, até 62 dias", async () => {
+    await comoUsuario(db, U.admin, async () => {
+      const ins = (inicio: string | null, fim: string | null, dias = 31) => db.query(
+        "insert into public.espelhos (empresa_id, veiculo_id, cliente_id, competencia, data_inicio, data_fim, linhas) values ($1, $2, $3, $4, $5, $6, $7::jsonb) returning id",
+        [OLIVEIRA, veiculo, cliente, "2026-11-01", inicio, fim, JSON.stringify(Array.from({ length: dias }, (_, i) => ({ dia: i + 1, horas: 1 })))]);
+      await expect(ins("2026-10-21", "2026-10-20")).rejects.toThrow(/check/);
+      await expect(ins("2026-10-01", "2026-12-02")).rejects.toThrow(/check/);
+      await expect(ins(null, "2026-11-20")).rejects.toThrow(/check/);
+      await expect(ins("2026-10-01", "2026-12-01", 63)).rejects.toThrow(/check/);
+      const r = await ins("2026-10-01", "2026-12-01", 62);
+      const { rows } = await db.query<{ total_horas: string }>("select total_horas from public.espelhos where id = $1", [r.rows[0].id]);
+      expect(Number(rows[0].total_horas)).toBe(62);
+      await db.query("delete from public.espelhos where id = $1", [r.rows[0].id]);
+    });
+  });
+
+  it("dias marcados: até 62", async () => {
+    await comoUsuario(db, U.admin, async () => {
+      const dias = (n: number) => Array.from({ length: n }, (_, i) => new Date(Date.UTC(2026, 9, 1 + i)).toISOString().slice(0, 10));
+      const ins = (n: number) => db.query(
+        "insert into public.espelhos (empresa_id, veiculo_id, cliente_id, competencia, datas) values ($1, $2, $3, $4, $5::date[]) returning id",
+        [OLIVEIRA, veiculo, cliente, "2026-11-01", dias(n)]);
+      await expect(ins(63)).rejects.toThrow(/check/);
+      const r = await ins(62);
+      const { rows } = await db.query<{ n: number }>("select cardinality(datas) as n from public.espelhos where id = $1", [r.rows[0].id]);
+      expect(rows[0].n).toBe(62);
+      await db.query("delete from public.espelhos where id = $1", [r.rows[0].id]);
     });
   });
 

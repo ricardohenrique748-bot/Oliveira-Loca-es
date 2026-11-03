@@ -4,7 +4,7 @@ import { FileQuestion } from "lucide-react";
 import { useAuth, exigirSessao } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { podeEscrever } from "@/lib/permissoes";
-import { normalizarLinhas } from "@/lib/calculos/espelho";
+import { normalizarFechamento, normalizarLinhas } from "@/lib/calculos/espelho";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { Cabecalho, Vazio } from "@/components/app/comuns";
 import { useAsyncPage } from "@/lib/use-async-page";
@@ -19,12 +19,14 @@ export default function EspelhoDetalhePage() {
     const s = await exigirSessao("medicoes");
     if (!id) return null;
     const supabase = createClient();
-    const { data: e } = await supabase.from("espelhos")
-      .select(`id, veiculo_id, cliente_id, obra_id, competencia, linhas, total_horas, observacoes, status, token, enviado_em, respondido_em, respondido_por, motivo_recusa,
+    const { data: e, error } = await supabase.from("espelhos")
+      .select(`id, veiculo_id, cliente_id, obra_id, competencia, data_inicio, data_fim, datas, valor_mensal, horas_franquia, fechamento, linhas, total_horas, observacoes, status, token, enviado_em, respondido_em, respondido_por, motivo_recusa,
         veiculos(placa, modelo, marca), clientes(razao_social, nome_fantasia, whatsapp, email), obras(nome), contratos(numero), empresas(apelido)`)
       .eq("id", id)
       .maybeSingle();
-    if (!e) return { naoEncontrado: true as const };
+    // erro na busca (ex.: banco sem uma coluna nova) não é "não encontrado": mostra o motivo
+    if (error) return { naoEncontrado: true as const, erro: error.message };
+    if (!e) return { naoEncontrado: true as const, erro: null };
     const podeEditar = podeEscrever(s.perfil, "medicoes");
     const opcoes = podeEditar ? await carregarOpcoesEspelho(supabase, s.empresaId) : null;
     return {
@@ -35,6 +37,12 @@ export default function EspelhoDetalhePage() {
         cliente_id: e.cliente_id,
         obra_id: e.obra_id,
         competencia: e.competencia,
+        data_inicio: e.data_inicio,
+        data_fim: e.data_fim,
+        datas: e.datas,
+        valor_mensal: e.valor_mensal == null ? null : Number(e.valor_mensal),
+        horas_franquia: e.horas_franquia == null ? null : Number(e.horas_franquia),
+        fechamento: normalizarFechamento(e.fechamento),
         linhas: normalizarLinhas(e.linhas),
         total_horas: e.total_horas,
         observacoes: e.observacoes,
@@ -62,7 +70,9 @@ export default function EspelhoDetalhePage() {
     return (
       <>
         <Cabecalho titulo="Espelho" voltar={{ href: "/espelho", rotulo: "Espelhos" }} />
-        <Vazio icone={FileQuestion} titulo="Espelho não encontrado" descricao="Ele pode ter sido excluído ou ser de outra empresa." />
+        {data.erro
+          ? <Vazio icone={FileQuestion} titulo="Não foi possível abrir o espelho" descricao={`Erro do banco: ${data.erro}`} />
+          : <Vazio icone={FileQuestion} titulo="Espelho não encontrado" descricao="Ele pode ter sido excluído ou ser de outra empresa." />}
       </>
     );
   }

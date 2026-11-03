@@ -13,11 +13,19 @@ import { Input, Textarea } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { traduzirErro } from "@/lib/acoes";
 import { formatCompetencia, formatDataHora, formatHoras, formatPlaca, maskCNPJ } from "@/lib/format";
-import { dataDaLinha, horasEmRelogio, normalizarLinhas, type LinhaEspelho } from "@/lib/calculos/espelho";
+import { dataDaLinha, diasDoEspelho, horasEmRelogio, normalizarFechamento, normalizarLinhas, rotuloDias, type LinhaEspelho } from "@/lib/calculos/espelho";
+import { QuadroFechamento } from "@/components/app/quadro-fechamento";
 import { cn } from "@/lib/utils";
 
 interface EspelhoPublico {
   competencia: string;
+  /** início do período de fechamento (null = dia 1 do mês) */
+  data_inicio?: string | null;
+  data_fim?: string | null;
+  datas?: string[] | null;
+  valor_mensal?: number | null;
+  horas_franquia?: number | null;
+  fechamento?: unknown;
   status: "enviado" | "aprovado" | "recusado";
   linhas: LinhaEspelho[];
   total_horas: number;
@@ -108,8 +116,11 @@ export default function AprovacaoEspelhoPage() {
   }
 
   const mes = formatCompetencia(espelho.competencia, true);
-  const dias = espelho.linhas.filter((l) => dataDaLinha(espelho.competencia, l.dia));
+  const per = diasDoEspelho(espelho.competencia, espelho.data_inicio, espelho.data_fim, espelho.datas);
+  const dias = espelho.linhas.filter((l) => dataDaLinha(per, l.dia));
   const diasLancados = dias.filter((l) => (l.horas ?? 0) > 0).length;
+  const valorMensal = espelho.valor_mensal == null ? null : Number(espelho.valor_mensal);
+  const franquia = espelho.horas_franquia == null ? null : Number(espelho.horas_franquia);
   const podeResponder = espelho.status === "enviado";
 
   return (
@@ -117,7 +128,7 @@ export default function AprovacaoEspelhoPage() {
       <div className="mb-5">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{espelho.empresa}{espelho.empresa_cnpj && ` · CNPJ ${maskCNPJ(espelho.empresa_cnpj)}`}</p>
         <h1 className="text-2xl font-black uppercase tracking-tight sm:text-3xl">Espelho de horas</h1>
-        <p className="text-sm text-muted-foreground">{mes.charAt(0).toUpperCase() + mes.slice(1)}</p>
+        <p className="text-sm text-muted-foreground">{mes.charAt(0).toUpperCase() + mes.slice(1)} · {rotuloDias(per)}</p>
       </div>
 
       <Card className="mb-4 grid gap-3 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -158,7 +169,7 @@ export default function AprovacaoEspelhoPage() {
           </thead>
           <tbody>
             {dias.map((l) => {
-              const d = dataDaLinha(espelho.competencia, l.dia)!;
+              const d = dataDaLinha(per, l.dia)!;
               const horario = l.inicio && l.fim ? `${l.inicio} – ${l.fim}` : l.inicio ?? l.fim ?? "—";
               return (
                 <tr key={l.dia} className={cn("border-b align-top last:border-0", d.fimDeSemana && "bg-muted/40")}>
@@ -190,6 +201,13 @@ export default function AprovacaoEspelhoPage() {
           </tfoot>
         </table>
       </Card>
+
+      {/* fechamento no formato da planilha (só quando a Oliveira informou o valor mensal) */}
+      {valorMensal != null && (
+        <div className="mt-4">
+          <QuadroFechamento totalHoras={espelho.total_horas} valorMensal={valorMensal} franquia={franquia} fechamento={normalizarFechamento(espelho.fechamento)} />
+        </div>
+      )}
 
       {espelho.observacoes && (
         <Card className="mt-4 p-4 text-sm">

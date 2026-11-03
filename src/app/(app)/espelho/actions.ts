@@ -3,7 +3,7 @@ import { z } from "zod";
 import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
-import { LINHAS_ESPELHO, linhasPreenchidas, type LinhaEspelho } from "@/lib/calculos/espelho";
+import { LINHAS_ESPELHO, MAX_DIAS_ESPELHO, diasDoEspelho, erroDatas, linhasPreenchidas, ordenarDatas, remapearLinhas, normalizarFechamento, type FechamentoEspelho, type LinhaEspelho } from "@/lib/calculos/espelho";
 import type { Json } from "@/lib/supabase/database.types";
 
 const REVALIDAR = ["/espelho"];
@@ -16,7 +16,12 @@ const novoSchema = z.object({
   contrato_id: uuid.nullable(),
   obra_id: uuid.nullable(),
   competencia: z.string().regex(/^\d{4}-\d{2}$/, "Escolha o mês"),
-});
+  /** dias marcados no calendário (vazio = mês inteiro da competência) */
+  datas: z.array(z.string()).max(MAX_DIAS_ESPELHO, `No máximo ${MAX_DIAS_ESPELHO} dias por espelho`).default([]),
+}).superRefine((d, ctx) => {
+  const erro = erroDatas(d.datas);
+  if (erro) ctx.addIssue({ code: z.ZodIssueCode.custom, message: erro, path: ["datas"] });
+}).transform((d) => ({ ...d, datas: ordenarDatas(d.datas) }));
 
 const linhaSchema = z.object({
   dia: z.number().int().min(1).max(LINHAS_ESPELHO),
@@ -41,6 +46,7 @@ export async function criarEspelho(dados: unknown) {
       contrato_id: d.contrato_id,
       obra_id: d.obra_id,
       competencia: `${d.competencia}-01`,
+      datas: d.datas.length ? d.datas : null,
     }).select("id").single();
     if (r.error?.code === "23505") throw new Error("Já existe espelho desta placa para este cliente neste mês.");
     return checar(r)!.id;
@@ -48,7 +54,7 @@ export async function criarEspelho(dados: unknown) {
 }
 
 /**
- * Troca placa, cliente, obra ou mês de um espelho ainda não aprovado (as horas lançadas ficam).
+ * Troca placa, cliente, obra, mês ou início do período de um espelho ainda não aprovado (as horas lançadas ficam).
  * Se ele já tinha sido enviado, o link continua o mesmo e o cliente vê os dados novos.
  */
 export async function editarDadosEspelho(id: string, dados: unknown) {
@@ -57,8 +63,13 @@ export async function editarDadosEspelho(id: string, dados: unknown) {
     const espelhoId = uuid.parse(id);
     const d = novoSchema.parse(dados);
     const supabase = await createClient();
-    const atual = checar(await supabase.from("espelhos").select("status").eq("id", espelhoId).single())!;
+    const atual = checar(await supabase.from("espelhos").select("status, linhas, competencia, data_inicio, data_fim, datas").eq("id", espelhoId).single())!;
     if (atual.status === "aprovado") throw new Error("Espelho aprovado pelo cliente não pode ser alterado.");
+    // dias trocados: cada linha lançada vai para a sua data; dias desmarcados saem (não somam no total)
+    const antes = diasDoEspelho(atual.competencia, atual.data_inicio, atual.data_fim, atual.datas);
+    const depois = diasDoEspelho(`${d.competencia}-01`, null, null, d.datas);
+    const salvas = (Array.isArray(atual.linhas) ? atual.linhas : []) as unknown as { dia: number }[];
+    const linhas = remapearLinhas(salvas.filter((l) => typeof l?.dia === "number"), antes, depois);
     const veiculo = checar(await supabase.from("veiculos").select("empresa_id").eq("id", d.veiculo_id).single())!;
     const r = await supabase.from("espelhos").update({
       empresa_id: veiculo.empresa_id,
@@ -67,6 +78,11 @@ export async function editarDadosEspelho(id: string, dados: unknown) {
       contrato_id: d.contrato_id,
       obra_id: d.obra_id,
       competencia: `${d.competencia}-01`,
+      // o calendário substitui o período de início/fim
+      data_inicio: null,
+      data_fim: null,
+      datas: d.datas.length ? d.datas : null,
+      linhas: linhas as unknown as Json,
     }).eq("id", espelhoId).select("id").single();
     if (r.error?.code === "23505") throw new Error("Já existe espelho desta placa para este cliente neste mês.");
     checar(r);
@@ -74,15 +90,25 @@ export async function editarDadosEspelho(id: string, dados: unknown) {
   }, REVALIDAR, "Dados do espelho atualizados");
 }
 
-/** Grava as linhas (só os dias preenchidos) e a observação geral. */
-export async function salvarEspelho(id: string, linhas: LinhaEspelho[], observacoes: string | null) {
+const valoresSchema = z.object({
+  valor_mensal: z.number().min(0, "Valor mensal não pode ser negativo").max(999_999_999).nullable(),
+  horas_franquia: z.number().gt(0, "Horas do mês devem ser maiores que zero").max(9999).nullable(),
+  /** itens do fechamento: valores em reais e dias (todos opcionais, nunca negativos) */
+  fechamento: z.record(z.string(), z.number().min(0, "Valores do fechamento não podem ser negativos").max(999_999_999).nullable())
+    .default({}).transform((f) => normalizarFechamento(f)),
+});
+
+/** Grava as linhas (só os dias preenchidos), a observação geral e o valor mensal / horas do mês. */
+export async function salvarEspelho(id: string, linhas: LinhaEspelho[], observacoes: string | null,
+  valores: { valor_mensal: number | null; horas_franquia: number | null; fechamento?: FechamentoEspelho } = { valor_mensal: null, horas_franquia: null }) {
   return executar(async () => {
     await exigirEscrita("medicoes");
     const espelhoId = uuid.parse(id);
     const validas = z.array(linhaSchema).max(LINHAS_ESPELHO).parse(linhasPreenchidas(linhas));
     const obs = z.string().max(1000, "Observação: no máximo 1000 caracteres").nullable().parse(observacoes?.trim() || null);
+    const v = valoresSchema.parse(valores);
     const supabase = await createClient();
-    checar(await supabase.from("espelhos").update({ linhas: validas as unknown as Json, observacoes: obs }).eq("id", espelhoId).select("id").single());
+    checar(await supabase.from("espelhos").update({ linhas: validas as unknown as Json, observacoes: obs, valor_mensal: v.valor_mensal, horas_franquia: v.horas_franquia, fechamento: v.fechamento as unknown as Json }).eq("id", espelhoId).select("id").single());
     return null;
   }, REVALIDAR, "Espelho salvo");
 }

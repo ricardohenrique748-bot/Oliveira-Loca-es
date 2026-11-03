@@ -16,6 +16,8 @@ import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/ur
 import { formatCompetencia, formatDataHora, formatHoras, formatPlaca, linkEmail, linkWhatsApp } from "@/lib/format";
 import { MODO_DEMO } from "@/lib/plataforma";
 import { criarEspelho, editarDadosEspelho, enviarEspelho, excluirEspelho } from "./actions";
+import { MAX_DIAS_ESPELHO, diasDoEspelho, erroDatas, rotuloDias } from "@/lib/calculos/espelho";
+import { CalendarioDias } from "@/components/app/calendario-dias";
 
 export interface EspelhoLista {
   id: string;
@@ -23,6 +25,9 @@ export interface EspelhoLista {
   cliente_id: string;
   obra_id: string | null;
   competencia: string;
+  data_inicio: string | null;
+  data_fim: string | null;
+  datas: string[] | null;
   total_horas: number;
   status: string;
   token: string;
@@ -61,6 +66,9 @@ export interface EspelhoEnvio {
   status: string;
   placa: string;
   competencia: string;
+  data_inicio: string | null;
+  data_fim: string | null;
+  datas: string[] | null;
   cliente: string;
   cliente_whatsapp: string | null;
   cliente_email: string | null;
@@ -88,7 +96,10 @@ export function EnviarEspelhoDialog({ espelho, aberto, onOpenChange, antesDeEnvi
 
   if (!espelho) return null;
   const url = linkEspelho(espelho.token);
-  const mes = formatCompetencia(espelho.competencia, true);
+  // com período de fechamento escolhido, a mensagem mostra as datas (ex.: "21/10 a 20/11/2026")
+  const mes = espelho.data_inicio || espelho.datas?.length
+    ? rotuloDias(diasDoEspelho(espelho.competencia, espelho.data_inicio, espelho.data_fim, espelho.datas))
+    : formatCompetencia(espelho.competencia, true);
   const mensagem = `Olá! Segue o espelho de horas da placa ${formatPlaca(espelho.placa)} referente a ${mes} (${formatHoras(espelho.total_horas)}). `
     + `Por favor, confira e aprove pelo link: ${url}`;
   const whats = linkWhatsApp(espelho.cliente_whatsapp, mensagem);
@@ -178,10 +189,13 @@ export interface EspelhoEdicao {
   cliente_id: string;
   obra_id: string | null;
   competencia: string;
+  data_inicio: string | null;
+  data_fim: string | null;
+  datas: string[] | null;
   status: string;
 }
 
-/** Sem `editar`: cria um espelho e abre as 30 linhas. Com `editar`: troca placa, cliente, obra ou mês. */
+/** Sem `editar`: cria um espelho e abre as linhas do período. Com `editar`: troca placa, cliente, obra, mês ou início do período. */
 export function EspelhoDadosDialog({ aberto, onOpenChange, comp, opcoes, editar }: {
   aberto: boolean; onOpenChange: (v: boolean) => void; comp: string; opcoes: OpcoesEspelho; editar?: EspelhoEdicao | null;
 }) {
@@ -189,15 +203,30 @@ export function EspelhoDadosDialog({ aberto, onOpenChange, comp, opcoes, editar 
   const [veiculo, setVeiculo] = React.useState<string | null>(null);
   const [cliente, setCliente] = React.useState<string | null>(null);
   const [obra, setObra] = React.useState<string | null>(null);
-  const [competencia, setCompetencia] = React.useState(comp);
+  /** mês usado quando nenhum dia é marcado (o da lista, ou o do espelho em edição) */
+  const [mesBase, setMesBase] = React.useState(comp);
+  /** mês que o calendário mostra ao abrir (fixo enquanto a janela está aberta) */
+  const [mesCalendario, setMesCalendario] = React.useState(comp);
+  /** dias marcados no calendário (nenhum = mês inteiro da competência) */
+  const [datas, setDatas] = React.useState<string[]>([]);
   const [salvando, setSalvando] = React.useState(false);
+  const erroDias = erroDatas(datas);
+  // competência do espelho: o mês do último dia marcado (21/10 a 20/11 → novembro); sem dias, o mês base
+  const competencia = datas.length ? datas[datas.length - 1].slice(0, 7) : mesBase;
+  const inicioOk = !erroDias;
 
   React.useEffect(() => {
     if (!aberto) return;
     setVeiculo(editar?.veiculo_id ?? null);
     setCliente(editar?.cliente_id ?? null);
     setObra(editar?.obra_id ?? null);
-    setCompetencia(editar ? editar.competencia.slice(0, 7) : comp);
+    const base = editar ? editar.competencia.slice(0, 7) : comp;
+    // espelho com dias escolhidos (ou com período de início/fim, de antes do calendário): mostra os dias marcados
+    const dias = editar && (editar.datas?.length || editar.data_inicio)
+      ? diasDoEspelho(editar.competencia, editar.data_inicio, editar.data_fim, editar.datas) : [];
+    setMesBase(base);
+    setDatas(dias);
+    setMesCalendario(dias[0]?.slice(0, 7) ?? base);
     // só ao abrir (ou trocar de espelho): o objeto `editar` pode ser recriado a cada render da tela de trás
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, comp, editar?.id]);
@@ -215,10 +244,10 @@ export function EspelhoDadosDialog({ aberto, onOpenChange, comp, opcoes, editar 
   const obrasCliente = opcoes.obras.filter((o) => o.cliente_id === cliente);
 
   const salvar = async () => {
-    if (!veiculo || !cliente) return;
+    if (!veiculo || !cliente || !inicioOk) return;
     setSalvando(true);
     const dados = {
-      veiculo_id: veiculo, cliente_id: cliente, obra_id: obra, competencia,
+      veiculo_id: veiculo, cliente_id: cliente, obra_id: obra, competencia, datas,
       contrato_id: contrato && contrato.cliente_id === cliente ? contrato.id : null,
     };
     if (editar) {
@@ -245,8 +274,8 @@ export function EspelhoDadosDialog({ aberto, onOpenChange, comp, opcoes, editar 
           <DialogTitle>{editar ? "Editar espelho" : "Novo espelho de horas"}</DialogTitle>
           <DialogDescription>
             {editar
-              ? "Troque a placa, o cliente, a obra ou o mês. As horas já lançadas continuam."
-              : "Escolha a placa e o mês. As 30 linhas para lançar as horas aparecem em seguida."}
+              ? "Troque a placa, o cliente, a obra ou os dias. As horas já lançadas continuam na mesma data; dias desmarcados saem."
+              : "Escolha a placa e marque os dias no calendário. As linhas para lançar as horas aparecem em seguida."}
           </DialogDescription>
         </DialogHeader>
         {editar && editar.status !== "rascunho" && (
@@ -273,13 +302,18 @@ export function EspelhoDadosDialog({ aberto, onOpenChange, comp, opcoes, editar 
             </div>
           )}
           <div className="space-y-1">
-            <Label htmlFor="esp-mes">Mês</Label>
-            <SeletorMes id="esp-mes" value={competencia} onChange={setCompetencia} className="w-56 whitespace-nowrap" />
+            <Label>Dias do espelho</Label>
+            <CalendarioDias value={datas} onChange={setDatas} max={MAX_DIAS_ESPELHO} mesInicial={mesCalendario} />
+            <p className={cn("text-xs", inicioOk ? "text-muted-foreground" : "text-status-critico")}>
+              {erroDias ?? (datas.length
+                ? `${datas.length} ${datas.length === 1 ? "dia marcado" : "dias marcados"}: ${rotuloDias(datas)} · entra em ${formatCompetencia(competencia, true)}.`
+                : `Nenhum dia marcado = ${formatCompetencia(mesBase, true)} inteiro.`)}
+            </p>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={salvar} disabled={!veiculo || !cliente || salvando}>
+          <Button onClick={salvar} disabled={!veiculo || !cliente || !inicioOk || salvando}>
             {salvando ? <Loader2 className="animate-spin" /> : editar ? <Save /> : <Plus />} {editar ? "Salvar" : "Criar e lançar horas"}
           </Button>
         </DialogFooter>

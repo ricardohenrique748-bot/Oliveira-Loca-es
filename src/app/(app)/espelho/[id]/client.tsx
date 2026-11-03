@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Cabecalho, Confirmar, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { InputNumero } from "@/components/app/campos";
+import { QuadroFechamento } from "@/components/app/quadro-fechamento";
 import { formatCompetencia, formatDataHora, formatHoras, formatPlaca } from "@/lib/format";
-import { calcularHorasDia, dataDaLinha, totalHoras, type LinhaEspelho } from "@/lib/calculos/espelho";
+import { HORAS_FRANQUIA_PADRAO, calcularHorasDia, dataDaLinha, diasDoEspelho, linhasDoPeriodo, rotuloDias, totalHoras, type FechamentoEspelho, type LinhaEspelho } from "@/lib/calculos/espelho";
 import { cn } from "@/lib/utils";
 import { excluirEspelho, salvarEspelho } from "../actions";
 import { EnviarEspelhoDialog, EspelhoDadosDialog, type OpcoesEspelho } from "../client";
@@ -19,6 +20,12 @@ export interface EspelhoDetalhe {
   cliente_id: string;
   obra_id: string | null;
   competencia: string;
+  data_inicio: string | null;
+  data_fim: string | null;
+  datas: string[] | null;
+  valor_mensal: number | null;
+  horas_franquia: number | null;
+  fechamento: FechamentoEspelho;
   linhas: LinhaEspelho[];
   total_horas: number;
   observacoes: string | null;
@@ -75,7 +82,12 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
   const router = useRouter();
   const [linhas, setLinhas] = React.useState<LinhaEspelho[]>(espelho.linhas);
   const [obs, setObs] = React.useState(espelho.observacoes ?? "");
-  const [salvos, setSalvos] = React.useState(() => JSON.stringify([espelho.linhas, espelho.observacoes ?? ""]));
+  /** valor mensal e as horas que ele cobre (o que passar é hora excedente) */
+  const [valorMensal, setValorMensal] = React.useState<number | null>(espelho.valor_mensal);
+  const [franquia, setFranquia] = React.useState<number | null>(espelho.horas_franquia ?? HORAS_FRANQUIA_PADRAO);
+  const [fechamento, setFechamento] = React.useState<FechamentoEspelho>(espelho.fechamento);
+  const [salvos, setSalvos] = React.useState(() =>
+    JSON.stringify([espelho.linhas, espelho.observacoes ?? "", espelho.valor_mensal, espelho.horas_franquia ?? HORAS_FRANQUIA_PADRAO, espelho.fechamento]));
   const [salvando, setSalvando] = React.useState(false);
   const [enviar, setEnviar] = React.useState(false);
   const [excluir, setExcluir] = React.useState(false);
@@ -83,10 +95,13 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
 
   const travado = espelho.status === "aprovado";
   const editavel = podeEditar && !travado;
-  const alterado = JSON.stringify([linhas, obs]) !== salvos;
-  const total = totalHoras(linhas);
+  const alterado = JSON.stringify([linhas, obs, valorMensal, franquia, fechamento]) !== salvos;
+  const per = diasDoEspelho(espelho.competencia, espelho.data_inicio, espelho.data_fim, espelho.datas);
+  // só as linhas dos dias do espelho contam e vão para o banco
+  const total = totalHoras(linhasDoPeriodo(linhas, per));
   const mes = formatCompetencia(espelho.competencia, true);
-  const diasLancados = linhas.filter((l) => (l.horas ?? 0) > 0).length;
+  const periodo = rotuloDias(per);
+  const diasLancados = linhasDoPeriodo(linhas, per).filter((l) => (l.horas ?? 0) > 0).length;
 
   // avisa antes de sair da página com alterações não salvas
   React.useEffect(() => {
@@ -112,7 +127,7 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
   const preencherLote = (inicio: string, fim: string, intervalo: number | null, sabado: boolean) => {
     const horas = calcularHorasDia(inicio, fim, intervalo);
     setLinhas((ls) => ls.map((l) => {
-      const d = dataDaLinha(espelho.competencia, l.dia);
+      const d = dataDaLinha(per, l.dia);
       const vazio = !l.inicio && !l.fim && l.horas == null;
       if (!d || !vazio) return l;
       if (d.semana === "dom" || (d.semana === "sáb" && !sabado)) return l;
@@ -123,10 +138,11 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
 
   const salvar = async (): Promise<boolean> => {
     setSalvando(true);
-    const r = await rodarAcao(salvarEspelho(espelho.id, linhas, obs || null));
+    const r = await rodarAcao(salvarEspelho(espelho.id, linhasDoPeriodo(linhas, per), obs || null,
+      { valor_mensal: valorMensal, horas_franquia: valorMensal ? franquia : null, fechamento }));
     setSalvando(false);
     if (r.ok) {
-      setSalvos(JSON.stringify([linhas, obs]));
+      setSalvos(JSON.stringify([linhas, obs, valorMensal, franquia, fechamento]));
       router.refresh();
     }
     return r.ok;
@@ -138,7 +154,7 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
     <div className="pb-24">
       <Cabecalho
         titulo={`Espelho ${formatPlaca(espelho.placa)}`}
-        descricao={<>{espelho.cliente}{espelho.obra && ` · ${espelho.obra}`} · {mes}</>}
+        descricao={<>{espelho.cliente}{espelho.obra && ` · ${espelho.obra}`} · {mes} · {periodo}</>}
         voltar={{ href: voltar, rotulo: "Espelhos" }}
         acoes={<>
           <StatusBadge status={espelho.status} />
@@ -181,6 +197,12 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
 
       {lote && editavel && <PreencherLote onAplicar={preencherLote} />}
 
+      {/* fechamento no formato da planilha do cliente (em cima: o total já aparece ao lançar as horas) */}
+      <div className="mb-4">
+        <QuadroFechamento totalHoras={total} valorMensal={valorMensal} franquia={franquia} fechamento={fechamento} editavel={editavel}
+          onValorMensal={setValorMensal} onFranquia={setFranquia} onFechamento={setFechamento} />
+      </div>
+
       <Card className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">
           <thead>
@@ -195,13 +217,13 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
             </tr>
           </thead>
           <tbody>
-            {linhas.map((l) => {
-              const d = dataDaLinha(espelho.competencia, l.dia);
+            {linhasDoPeriodo(linhas, per).map((l) => {
+              const d = dataDaLinha(per, l.dia);
               const desabilitado = !editavel || !d;
               return (
                 <tr key={l.dia} className={cn("border-b last:border-0", d?.fimDeSemana && "bg-muted/40", !d && "opacity-40")}>
                   <td className="num px-3 py-1 font-semibold">{l.dia}</td>
-                  <td className="px-2 py-1 text-xs text-muted-foreground">{d ? <>{d.rotulo} <span className="uppercase">{d.semana}</span></> : "não existe"}</td>
+                  <td className="px-2 py-1 text-xs text-muted-foreground">{d ? <>{d.rotulo} <span className="uppercase">{d.semana}</span></> : "fora do período"}</td>
                   <td className="px-2 py-1">
                     <Input type="time" aria-label={`Início dia ${l.dia}`} className="h-8" disabled={desabilitado}
                       value={l.inicio ?? ""} onChange={(e) => mudar(l.dia, "inicio", e.target.value || null)} />
@@ -261,13 +283,13 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
         onOpenChange={setEnviar}
         antesDeEnviar={async () => (alterado ? salvar() : true)}
         espelho={{
-          id: espelho.id, token: espelho.token, status: espelho.status, placa: espelho.placa, competencia: espelho.competencia,
+          id: espelho.id, token: espelho.token, status: espelho.status, placa: espelho.placa, competencia: espelho.competencia, data_inicio: espelho.data_inicio, data_fim: espelho.data_fim, datas: espelho.datas,
           cliente: espelho.cliente, cliente_whatsapp: espelho.cliente_whatsapp, cliente_email: espelho.cliente_email, total_horas: total,
         }}
       />
       {editavel && opcoes && (
         <EspelhoDadosDialog aberto={editandoDados} onOpenChange={setEditandoDados} comp={espelho.competencia.slice(0, 7)} opcoes={opcoes}
-          editar={{ id: espelho.id, veiculo_id: espelho.veiculo_id, cliente_id: espelho.cliente_id, obra_id: espelho.obra_id, competencia: espelho.competencia, status: espelho.status }} />
+          editar={{ id: espelho.id, veiculo_id: espelho.veiculo_id, cliente_id: espelho.cliente_id, obra_id: espelho.obra_id, competencia: espelho.competencia, data_inicio: espelho.data_inicio, data_fim: espelho.data_fim, datas: espelho.datas, status: espelho.status }} />
       )}
       <Confirmar
         aberto={excluir}
@@ -279,7 +301,7 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
         onConfirmar={async () => {
           const r = await rodarAcao(excluirEspelho(espelho.id));
           if (!r.ok) throw new Error(r.erro);
-          setSalvos(JSON.stringify([linhas, obs]));
+          setSalvos(JSON.stringify([linhas, obs, valorMensal, franquia, fechamento]));
           router.push(voltar);
         }}
       />
