@@ -776,6 +776,7 @@ export type Database = {
           id: string
           inscricao_municipal: string | null
           nfse_aliquota_iss: number | null
+          nfse_aliquota_simples: number | null
           nfse_codigo_servico: string | null
           nfse_proximo_dps: number
           nfse_texto_complementar: string | null
@@ -799,6 +800,7 @@ export type Database = {
           id?: string
           inscricao_municipal?: string | null
           nfse_aliquota_iss?: number | null
+          nfse_aliquota_simples?: number | null
           nfse_codigo_servico?: string | null
           nfse_proximo_dps?: number
           nfse_texto_complementar?: string | null
@@ -822,6 +824,7 @@ export type Database = {
           id?: string
           inscricao_municipal?: string | null
           nfse_aliquota_iss?: number | null
+          nfse_aliquota_simples?: number | null
           nfse_codigo_servico?: string | null
           nfse_proximo_dps?: number
           nfse_texto_complementar?: string | null

@@ -32,7 +32,7 @@ const FATURA = {
   id: "fat-1", empresa_id: "emp-1", status: "faturado", valor_final: 1800, periodo_inicio: "2026-10-23", periodo_fim: "2026-10-23",
   nfse_chave: null, nfse_ambiente: null,
   empresas: { cnpj: "44889430000181", regime_tributario: "simples_nacional", codigo_ibge: "3549805", nfse_codigo_servico: "16.02.01.000",
-    nfse_aliquota_iss: 3, nfse_texto_complementar: "Dados Bancários: PIX" },
+    nfse_aliquota_iss: 3, nfse_aliquota_simples: 9.26, nfse_texto_complementar: "Dados Bancários: PIX" },
   contratos: { numero: "OL-002/26", clientes: { razao_social: "CLIENTE TESTE LTDA", cnpj: "15370280000105" }, veiculos: { placa: "CVP0414", tipo: "munck" } },
 };
 

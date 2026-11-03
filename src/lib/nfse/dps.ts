@@ -16,6 +16,8 @@ export interface DadosDPS {
     /** código de tributação: 6 dígitos (nacional) ou 9 (nacional + municipal, ex.: 16.02.01.000) */
     codigoServico: string;
     aliquotaIss: number;
+    /** ME/EPP do Simples: percentual de tributos do DAS que sai na nota (pTotTribSN) */
+    aliquotaSimples?: number | null;
   };
   tomador: { documento: string | null; nome: string };
   /** inicio = data em que a prestação começou (dCompet); complemento = texto fixo da empresa (ex.: dados bancários), no fim */
@@ -56,6 +58,9 @@ export function montarDPS(d: DadosDPS): string {
   const regTrib = `<regTrib><opSimpNac>${op}</opSimpNac>${op === 3 ? "<regApTribSN>1</regApTribSN>" : ""}<regEspTrib>0</regEspTrib></regTrib>`;
   // ISS não retido (tpRetISSQN = 1): no Simples/MEI o ISS vai no DAS e a Sefin proíbe a alíquota (E0625); só o regime normal informa
   const pAliq = d.prestador.regime === "normal" ? `<pAliq>${dec2(d.prestador.aliquotaIss)}</pAliq>` : "";
+  // ME/EPP não pode usar indTotTrib (E0712): informa o percentual de tributos do Simples; MEI não pode pTotTribSN (E0710)
+  if (op === 3 && d.prestador.aliquotaSimples == null) throw new Error("Informe os tributos do Simples na nota (%) em Cadastros → Empresas");
+  const totTrib = op === 3 ? `<pTotTribSN>${dec2(d.prestador.aliquotaSimples!)}</pTotTribSN>` : "<indTotTrib>0</indTotTrib>";
 
   return (
     `<DPS xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01">` +
@@ -71,7 +76,7 @@ export function montarDPS(d: DadosDPS): string {
     `<cServ><cTribNac>${cTribNac}</cTribNac>${cTribMun}<xDescServ>${esc(discriminacao.slice(0, 2000))}</xDescServ></cServ></serv>` +
     `<valores><vServPrest><vServ>${dec2(d.valor)}</vServ></vServPrest>` +
     `<trib><tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN>${pAliq}</tribMun>` +
-    `<totTrib><indTotTrib>0</indTotTrib></totTrib></trib></valores>` +
+    `<totTrib>${totTrib}</totTrib></trib></valores>` +
     `</infDPS></DPS>`
   );
 }

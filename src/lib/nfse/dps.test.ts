@@ -3,7 +3,7 @@ import { idDPS, montarDPS, type DadosDPS } from "./dps";
 
 const base: DadosDPS = {
   ambiente: 2, serie: 1, numero: 1, emissao: new Date("2026-10-23T14:30:00Z"),
-  prestador: { cnpj: "44.889.430/0001-81", codigoIbge: "3549805", regime: "simples_nacional", codigoServico: "16.02.01", aliquotaIss: 3 },
+  prestador: { cnpj: "44.889.430/0001-81", codigoIbge: "3549805", regime: "simples_nacional", codigoServico: "16.02.01", aliquotaIss: 3, aliquotaSimples: 9.26 },
   tomador: { documento: "11.222.333/0001-81", nome: "Construtora Caramuru Ltda" },
   servico: { descricao: "Locação de munck placa CVP-0414 — 23/10/2026", inicio: "2026-10-23" },
   valor: 1800,
@@ -53,9 +53,22 @@ describe("NFS-e — montarDPS", () => {
     expect(xml).toContain("<cServ><cTribNac>160201</cTribNac><xDescServ>Locação de munck placa CVP-0414 — 23/10/2026</xDescServ></cServ>");
   });
 
-  it("valores: serviço com 2 casas, ISS tributável não retido, sem estimativa de tributos", () => {
+  it("valores: serviço com 2 casas; ME/EPP informa percentual do Simples, não o indicador (E0712)", () => {
     expect(xml).toContain("<vServPrest><vServ>1800.00</vServ></vServPrest>");
-    expect(xml).toContain("<totTrib><indTotTrib>0</indTotTrib></totTrib>");
+    expect(xml).toContain("<totTrib><pTotTribSN>9.26</pTotTribSN></totTrib>");
+    expect(xml).not.toContain("<indTotTrib>");
+  });
+
+  it("ME/EPP sem o percentual do Simples cadastrado não monta a nota", () => {
+    expect(() => montarDPS({ ...base, prestador: { ...base.prestador, aliquotaSimples: null } })).toThrow(/tributos do Simples/);
+  });
+
+  it("MEI e regime normal usam o indicador de total de tributos", () => {
+    for (const regime of ["mei", "normal"] as const) {
+      const x = montarDPS({ ...base, prestador: { ...base.prestador, regime } });
+      expect(x).toContain("<totTrib><indTotTrib>0</indTotTrib></totTrib>");
+      expect(x).not.toContain("<pTotTribSN>");
+    }
   });
 
   it("Simples e MEI sem retenção não informam alíquota (E0625)", () => {

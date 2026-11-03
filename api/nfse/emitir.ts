@@ -71,7 +71,7 @@ export default async function handler(req: Req, res: Res) {
   const { data: m, error } = await sb.from("medicoes")
     .select(`id, empresa_id, status, valor_final, periodo_inicio, periodo_fim, nfse_chave, nfse_ambiente, descricao, itens,
       clientes(razao_social, cnpj), veiculos(placa),
-      empresas(cnpj, regime_tributario, codigo_ibge, nfse_codigo_servico, nfse_aliquota_iss, nfse_texto_complementar),
+      empresas(cnpj, regime_tributario, codigo_ibge, nfse_codigo_servico, nfse_aliquota_iss, nfse_aliquota_simples, nfse_texto_complementar),
       contratos(numero, clientes(razao_social, cnpj), veiculos(placa, tipo))`)
     .eq("id", medicaoId).maybeSingle();
   if (error || !m) return res.status(404).json({ erro: "Fatura não encontrada ou sem permissão" });
@@ -79,10 +79,16 @@ export default async function handler(req: Req, res: Res) {
   if (m.nfse_chave && m.nfse_ambiente === ambiente) return res.status(409).json({ erro: "Esta fatura já tem nota emitida", chave: m.nfse_chave });
 
   const e = m.empresas as unknown as { cnpj: string | null; regime_tributario: "mei" | "simples_nacional" | "normal" | null;
-    codigo_ibge: string | null; nfse_codigo_servico: string | null; nfse_aliquota_iss: number | null; nfse_texto_complementar: string | null } | null;
+    codigo_ibge: string | null; nfse_codigo_servico: string | null; nfse_aliquota_iss: number | null; nfse_aliquota_simples: number | null;
+    nfse_texto_complementar: string | null } | null;
   const c = m.contratos as unknown as { numero: string | null; clientes: { razao_social: string; cnpj: string | null } | null; veiculos: { placa: string; tipo: string } | null } | null;
-  if (!e?.cnpj || !e.codigo_ibge || !e.regime_tributario || !e.nfse_codigo_servico || e.nfse_aliquota_iss == null)
+  if (!e?.cnpj || !e.codigo_ibge || !e.regime_tributario || !e.nfse_codigo_servico)
     return res.status(400).json({ erro: "Complete os dados fiscais da empresa em Cadastros → Empresas" });
+  // alíquota do ISS só vai na nota no regime normal; ME/EPP do Simples informa o percentual de tributos do DAS
+  if (e.regime_tributario === "normal" && e.nfse_aliquota_iss == null)
+    return res.status(400).json({ erro: "Informe a alíquota do ISS da empresa em Cadastros → Empresas" });
+  if (e.regime_tributario === "simples_nacional" && e.nfse_aliquota_simples == null)
+    return res.status(400).json({ erro: "Informe os tributos do Simples na nota (%) da empresa em Cadastros → Empresas" });
   // fatura avulsa (sem contrato): cliente na própria fatura, descrição digitada no lançamento
   const tomadorCliente = c?.clientes ?? (m.clientes as unknown as { razao_social: string; cnpj: string | null } | null);
   if (!tomadorCliente) return res.status(400).json({ erro: "Fatura sem cliente" });
@@ -108,7 +114,8 @@ export default async function handler(req: Req, res: Res) {
     const xml = montarDPS({
       ambiente: ambiente === "producao" ? 1 : 2, serie: 1, numero, emissao: new Date(),
       prestador: { cnpj: e.cnpj, codigoIbge: e.codigo_ibge, regime: e.regime_tributario,
-        codigoServico: e.nfse_codigo_servico, aliquotaIss: Number(e.nfse_aliquota_iss) },
+        codigoServico: e.nfse_codigo_servico, aliquotaIss: Number(e.nfse_aliquota_iss ?? 0),
+        aliquotaSimples: e.nfse_aliquota_simples == null ? null : Number(e.nfse_aliquota_simples) },
       tomador: { documento: tomadorCliente.cnpj, nome: tomadorCliente.razao_social },
       servico: {
         descricao: c
