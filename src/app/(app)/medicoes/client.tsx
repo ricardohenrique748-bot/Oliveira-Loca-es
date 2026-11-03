@@ -482,6 +482,40 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
   const [gerando, setGerando] = React.useState(false);
   const [emitindo, setEmitindo] = React.useState(false);
   const [verEnvios, setVerEnvios] = React.useState(false);
+  /** nota já emitida desta fatura (chave gravada pela emissão) */
+  const [nota, setNota] = React.useState<{ chave: string; ambiente: string | null } | null>(null);
+  const [baixando, setBaixando] = React.useState<"pdf" | "xml" | null>(null);
+  const carregarNota = React.useCallback(async (id: string) => {
+    const { data } = await createClient().from("medicoes").select("nfse_chave, nfse_ambiente").eq("id", id).maybeSingle();
+    setNota(data?.nfse_chave ? { chave: data.nfse_chave, ambiente: data.nfse_ambiente } : null);
+  }, []);
+  React.useEffect(() => { setNota(null); if (m) void carregarNota(m.id); }, [m, carregarNota]);
+  /** baixa a NFS-e emitida (PDF/DANFSe ou XML) pela função da Vercel, que busca na Receita com o certificado */
+  const baixarNota = async (formato: "pdf" | "xml") => {
+    if (!m || !nota) return;
+    setBaixando(formato);
+    try {
+      const { data } = await createClient().auth.getSession();
+      const r = await fetch("/api/nfse/danfse", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+        body: JSON.stringify({ medicaoId: m.id, formato }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => ({}))) as { erro?: string };
+        toast.error(`Não foi possível baixar a NF: ${j.erro ?? `HTTP ${r.status}`}`, { duration: 20_000 });
+        return;
+      }
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = url; a.download = `NFSe_${nota.chave}.${formato}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      toast.error(`Falha ao baixar a NF: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBaixando(null);
+    }
+  };
   /** NFS-e no Emissor Nacional pela função da Vercel (certificado fica lá); o ambiente é o da variável NFSE_AMBIENTE */
   const emitirNota = async () => {
     if (!m) return;
@@ -493,7 +527,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
         body: JSON.stringify({ medicaoId: m.id }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; erro?: string; chave?: string; numero?: string; ambiente?: string; aviso?: string };
-      if (j.ok) toast.success(`NFS-e ${j.numero ?? ""} emitida (${j.ambiente}) · chave ${j.chave}`, { duration: 15_000 });
+      if (j.ok) { toast.success(`NFS-e ${j.numero ?? ""} emitida (${j.ambiente}) · chave ${j.chave}`, { duration: 15_000 }); void carregarNota(m.id); onSalvo(); }
       else toast.error(`NFS-e não emitida${j.ambiente ? ` (${j.ambiente})` : ""}: ${j.erro ?? `HTTP ${r.status}`}`, { duration: 30_000 });
       // o envio aconteceu mas o histórico (nfse_tentativas) não gravou: avisar, senão a evidência some sem ninguém saber
       if (j.aviso) toast.warning(j.aviso, { duration: 30_000 });
@@ -608,11 +642,20 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
           <DialogFooter className="sticky bottom-0 -mx-5 -mb-5 border-t bg-background px-5 py-3 sm:flex-wrap">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
             {ed && <Button variant="outline" disabled={!mudou || salvando} onClick={salvarAjuste}>{salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar ajustes</Button>}
-            {podeEditar && m.status !== "cancelado" && (
+            {podeEditar && m.status !== "cancelado" && !nota && (
               <Button variant="outline" disabled={emitindo || mudou} title={mudou ? "Salve os ajustes antes de emitir" : "Emite a NFS-e no Emissor Nacional"} onClick={emitirNota}>
                 {emitindo ? <Loader2 className="animate-spin" /> : <FileText />} Emitir NF
               </Button>
             )}
+            {/* nota já emitida: baixa da Receita (o sistema guarda só a chave) */}
+            {nota && <>
+              <Button variant="outline" disabled={!!baixando} title={`Chave ${nota.chave}${nota.ambiente === "homologacao" ? " (homologação)" : ""}`} onClick={() => baixarNota("pdf")}>
+                {baixando === "pdf" ? <Loader2 className="animate-spin" /> : <FileDown />} Baixar NF (PDF)
+              </Button>
+              <Button variant="outline" disabled={!!baixando} title="XML da NFS-e" onClick={() => baixarNota("xml")}>
+                {baixando === "xml" ? <Loader2 className="animate-spin" /> : <FileDown />} XML
+              </Button>
+            </>}
             {podeEditar && <Button variant="outline" onClick={() => setVerEnvios(true)}><History /> Ver último envio</Button>}
             <Button disabled={gerando} title={mudou ? "Salve os ajustes antes: o PDF usa os valores salvos" : undefined}
               onClick={async () => { setGerando(true); try { await baixarFaturaPDF(m.id, baseDias); } finally { setGerando(false); } }}>
