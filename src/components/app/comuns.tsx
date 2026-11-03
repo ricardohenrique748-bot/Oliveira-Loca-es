@@ -58,6 +58,10 @@ const STATUS: Record<string, { rotulo: string; variante: BadgeVariant }> = {
   aprovada: { rotulo: "Aprovada", variante: "ok" },
   recusada: { rotulo: "Recusada", variante: "critico" },
   convertida: { rotulo: "Virou contrato", variante: "ok" },
+  // espelho de horas
+  enviado: { rotulo: "Aguardando cliente", variante: "info" },
+  aprovado: { rotulo: "Aprovado", variante: "ok" },
+  recusado: { rotulo: "Recusado", variante: "critico" },
   // contrato
   ativo: { rotulo: "Ativo", variante: "ok" },
   encerrado: { rotulo: "Encerrado", variante: "neutro" },

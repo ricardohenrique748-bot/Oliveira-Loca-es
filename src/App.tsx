@@ -27,6 +27,8 @@ import ReceberPage from "@/app/(app)/receber/page";
 import RepassesPage from "@/app/(app)/repasses/page";
 import PagarPage from "@/app/(app)/pagar/page";
 import EspelhoPage from "@/app/(app)/espelho/page";
+import EspelhoDetalhePage from "@/app/(app)/espelho/[id]/page";
+import AprovacaoEspelhoPage from "@/app/aprovacao/espelho/page";
 import ManutencaoPage from "@/app/(app)/manutencao/page";
 import OrdensPage from "@/app/(app)/manutencao/ordens/page";
 import OrdemDetalhePage from "@/app/(app)/manutencao/ordens/[id]/page";
@@ -67,6 +69,8 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/configurar" element={<ConfigurarPage />} />
       <Route path="/offline" element={<OfflinePage />} />
+      {/* link público: o cliente aprova o espelho de horas sem login */}
+      <Route path="/aprovacao/espelho/:token" element={<AprovacaoEspelhoPage />} />
 
       {/* Rotas autenticadas protegidas pelo AppLayout */}
       <Route element={<AppLayout />}>
@@ -95,6 +99,7 @@ export function App() {
         <Route path="/repasses" element={<RepassesPage />} />
         <Route path="/pagar" element={<PagarPage />} />
         <Route path="/espelho" element={<EspelhoPage />} />
+        <Route path="/espelho/:id" element={<EspelhoDetalhePage />} />
 
         {/* Manutenção / Frota */}
         <Route path="/manutencao" element={<ManutencaoPage />} />

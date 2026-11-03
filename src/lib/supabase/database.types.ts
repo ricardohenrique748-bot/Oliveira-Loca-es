@@ -833,6 +833,108 @@ export type Database = {
         }
         Relationships: []
       }
+      espelhos: {
+        Row: {
+          cliente_id: string
+          competencia: string
+          contrato_id: string | null
+          created_at: string
+          created_by: string | null
+          empresa_id: string
+          enviado_em: string | null
+          id: string
+          linhas: Json
+          motivo_recusa: string | null
+          obra_id: string | null
+          observacoes: string | null
+          respondido_em: string | null
+          respondido_por: string | null
+          status: string
+          token: string
+          total_horas: number
+          updated_at: string
+          veiculo_id: string
+        }
+        Insert: {
+          cliente_id: string
+          competencia: string
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          empresa_id: string
+          enviado_em?: string | null
+          id?: string
+          linhas?: Json
+          motivo_recusa?: string | null
+          obra_id?: string | null
+          observacoes?: string | null
+          respondido_em?: string | null
+          respondido_por?: string | null
+          status?: string
+          token?: string
+          total_horas?: number
+          updated_at?: string
+          veiculo_id: string
+        }
+        Update: {
+          cliente_id?: string
+          competencia?: string
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          empresa_id?: string
+          enviado_em?: string | null
+          id?: string
+          linhas?: Json
+          motivo_recusa?: string | null
+          obra_id?: string | null
+          observacoes?: string | null
+          respondido_em?: string | null
+          respondido_por?: string | null
+          status?: string
+          token?: string
+          total_horas?: number
+          updated_at?: string
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "espelhos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "espelhos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "espelhos_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "espelhos_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "espelhos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fornecedores: {
         Row: {
           ativo: boolean
@@ -2550,6 +2652,12 @@ export type Database = {
         }
         Returns: string
       }
+      fn_espelho_publico: {
+        Args: {
+          p_token: string
+        }
+        Returns: Json
+      }
       fn_fechar_os: {
         Args: {
           p_os: string
@@ -2595,6 +2703,15 @@ export type Database = {
           p_proposta: string
         }
         Returns: string
+      }
+      fn_responder_espelho: {
+        Args: {
+          p_token: string
+          p_aprovado: boolean
+          p_nome: string
+          p_motivo?: string
+        }
+        Returns: Json
       }
       fn_rodar_jobs: {
         Args: {
