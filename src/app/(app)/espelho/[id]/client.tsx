@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Clock, Loader2, Save, Send, Trash2, Wand2, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Loader2, Pencil, Save, Send, Trash2, Wand2, XCircle } from "lucide-react";
 import { Card, Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
@@ -11,10 +11,13 @@ import { formatCompetencia, formatDataHora, formatHoras, formatPlaca } from "@/l
 import { calcularHorasDia, dataDaLinha, totalHoras, type LinhaEspelho } from "@/lib/calculos/espelho";
 import { cn } from "@/lib/utils";
 import { excluirEspelho, salvarEspelho } from "../actions";
-import { EnviarEspelhoDialog } from "../client";
+import { EnviarEspelhoDialog, EspelhoDadosDialog, type OpcoesEspelho } from "../client";
 
 export interface EspelhoDetalhe {
   id: string;
+  veiculo_id: string;
+  cliente_id: string;
+  obra_id: string | null;
   competencia: string;
   linhas: LinhaEspelho[];
   total_horas: number;
@@ -67,7 +70,8 @@ function PreencherLote({ onAplicar }: { onAplicar: (inicio: string, fim: string,
   );
 }
 
-export function EditorEspelho({ espelho, podeEditar }: { espelho: EspelhoDetalhe; podeEditar: boolean }) {
+export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: EspelhoDetalhe; podeEditar: boolean; opcoes: OpcoesEspelho | null }) {
+  const [editandoDados, setEditandoDados] = React.useState(false);
   const router = useRouter();
   const [linhas, setLinhas] = React.useState<LinhaEspelho[]>(espelho.linhas);
   const [obs, setObs] = React.useState(espelho.observacoes ?? "");
@@ -138,6 +142,7 @@ export function EditorEspelho({ espelho, podeEditar }: { espelho: EspelhoDetalhe
         voltar={{ href: voltar, rotulo: "Espelhos" }}
         acoes={<>
           <StatusBadge status={espelho.status} />
+          {editavel && opcoes && <Button variant="outline" size="sm" onClick={() => setEditandoDados(true)}><Pencil /> Editar dados</Button>}
           {editavel && <Button variant="outline" size="sm" onClick={() => setLote((v) => !v)}><Wand2 /> Preencher em lote</Button>}
           {editavel && <Button variant="outline" size="sm" onClick={() => setExcluir(true)}><Trash2 /> Excluir</Button>}
           {(podeEditar || espelho.status !== "rascunho") && (
@@ -260,6 +265,10 @@ export function EditorEspelho({ espelho, podeEditar }: { espelho: EspelhoDetalhe
           cliente: espelho.cliente, cliente_whatsapp: espelho.cliente_whatsapp, cliente_email: espelho.cliente_email, total_horas: total,
         }}
       />
+      {editavel && opcoes && (
+        <EspelhoDadosDialog aberto={editandoDados} onOpenChange={setEditandoDados} comp={espelho.competencia.slice(0, 7)} opcoes={opcoes}
+          editar={{ id: espelho.id, veiculo_id: espelho.veiculo_id, cliente_id: espelho.cliente_id, obra_id: espelho.obra_id, competencia: espelho.competencia, status: espelho.status }} />
+      )}
       <Confirmar
         aberto={excluir}
         onOpenChange={setExcluir}

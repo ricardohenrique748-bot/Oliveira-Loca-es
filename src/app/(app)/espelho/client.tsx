@@ -2,7 +2,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CalendarDays, ClipboardList, Copy, History, Loader2, Mail, MessageCircle, Plus, Send, X } from "lucide-react";
+import { CalendarDays, ClipboardList, Copy, History, Loader2, Mail, MessageCircle, Pencil, Plus, Save, Send, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, Label, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
@@ -10,15 +10,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { SelectBusca } from "@/components/ui/select-busca";
 import { SelectSimples } from "@/components/ui/select";
-import { BotaoCopiar, Cabecalho, StatusBadge, Vazio, rodarAcao } from "@/components/app/comuns";
+import { BotaoCopiar, Cabecalho, Confirmar, StatusBadge, Vazio, rodarAcao } from "@/components/app/comuns";
 import { SeletorMes } from "@/components/app/seletor-mes";
 import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
 import { formatCompetencia, formatDataHora, formatHoras, formatPlaca, linkEmail, linkWhatsApp } from "@/lib/format";
 import { MODO_DEMO } from "@/lib/plataforma";
-import { criarEspelho, enviarEspelho } from "./actions";
+import { criarEspelho, editarDadosEspelho, enviarEspelho, excluirEspelho } from "./actions";
 
 export interface EspelhoLista {
   id: string;
+  veiculo_id: string;
+  cliente_id: string;
+  obra_id: string | null;
   competencia: string;
   total_horas: number;
   status: string;
@@ -166,10 +169,21 @@ export function EnviarEspelhoDialog({ espelho, aberto, onOpenChange, antesDeEnvi
   );
 }
 
-// ---------- novo espelho ----------
+// ---------- novo espelho / editar dados ----------
 
-function NovoEspelhoDialog({ aberto, onOpenChange, comp, opcoes }: {
-  aberto: boolean; onOpenChange: (v: boolean) => void; comp: string; opcoes: OpcoesEspelho;
+/** Dados de um espelho existente para o modo edição. */
+export interface EspelhoEdicao {
+  id: string;
+  veiculo_id: string;
+  cliente_id: string;
+  obra_id: string | null;
+  competencia: string;
+  status: string;
+}
+
+/** Sem `editar`: cria um espelho e abre as 30 linhas. Com `editar`: troca placa, cliente, obra ou mês. */
+export function EspelhoDadosDialog({ aberto, onOpenChange, comp, opcoes, editar }: {
+  aberto: boolean; onOpenChange: (v: boolean) => void; comp: string; opcoes: OpcoesEspelho; editar?: EspelhoEdicao | null;
 }) {
   const router = useRouter();
   const [veiculo, setVeiculo] = React.useState<string | null>(null);
@@ -179,8 +193,14 @@ function NovoEspelhoDialog({ aberto, onOpenChange, comp, opcoes }: {
   const [salvando, setSalvando] = React.useState(false);
 
   React.useEffect(() => {
-    if (aberto) { setVeiculo(null); setCliente(null); setObra(null); setCompetencia(comp); }
-  }, [aberto, comp]);
+    if (!aberto) return;
+    setVeiculo(editar?.veiculo_id ?? null);
+    setCliente(editar?.cliente_id ?? null);
+    setObra(editar?.obra_id ?? null);
+    setCompetencia(editar ? editar.competencia.slice(0, 7) : comp);
+    // só ao abrir (ou trocar de espelho): o objeto `editar` pode ser recriado a cada render da tela de trás
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto, comp, editar?.id]);
 
   // contrato ativo da placa: já traz cliente e obra
   const contrato = React.useMemo(
@@ -194,13 +214,23 @@ function NovoEspelhoDialog({ aberto, onOpenChange, comp, opcoes }: {
   };
   const obrasCliente = opcoes.obras.filter((o) => o.cliente_id === cliente);
 
-  const criar = async () => {
+  const salvar = async () => {
     if (!veiculo || !cliente) return;
     setSalvando(true);
-    const r = await rodarAcao(criarEspelho({
+    const dados = {
       veiculo_id: veiculo, cliente_id: cliente, obra_id: obra, competencia,
       contrato_id: contrato && contrato.cliente_id === cliente ? contrato.id : null,
-    }));
+    };
+    if (editar) {
+      const r = await rodarAcao(editarDadosEspelho(editar.id, dados));
+      setSalvando(false);
+      if (r.ok) {
+        onOpenChange(false);
+        router.refresh();
+      }
+      return;
+    }
+    const r = await rodarAcao(criarEspelho(dados));
     setSalvando(false);
     if (r.ok && r.dados) {
       onOpenChange(false);
@@ -212,9 +242,18 @@ function NovoEspelhoDialog({ aberto, onOpenChange, comp, opcoes }: {
     <Dialog open={aberto} onOpenChange={onOpenChange}>
       <DialogContent tamanho="sm">
         <DialogHeader>
-          <DialogTitle>Novo espelho de horas</DialogTitle>
-          <DialogDescription>Escolha a placa e o mês. As 30 linhas para lançar as horas aparecem em seguida.</DialogDescription>
+          <DialogTitle>{editar ? "Editar espelho" : "Novo espelho de horas"}</DialogTitle>
+          <DialogDescription>
+            {editar
+              ? "Troque a placa, o cliente, a obra ou o mês. As horas já lançadas continuam."
+              : "Escolha a placa e o mês. As 30 linhas para lançar as horas aparecem em seguida."}
+          </DialogDescription>
         </DialogHeader>
+        {editar && editar.status !== "rascunho" && (
+          <p className="rounded-lg border border-status-alerta/40 p-2 text-xs">
+            Este espelho já foi enviado. O link continua o mesmo e o cliente passa a ver os dados novos.
+          </p>
+        )}
         <div className="space-y-3">
           <div className="space-y-1">
             <Label htmlFor="esp-placa">Placa</Label>
@@ -240,8 +279,8 @@ function NovoEspelhoDialog({ aberto, onOpenChange, comp, opcoes }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={criar} disabled={!veiculo || !cliente || salvando}>
-            {salvando ? <Loader2 className="animate-spin" /> : <Plus />} Criar e lançar horas
+          <Button onClick={salvar} disabled={!veiculo || !cliente || salvando}>
+            {salvando ? <Loader2 className="animate-spin" /> : editar ? <Save /> : <Plus />} {editar ? "Salvar" : "Criar e lançar horas"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -277,8 +316,11 @@ export function EspelhosCliente({ comp, historico, espelhos, opcoes, podeEditar 
   comp: string; historico: boolean; espelhos: EspelhoLista[]; opcoes: OpcoesEspelho; podeEditar: boolean;
 }) {
   const { get, set } = useUrlParams();
+  const router = useRouter();
   const [novo, setNovo] = React.useState(false);
   const [envio, setEnvio] = React.useState<EspelhoLista | null>(null);
+  const [editando, setEditando] = React.useState<EspelhoLista | null>(null);
+  const [excluindo, setExcluindo] = React.useState<EspelhoLista | null>(null);
   const total = espelhos.reduce((s, e) => s + Number(e.total_horas || 0), 0);
   const aguardando = espelhos.filter((e) => e.status === "enviado").length;
   // placa e cliente continuam ao trocar de aba; status só existe no Histórico
@@ -380,14 +422,21 @@ export function EspelhosCliente({ comp, historico, espelhos, opcoes, podeEditar 
                     ) : e.enviado_em ? `Enviado ${formatDataHora(e.enviado_em)}` : "—"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
+                    <div className="flex flex-wrap justify-end gap-1">
                       <Button variant="outline" size="xs" asChild><Link href={`/espelho/${e.id}`}>{podeEditar && e.status !== "aprovado" ? "Lançar horas" : "Abrir"}</Link></Button>
+                      {podeEditar && e.status !== "aprovado" && (
+                        <Button variant="outline" size="xs" onClick={() => setEditando(e)}><Pencil /> Editar</Button>
+                      )}
                       {(podeEditar || e.status === "enviado" || e.status === "aprovado") && e.status !== "rascunho" ? (
                         <Button variant="outline" size="xs" onClick={() => setEnvio(e)}><Copy /> Link</Button>
                       ) : podeEditar ? (
                         <Button variant="outline" size="xs" onClick={() => setEnvio(e)} disabled={!Number(e.total_horas)}
                           title={!Number(e.total_horas) ? "Lance as horas antes de enviar" : undefined}><Send /> Enviar</Button>
                       ) : null}
+                      {podeEditar && e.status !== "aprovado" && (
+                        <Button variant="outline" size="xs" onClick={() => setExcluindo(e)} aria-label={`Excluir espelho ${formatPlaca(e.placa)}`}
+                          className="text-status-critico hover:text-status-critico"><Trash2 /> Excluir</Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -397,8 +446,30 @@ export function EspelhosCliente({ comp, historico, espelhos, opcoes, podeEditar 
         </Card>
       )}
 
-      {podeEditar && <NovoEspelhoDialog aberto={novo} onOpenChange={setNovo} comp={comp} opcoes={opcoes} />}
+      {podeEditar && <EspelhoDadosDialog aberto={novo} onOpenChange={setNovo} comp={comp} opcoes={opcoes} />}
+      {podeEditar && (
+        <EspelhoDadosDialog aberto={!!editando} onOpenChange={(v) => !v && setEditando(null)} comp={comp} opcoes={opcoes} editar={editando} />
+      )}
       <EnviarEspelhoDialog espelho={envio} aberto={!!envio} onOpenChange={(v) => !v && setEnvio(null)} />
+      <Confirmar
+        aberto={!!excluindo}
+        onOpenChange={(v) => !v && setExcluindo(null)}
+        titulo="Excluir este espelho?"
+        descricao={excluindo && (
+          <>
+            As horas lançadas de <strong>{formatPlaca(excluindo.placa)}</strong> ({excluindo.cliente}, {formatCompetencia(excluindo.competencia, true)}) serão apagadas.
+            {excluindo.status !== "rascunho" && " O link que o cliente recebeu deixa de funcionar."}
+          </>
+        )}
+        rotulo="Excluir"
+        destrutivo
+        onConfirmar={async () => {
+          if (!excluindo) return;
+          const r = await rodarAcao(excluirEspelho(excluindo.id));
+          if (!r.ok) throw new Error(r.erro);
+          router.refresh();
+        }}
+      />
     </>
   );
 }

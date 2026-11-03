@@ -9,6 +9,7 @@ import { CarregandoPagina } from "@/components/app/carregando";
 import { Cabecalho, Vazio } from "@/components/app/comuns";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { EditorEspelho } from "./client";
+import { carregarOpcoesEspelho } from "../dados";
 
 export default function EspelhoDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -19,14 +20,20 @@ export default function EspelhoDetalhePage() {
     if (!id) return null;
     const supabase = createClient();
     const { data: e } = await supabase.from("espelhos")
-      .select(`id, competencia, linhas, total_horas, observacoes, status, token, enviado_em, respondido_em, respondido_por, motivo_recusa,
+      .select(`id, veiculo_id, cliente_id, obra_id, competencia, linhas, total_horas, observacoes, status, token, enviado_em, respondido_em, respondido_por, motivo_recusa,
         veiculos(placa, modelo, marca), clientes(razao_social, nome_fantasia, whatsapp, email), obras(nome), contratos(numero), empresas(apelido)`)
       .eq("id", id)
       .maybeSingle();
     if (!e) return { naoEncontrado: true as const };
+    const podeEditar = podeEscrever(s.perfil, "medicoes");
+    const opcoes = podeEditar ? await carregarOpcoesEspelho(supabase, s.empresaId) : null;
     return {
+      opcoes,
       espelho: {
         id: e.id,
+        veiculo_id: e.veiculo_id,
+        cliente_id: e.cliente_id,
+        obra_id: e.obra_id,
         competencia: e.competencia,
         linhas: normalizarLinhas(e.linhas),
         total_horas: e.total_horas,
@@ -46,7 +53,7 @@ export default function EspelhoDetalhePage() {
         contrato: e.contratos?.numero ?? null,
         empresa: e.empresas?.apelido ?? null,
       },
-      podeEditar: podeEscrever(s.perfil, "medicoes"),
+      podeEditar,
     };
   }, [id, sessao?.empresaId]);
 

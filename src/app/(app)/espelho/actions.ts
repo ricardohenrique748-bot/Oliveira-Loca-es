@@ -47,6 +47,33 @@ export async function criarEspelho(dados: unknown) {
   }, REVALIDAR);
 }
 
+/**
+ * Troca placa, cliente, obra ou mês de um espelho ainda não aprovado (as horas lançadas ficam).
+ * Se ele já tinha sido enviado, o link continua o mesmo e o cliente vê os dados novos.
+ */
+export async function editarDadosEspelho(id: string, dados: unknown) {
+  return executar(async () => {
+    await exigirEscrita("medicoes");
+    const espelhoId = uuid.parse(id);
+    const d = novoSchema.parse(dados);
+    const supabase = await createClient();
+    const atual = checar(await supabase.from("espelhos").select("status").eq("id", espelhoId).single())!;
+    if (atual.status === "aprovado") throw new Error("Espelho aprovado pelo cliente não pode ser alterado.");
+    const veiculo = checar(await supabase.from("veiculos").select("empresa_id").eq("id", d.veiculo_id).single())!;
+    const r = await supabase.from("espelhos").update({
+      empresa_id: veiculo.empresa_id,
+      veiculo_id: d.veiculo_id,
+      cliente_id: d.cliente_id,
+      contrato_id: d.contrato_id,
+      obra_id: d.obra_id,
+      competencia: `${d.competencia}-01`,
+    }).eq("id", espelhoId).select("id").single();
+    if (r.error?.code === "23505") throw new Error("Já existe espelho desta placa para este cliente neste mês.");
+    checar(r);
+    return null;
+  }, REVALIDAR, "Dados do espelho atualizados");
+}
+
 /** Grava as linhas (só os dias preenchidos) e a observação geral. */
 export async function salvarEspelho(id: string, linhas: LinhaEspelho[], observacoes: string | null) {
   return executar(async () => {
