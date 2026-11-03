@@ -25,16 +25,35 @@ export async function criarContaPagar(dados: unknown) {
     const locador = comum.descontar_locador && c.valor_locador ? c.valor_locador / c.valor : null;
     const comLocador = (l: TablesInsert<"contas_pagar">) => ({ ...l, valor_locador: locador ? Math.round(Number(l.valor) * locador * 100) / 100 : null });
     let linhas: TablesInsert<"contas_pagar">[];
+    // vários boletos anexados: um por parcela, na ordem (1º boleto → 1ª parcela gerada); um só (carnê) vai em todas
+    const boletos = (c.anexo_url ?? "").split("\n").map((r) => r.trim()).filter(Boolean);
     if (rateio) {
-      // boleto único com várias placas: uma conta por nota, cada uma na sua placa, mesmo vencimento e mesmo boleto
-      const obs = `Boleto único de ${formatBRL(c.valor)} com ${itens.length} placas`;
-      const linhasRateio = itens.map((i) => ({
-        ...comum, empresa_id: i.empresa_id ?? c.empresa_id, veiculo_id: i.veiculo_id, descontar_locador: i.descontar_locador,
-        valor_locador: i.descontar_locador ? i.valor_locador : null,
-        descricao: i.nota ? `${c.descricao} – NF ${i.nota}` : c.descricao, vencimento: c.vencimento, valor: i.valor!,
-        observacoes: c.observacoes ? `${c.observacoes}
-${obs}` : obs,
-      }));
+      // boleto único com várias placas: uma conta por nota, cada uma na sua placa, mesmo vencimento e mesmo boleto.
+      // Parcelado: cada placa vira o seu parcelamento n/N (grupo próprio), com os mesmos vencimentos.
+      const parcelado = repeticao === "parcelada";
+      const obs = parcelado
+        ? `Boleto de ${formatBRL(c.valor)}${modo_valor === "parcela" ? " por parcela" : ""} com ${itens.length} placas, em ${parcelas}x`
+        : `Boleto único de ${formatBRL(c.valor)} com ${itens.length} placas`;
+      const observacoes = c.observacoes ? `${c.observacoes}\n${obs}` : obs;
+      const linhasRateio = itens.flatMap((i): TablesInsert<"contas_pagar">[] => {
+        const daPlaca = {
+          ...comum, empresa_id: i.empresa_id ?? c.empresa_id, veiculo_id: i.veiculo_id, descontar_locador: i.descontar_locador, observacoes,
+        };
+        const descricao = i.nota ? `${c.descricao} – NF ${i.nota}` : c.descricao;
+        if (!parcelado) {
+          return [{ ...daPlaca, valor_locador: i.descontar_locador ? i.valor_locador : null, descricao, vencimento: c.vencimento, valor: i.valor! }];
+        }
+        // valor para o locador na mesma proporção do valor de cada parcela (como no parcelado comum)
+        const fatorLocador = i.descontar_locador && i.valor_locador ? i.valor_locador / i.valor! : null;
+        const grupo = crypto.randomUUID();
+        return gerarParcelas({ descricao, valor: i.valor!, modo: modo_valor, total: parcelas!, inicio: parcela_inicial ?? 1, primeiroVencimento: c.vencimento })
+          .map((p, n) => ({
+            ...daPlaca, descricao: p.descricao, vencimento: p.vencimento, valor: p.valor,
+            parcela_num: p.parcelaNum, parcela_total: p.parcelaTotal, grupo_parcela_id: grupo,
+            valor_locador: fatorLocador ? Math.round(p.valor * fatorLocador * 100) / 100 : null,
+            ...(boletos.length > 1 ? { anexo_url: boletos[n] ?? null } : {}),
+          }));
+      });
       checar(await supabase.from("contas_pagar").insert(linhasRateio));
       return { criadas: linhasRateio.length };
     }
@@ -42,8 +61,6 @@ ${obs}` : obs,
       const grupo = crypto.randomUUID();
       linhas = gerarParcelas({ descricao: c.descricao, valor: c.valor, modo: modo_valor, total: parcelas!, inicio: parcela_inicial ?? 1, primeiroVencimento: c.vencimento })
         .map((p) => ({ ...comum, descricao: p.descricao, vencimento: p.vencimento, valor: p.valor, parcela_num: p.parcelaNum, parcela_total: p.parcelaTotal, grupo_parcela_id: grupo }));
-      // vários boletos: um por parcela, na ordem (1º boleto → 1ª parcela gerada); um só (carnê) vai em todas
-      const boletos = (c.anexo_url ?? "").split("\n").map((r) => r.trim()).filter(Boolean);
       if (boletos.length > 1) linhas = linhas.map((l, i) => ({ ...l, anexo_url: boletos[i] ?? null }));
     } else if (repeticao === "recorrente") {
       const grupo = crypto.randomUUID();

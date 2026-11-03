@@ -50,9 +50,11 @@ function comEmpresa<V extends { empresa_id: string; tipo: string; veiculo_id?: s
 }
 
 /** valor para o locador preenchido = descontar do locador; desmarcar "descontar" limpa o valor */
-function sincronizarLocador(campo: string, v: { descontar_locador?: boolean; valor_locador?: number | null }) {
+function sincronizarLocador(campo: string, v: { descontar_locador?: boolean; valor_locador?: number | null; rateio?: boolean; repeticao?: string }) {
   if (campo === "valor_locador" && v.valor_locador) return { descontar_locador: true } as never;
   if (campo === "descontar_locador" && !v.descontar_locador) return { valor_locador: null } as never;
+  // boleto com várias placas não tem "recorrente": volta para única
+  if (campo === "rateio" && v.rateio && v.repeticao === "recorrente") return { repeticao: "unica" } as never;
 }
 
 function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opcoes, novo: boolean): Campo<V>[] {
@@ -78,8 +80,14 @@ function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opc
     lista.push(
       { nome: "rateio", rotulo: "Boleto com várias placas (uma nota para cada placa)", tipo: "checkbox", col: 6, visivel: (v) => v.tipo === "veiculo" },
       { nome: "itens", rotulo: "Notas do boleto", tipo: "personalizado", col: 6, visivel: (v) => v.tipo === "veiculo" && !!v.rateio,
-        render: ({ value, onChange, valores }) => <EditorRateio itens={value ?? []} onChange={onChange} total={valores.valor ?? 0} veiculos={o.veiculos} /> },
-      { nome: "repeticao", rotulo: "Repetição", tipo: "select", col: 2, visivel: (v) => !rateio(v as V), opcoes: [{ value: "unica", label: "Única" }, { value: "parcelada", label: "Parcelada (n/N)" }, { value: "recorrente", label: "Recorrente (mensal)" }] },
+        render: ({ value, onChange, valores }) => (
+          <EditorRateio itens={value ?? []} onChange={onChange} total={valores.valor ?? 0} veiculos={o.veiculos}
+            parcelas={valores.repeticao === "parcelada" ? valores.parcelas ?? null : null} modo={valores.modo_valor ?? "parcela"} />
+        ) },
+      // várias placas: única ou parcelada (cada placa vira o seu parcelamento); recorrente não
+      { nome: "repeticao", rotulo: "Repetição", tipo: "select", col: 2,
+        opcoes: (v) => [{ value: "unica", label: "Única" }, { value: "parcelada", label: "Parcelada (n/N)" },
+          ...(rateio(v as V) ? [] : [{ value: "recorrente", label: "Recorrente (mensal)" }])] },
       { nome: "parcelas", rotulo: "Nº de parcelas", tipo: "numero", col: 1, visivel: (v) => v.repeticao === "parcelada" },
       { nome: "parcela_inicial", rotulo: "Começa na", tipo: "numero", col: 1, visivel: (v) => v.repeticao === "parcelada", ajuda: "ex.: 15 de 53" },
       { nome: "modo_valor", rotulo: "O valor é", tipo: "select", col: 2, visivel: (v) => v.repeticao === "parcelada", opcoes: [{ value: "parcela", label: "de cada parcela" }, { value: "total", label: "total (dividir)" }] },
@@ -259,15 +267,22 @@ function comEmpresaItens(v: ContaPagarNovaForm, o: Opcoes): ContaPagarNovaForm {
 }
 
 /** Linhas placa / nota / valor do boleto único; confere a soma com o valor do boleto. */
-function EditorRateio({ itens, onChange, total, veiculos }: {
+function EditorRateio({ itens, onChange, total, veiculos, parcelas, modo }: {
   itens: ItemRateio[]; onChange: (v: ItemRateio[]) => void; total: number; veiculos: Opcoes["veiculos"];
+  /** parcelado: nº de parcelas (null = única) */
+  parcelas: number | null; modo: "parcela" | "total";
 }) {
   const alterar = (i: number, p: Partial<ItemRateio>) => onChange(itens.map((x, j) => (j === i ? { ...x, ...p } : x)));
   const soma = somar(itens.map((x) => x.valor ?? 0));
   const bate = Math.abs(soma - total) < 0.005;
+  const base = modo === "parcela" ? "de cada parcela" : "total (soma de todas as parcelas)";
   return (
     <div className="space-y-2 rounded-md border p-3">
-      <p className="text-xs text-muted-foreground">Cada linha vira uma conta na sua placa, com o mesmo fornecedor, vencimento e forma. Em <strong>Valor</strong> acima, informe o total do boleto.</p>
+      <p className="text-xs text-muted-foreground">
+        {parcelas
+          ? <>Cada placa vira o seu parcelamento ({parcelas}x), com o mesmo fornecedor, vencimentos e forma. Em <strong>Valor</strong> acima e em cada placa, informe o valor <strong>{base}</strong>, como escolhido em “O valor é”.</>
+          : <>Cada linha vira uma conta na sua placa, com o mesmo fornecedor, vencimento e forma. Em <strong>Valor</strong> acima, informe o total do boleto.</>}
+      </p>
       {itens.map((it, i) => {
         const locador = !!veiculos.find((x) => x.value === it.veiculo_id)?.locador;
         return (
@@ -312,9 +327,14 @@ function PreviaParcelas({ v }: { v: ContaPagarNovaForm }) {
   if (v.repeticao !== "parcelada" || !v.parcelas || v.parcelas < 2 || !v.valor || !v.vencimento) return null;
   try {
     const ps = gerarParcelas({ descricao: v.descricao || "Parcela", valor: v.valor, modo: v.modo_valor, total: v.parcelas, inicio: v.parcela_inicial ?? 1, primeiroVencimento: v.vencimento });
+    const placas = v.rateio && v.tipo === "veiculo" ? (v.itens ?? []).length : 0;
     return (
       <div className="rounded-md bg-muted p-3 text-sm">
-        <p className="mb-1 font-medium">{ps.length} lançamentos · total {formatBRL(somar(ps.map((p) => p.valor)))}</p>
+        <p className="mb-1 font-medium">
+          {placas > 1
+            ? `${ps.length} parcelas × ${placas} placas = ${ps.length * placas} lançamentos · total do boleto ${formatBRL(somar(ps.map((p) => p.valor)))}`
+            : `${ps.length} lançamentos · total ${formatBRL(somar(ps.map((p) => p.valor)))}`}
+        </p>
         <p className="text-xs text-muted-foreground">
           {ps.slice(0, 3).map((p) => `${p.descricao} — ${formatData(p.vencimento)} — ${formatBRL(p.valor)}`).join(" · ")}
           {ps.length > 3 && ` · … · ${ps.at(-1)!.descricao} — ${formatData(ps.at(-1)!.vencimento)}`}

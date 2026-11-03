@@ -56,7 +56,8 @@ export const contaPagarNovaSchema = z.object({
   if (v.rateio) {
     const erro = (message: string) => ctx.addIssue({ code: "custom", path: ["itens"], message });
     if (v.tipo !== "veiculo") return erro("Boleto com várias placas só em despesa de veículo");
-    if (v.repeticao !== "unica") return erro("Boleto com várias placas não pode ser parcelado nem recorrente");
+    // parcelado vale (cada placa vira o seu parcelamento n/N); recorrente não
+    if (v.repeticao === "recorrente") return erro("Boleto com várias placas não pode ser recorrente (use Única ou Parcelada)");
     if (v.itens.length < 2) return erro("Adicione pelo menos 2 placas");
     if (v.itens.some((i) => !i.veiculo_id)) return erro("Escolha a placa em todas as linhas");
     if (v.itens.some((i) => !i.valor || i.valor <= 0)) return erro("Informe o valor de cada placa");
