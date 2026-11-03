@@ -53,10 +53,20 @@ describe("NFS-e — montarDPS", () => {
     expect(xml).toContain("<cServ><cTribNac>160201</cTribNac><xDescServ>Locação de munck placa CVP-0414 — 23/10/2026</xDescServ></cServ>");
   });
 
-  it("valores: serviço com 2 casas, ISS tributável não retido a 3%, sem estimativa de tributos", () => {
+  it("valores: serviço com 2 casas, ISS tributável não retido, sem estimativa de tributos", () => {
     expect(xml).toContain("<vServPrest><vServ>1800.00</vServ></vServPrest>");
-    expect(xml).toContain("<tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN><pAliq>3.00</pAliq></tribMun>");
     expect(xml).toContain("<totTrib><indTotTrib>0</indTotTrib></totTrib>");
+  });
+
+  it("Simples e MEI sem retenção não informam alíquota (E0625)", () => {
+    expect(xml).toContain("<tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN></tribMun>");
+    const mei = montarDPS({ ...base, prestador: { ...base.prestador, regime: "mei" } });
+    expect(mei).not.toContain("<pAliq>");
+  });
+
+  it("regime normal informa a alíquota do ISS", () => {
+    const normal = montarDPS({ ...base, prestador: { ...base.prestador, regime: "normal" } });
+    expect(normal).toContain("<tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN><pAliq>3.00</pAliq></tribMun>");
   });
 
   it("escapa caracteres especiais do XML", () => {

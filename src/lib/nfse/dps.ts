@@ -54,6 +54,8 @@ export function montarDPS(d: DadosDPS): string {
   const discriminacao = [d.servico.descricao, d.servico.complemento].filter(Boolean).join("\n");
   const op = OP_SIMPLES[d.prestador.regime];
   const regTrib = `<regTrib><opSimpNac>${op}</opSimpNac>${op === 3 ? "<regApTribSN>1</regApTribSN>" : ""}<regEspTrib>0</regEspTrib></regTrib>`;
+  // ISS não retido (tpRetISSQN = 1): no Simples/MEI o ISS vai no DAS e a Sefin proíbe a alíquota (E0625); só o regime normal informa
+  const pAliq = d.prestador.regime === "normal" ? `<pAliq>${dec2(d.prestador.aliquotaIss)}</pAliq>` : "";
 
   return (
     `<DPS xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01">` +
@@ -68,7 +70,7 @@ export function montarDPS(d: DadosDPS): string {
     `<serv><locPrest><cLocPrestacao>${d.prestador.codigoIbge}</cLocPrestacao></locPrest>` +
     `<cServ><cTribNac>${cTribNac}</cTribNac>${cTribMun}<xDescServ>${esc(discriminacao.slice(0, 2000))}</xDescServ></cServ></serv>` +
     `<valores><vServPrest><vServ>${dec2(d.valor)}</vServ></vServPrest>` +
-    `<trib><tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN><pAliq>${dec2(d.prestador.aliquotaIss)}</pAliq></tribMun>` +
+    `<trib><tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN>${pAliq}</tribMun>` +
     `<totTrib><indTotTrib>0</indTotTrib></totTrib></trib></valores>` +
     `</infDPS></DPS>`
   );
