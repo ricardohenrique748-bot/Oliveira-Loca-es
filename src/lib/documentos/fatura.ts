@@ -2,7 +2,7 @@
  * Fatura de locação (antigo "boletim de medição") para enviar ao cliente.
  * Função pura: os dados chegam prontos e o PDF é desenhado por pdf.ts.
  */
-import { formatBRL, formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
+import { formatBRL, formatCompetencia, formatData, formatPeriodo, formatPlaca, maskCpfCnpj } from "@/lib/format";
 import { ROTULOS } from "@/lib/schemas/cadastros";
 import { FORMAS_FATURA, formatQuantidadeAvulsa, type FormaFatura, type ItemAvulsoSalvo, type ItemFatura } from "@/lib/schemas/operacao";
 import type { Bloco, Documento } from "./pdf";
@@ -22,7 +22,14 @@ export interface DadosFatura {
   unidade?: string | null;
   /** avulsa com vários itens: uma linha por item */
   itens?: ItemAvulsoSalvo[] | null;
-  empresa: EmpresaDoc; cliente: ClienteDoc;
+  empresa: EmpresaDoc; cliente: ClienteDoc & { cep?: string | null };
+}
+
+const cnpj = (v: string | null | undefined) => (v ? maskCpfCnpj(v) : "");
+/** endereço do cliente com o CEP no fim: "Av. Wilson Rosado, 1 · Planalto — Mossoró/RN · CEP 59633-629" */
+function enderecoComCep(c: DadosFatura["cliente"]): string {
+  const cep = (c.cep ?? "").replace(/\D/g, "");
+  return [enderecoCompleto(c), cep.length === 8 ? `CEP ${cep.slice(0, 5)}-${cep.slice(5)}` : ""].filter(Boolean).join(" · ");
 }
 
 // conta de recebimento impressa em toda fatura
@@ -56,10 +63,16 @@ export function montarFatura(d: DadosFatura): Documento {
 
   const blocos: Bloco[] = [
     { t: "titulo", texto: "FATURA DE LOCAÇÃO", sub: `Competência ${competencia}` },
+    // emitente: quem fatura (como no modelo antigo: razão social, endereço, CNPJ e a operação)
+    { t: "secao", texto: "Emitente" },
+    { t: "campos", colunas: 2, pares: [
+      ["Razão social", d.empresa.razao_social], ["CNPJ", cnpj(d.empresa.cnpj)],
+      ["Endereço", enderecoCompleto(d.empresa)], ["Operação", "Locação"],
+    ] },
     { t: "secao", texto: "Cliente" },
     { t: "campos", colunas: 2, pares: [
-      ["Razão social", d.cliente.razao_social], ["CNPJ/CPF", d.cliente.cnpj ?? ""],
-      ["Endereço", enderecoCompleto(d.cliente)], ["Obra", d.obra ?? ""],
+      ["Razão social", d.cliente.razao_social], ["CNPJ/CPF", cnpj(d.cliente.cnpj)],
+      ["Endereço", enderecoComCep(d.cliente)], ["Obra", d.obra ?? ""],
     ] },
     { t: "secao", texto: "Dados da fatura" },
     { t: "campos", colunas: 2, pares: [
@@ -76,7 +89,7 @@ export function montarFatura(d: DadosFatura): Documento {
     { t: "paragrafo", texto: DADOS_BANCARIOS },
     { t: "espaco", mm: 6 },
     { t: "assinaturas", partes: [
-      { titulo: d.empresa.razao_social, linhas: d.empresa.cnpj ? [`CNPJ ${d.empresa.cnpj}`] : [] },
+      { titulo: d.empresa.razao_social, linhas: d.empresa.cnpj ? [`CNPJ ${cnpj(d.empresa.cnpj)}`] : [] },
       { titulo: "De acordo — cliente", linhas: [d.cliente.razao_social] },
     ] },
   ];

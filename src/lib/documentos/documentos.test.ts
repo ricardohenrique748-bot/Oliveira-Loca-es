@@ -178,3 +178,26 @@ describe("recibo de repasse ao locador", () => {
     expect(t).toContain("acréscimos e descontos acima");
   });
 });
+
+describe("fatura — emitente e cliente completos", () => {
+  it("mostra razão social, endereço e CNPJ da empresa e o endereço com CEP do cliente", () => {
+    const d = montarFatura({
+      contrato_numero: "OL-008/26", tipo_cobranca: "mensal", base_dias: 30, periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 29,
+      valor_mensal: 8000, valor_base: 7733.33, acrescimos: 0, descontos: 0, valor_final: 7733.33, numero_nf: null, data_emissao: "2026-11-03", data_vencimento: "2026-11-30",
+      forma_pagamento: "pix", acrescimos_itens: [], descontos_itens: [], observacoes: "CONTRATO Nº355",
+      placa: "KAQ0H45", veiculo_tipo: "caminhao", obra: null,
+      empresa: { razao_social: "OLIVEIRA & OLIVEIRA RIO PRETO LTDA", cnpj: "44889430000181", endereco: "Rua Primavera, Quadra D Lote 22 · Condomínio Areia Branca",
+        cidade: "São José do Rio Preto", uf: "SP", contato_nome: null, telefone: null, email: null },
+      cliente: { razao_social: "CONSTRUTORA LUIZ COSTA LTDA", nome_fantasia: null, cnpj: "00779059000553", endereco: "Av. Wilson Rosado, 1 · Bairro do Planalto",
+        cidade: "Mossoró", uf: "RN", email: null, cep: "59633629" },
+    });
+    const t = texto(d);
+    expect(t).toContain("Emitente");
+    expect(t).toContain("OLIVEIRA & OLIVEIRA RIO PRETO LTDA");
+    expect(t).toContain("44.889.430/0001-81");
+    expect(t).toContain("Rua Primavera, Quadra D Lote 22 · Condomínio Areia Branca — São José do Rio Preto/SP");
+    expect(t).toContain("Locação");
+    expect(t).toContain("00.779.059/0005-53");
+    expect(t).toContain("Av. Wilson Rosado, 1 · Bairro do Planalto — Mossoró/RN · CEP 59633-629");
+  });
+});

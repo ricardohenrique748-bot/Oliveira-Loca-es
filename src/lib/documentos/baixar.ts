@@ -11,7 +11,7 @@ export type { ItemRecibo } from "./recibo-repasse";
 import { hojeSP } from "@/lib/calculos";
 
 const EMPRESA = "razao_social, cnpj, endereco, cidade, uf, contato_nome, telefone, email";
-const CLIENTE = "razao_social, nome_fantasia, cnpj, endereco, cidade, uf, email";
+const CLIENTE = "razao_social, nome_fantasia, cnpj, endereco, cidade, uf, email, cep";
 
 async function gerar(montar: () => Promise<Parameters<typeof baixarDocumentoPDF>[0] | null>) {
   try {
