@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, List, MoreHorizontal, Pencil, Plus, Repeat, StickyNote, Trash2, Undo2, UserMinus } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, List, MoreHorizontal, Pencil, Plus, Repeat, StickyNote, Trash2, Undo2, UserMinus, X } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Checkbox, Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,7 +109,10 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
   const [editando, setEditando] = React.useState<LinhaConta | null>(null);
   const [baixa, setBaixa] = React.useState<LinhaConta[] | null>(null);
   const [excluir, setExcluir] = React.useState<LinhaConta | null>(null);
-  const [diaSel, setDiaSel] = React.useState<string | null>(null);
+  // dia escolhido (filtro "Dia", calendário ou totais por dia): fica na URL; dia de outro mês troca o mês junto
+  const diaSel = url.get("dia");
+  const setDiaSel = (d: string | null) =>
+    url.set({ dia: d, id: null, ...(d && d.slice(0, 7) !== mes ? { mes: d.slice(0, 7) } : {}) });
 
   React.useEffect(() => {
     if (foco) { const c = linhas.find((l) => l.id === foco); if (c) setEditando(c); }
@@ -124,6 +127,8 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
     acc[k] = (acc[k] ?? 0) + l.valor;
     return acc;
   }, {})).sort((a, b) => b[1] - a[1]);
+
+  const filtradasDia = diaSel ? linhas.filter((l) => l.vencimento === diaSel) : linhas;
 
   const colunas = React.useMemo<ColumnDef<LinhaConta, unknown>[]>(() => [
     { accessorKey: "vencimento", header: "Vencimento", cell: ({ row: { original: c } }) => <span className={cn(c.status === "vencido" && "font-semibold text-status-critico")}>{formatData(c.vencimento)}</span> },
@@ -147,7 +152,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
       <span className="whitespace-nowrap"><span className="font-mono">{formatPlaca(c.placa)}</span>{c.descontar_locador && <Badge variant="info" className="ml-1" title={`Descontar do locador${c.valor_locador != null ? `: ${formatBRL(c.valor_locador)}` : ""}`}><UserMinus className="h-3 w-3" /> Locador{c.valor_locador != null && ` ${formatBRL(c.valor_locador)}`}</Badge>}</span>
     ) : <span className="text-muted-foreground">Fixa</span> },
     { id: "pagamento", header: "Forma / banco", cell: ({ row: { original: c } }) => <span className="text-sm">{FORMAS[c.forma_pagamento]}<span className="block text-xs text-muted-foreground">{c.conta_apelido ?? c.banco ?? "—"}</span></span> },
-    { accessorKey: "valor", header: "Valor", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number} className="font-semibold" />, footer: () => <Moeda valor={somar(linhas.map((l) => l.valor))} /> },
+    { accessorKey: "valor", header: "Valor", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number} className="font-semibold" />, footer: () => <Moeda valor={somar(filtradasDia.map((l) => l.valor))} /> },
     { accessorKey: "status", header: "Status", cell: ({ row: { original: c } }) => (
       <span><StatusBadge status={c.status} />{c.pago_em && <span className="block text-xs text-muted-foreground">{formatData(c.pago_em)}</span>}</span>
     ) },
@@ -166,9 +171,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
         </DropdownMenu>
       </div>
     ) : null },
-  ], [linhas, podeEditar, router]);
-
-  const filtradasDia = diaSel ? linhas.filter((l) => l.vencimento === diaSel) : linhas;
+  ], [filtradasDia, podeEditar, router]);
 
   return (
     <div className="space-y-4">
@@ -187,9 +190,16 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
         <div className="flex flex-col gap-1">
           <Label className="text-xs text-muted-foreground">Mês</Label>
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon-sm" aria-label="Mês anterior" onClick={() => url.set({ mes: addCompetencia(mes, -1), id: null })}><ChevronLeft /></Button>
-            <Input type="month" className="h-9 w-40" value={mes} onChange={(e) => e.target.value && url.set({ mes: e.target.value, id: null })} aria-label="Mês" />
-            <Button variant="outline" size="icon-sm" aria-label="Próximo mês" onClick={() => url.set({ mes: addCompetencia(mes, 1), id: null })}><ChevronRight /></Button>
+            <Button variant="outline" size="icon-sm" aria-label="Mês anterior" onClick={() => url.set({ mes: addCompetencia(mes, -1), id: null, dia: null })}><ChevronLeft /></Button>
+            <Input type="month" className="h-9 w-40" value={mes} onChange={(e) => e.target.value && url.set({ mes: e.target.value, id: null, dia: null })} aria-label="Mês" />
+            <Button variant="outline" size="icon-sm" aria-label="Próximo mês" onClick={() => url.set({ mes: addCompetencia(mes, 1), id: null, dia: null })}><ChevronRight /></Button>
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="filtro-dia" className="text-xs text-muted-foreground">Dia</Label>
+          <div className="flex items-center gap-1">
+            <Input id="filtro-dia" type="date" className="h-9 w-40" value={diaSel ?? ""} onChange={(e) => setDiaSel(e.target.value || null)} />
+            {diaSel && <Button variant="ghost" size="icon-sm" aria-label="Limpar dia" onClick={() => setDiaSel(null)}><X /></Button>}
           </div>
         </div>
         <FiltroSelectUrl param="status" rotulo="Status" opcoes={[{ value: "a_vencer", label: "A vencer" }, { value: "vencido", label: "Vencidas (todas)" }, { value: "pago", label: "Pagas" }]} />
