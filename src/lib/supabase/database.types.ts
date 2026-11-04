@@ -617,6 +617,8 @@ export type Database = {
           data_fim: string | null
           data_inicio: string
           dia_corte_inicio: number
+          dia_pagamento: number | null
+          data_pagamento: string | null
           empresa_id: string
           hora_fim: string | null
           hora_inicio: string | null
@@ -641,6 +643,8 @@ export type Database = {
           data_fim?: string | null
           data_inicio: string
           dia_corte_inicio?: number
+          dia_pagamento?: number | null
+          data_pagamento?: string | null
           empresa_id: string
           hora_fim?: string | null
           hora_inicio?: string | null
@@ -665,6 +669,8 @@ export type Database = {
           data_fim?: string | null
           data_inicio?: string
           dia_corte_inicio?: number
+          dia_pagamento?: number | null
+          data_pagamento?: string | null
           empresa_id?: string
           hora_fim?: string | null
           hora_inicio?: string | null
@@ -2352,6 +2358,7 @@ export type Database = {
           descontos_itens: Json | null
           descricao: string | null
           dia_corte_inicio: number | null
+          dia_pagamento: number | null
           dias: number | null
           dias_atraso: number | null
           empresa_apelido: string | null

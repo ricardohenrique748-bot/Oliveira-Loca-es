@@ -9,6 +9,7 @@ import {
   calcularDias,
   calcularPreventiva,
   calcularValorMedicao,
+  calcularVencimento,
   periodoContendo,
   periodoDaCompetencia,
   type DiaCorte,
@@ -706,5 +707,17 @@ describe("fatura avulsa com repasse ao locador", () => {
        values (null, $1, $2, '2026-11-02', '2026-11-02', 1, 500, $3::jsonb) returning id`,
       [cl.id, OLIVEIRA, JSON.stringify([{ veiculo_id: v.id, valor: 300 }])]);
     expect(await q("select 1 from public.repasses where medicao_id = $1", [m.id])).toHaveLength(0);
+  });
+});
+
+describe("vencimento por dia fixo (paridade SQL × TS)", () => {
+  it("app.calcular_vencimento bate com calcularVencimento", async () => {
+    const casos: [string, number, number | null][] = [
+      ["2026-10-31", 30, 10], ["2026-11-03", 30, 10], ["2026-12-15", 30, 5], ["2027-01-20", 30, 31], ["2026-10-20", 30, 31], ["2026-11-03", 30, null], ["2026-02-28", 15, null],
+    ];
+    for (const [emissao, prazo, dia] of casos) {
+      const [r] = await q<{ v: string }>("select app.calcular_vencimento($1::date, $2, $3)::text as v", [emissao, prazo, dia]);
+      expect(r.v, `${emissao} ${prazo} ${dia}`).toBe(calcularVencimento(emissao, prazo, dia));
+    }
   });
 });

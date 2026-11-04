@@ -33,7 +33,7 @@ export type LinhaMedicao = {
   id: string; contrato_id: string | null; empresa_id: string; empresa_apelido: string; periodo_inicio: string; periodo_fim: string; competencia: string;
   dias: number; valor_mensal: number; valor_base: number; acrescimos: number; descontos: number; valor_final: number; numero_nf: string | null;
   data_emissao: string | null; data_vencimento: string | null; status: string; status_exibicao: string; observacoes: string | null; final: boolean;
-  cliente_id: string; cliente_fantasia: string; obra_nome: string | null; placa: string | null; proprietario: string | null; prazo_pagamento_dias: number | null;
+  cliente_id: string; cliente_fantasia: string; obra_nome: string | null; placa: string | null; proprietario: string | null; prazo_pagamento_dias: number | null; dia_pagamento?: number | null;
   dia_corte_inicio: number; valor_recebido: number; repasse_liquido: number | null; margem: number;
   contrato_numero: string | number | null; cliente_nome: string | null; veiculo_tipo: string | null; saldo: number;
   tipo_cobranca: TipoCobrancaFatura | null; descricao: string | null; unidade: string | null; numero_os: string | null; forma_pagamento: string | null; acrescimos_itens: ItemFatura[] | null; descontos_itens: ItemFatura[] | null;
@@ -89,7 +89,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
       const atual: Partial<Editavel> = { ...(e[m.id] ?? {}), [k]: v };
       // emissão alterada e vencimento não mexido → recalcula vencimento (emissão + prazo)
       if (k === "data_emissao" && m.prazo_pagamento_dias != null && !("data_vencimento" in (e[m.id] ?? {}) && e[m.id]!.data_vencimento !== m.data_vencimento)) {
-        atual.data_vencimento = calcularVencimento(v as string | null, m.prazo_pagamento_dias);
+        atual.data_vencimento = calcularVencimento(v as string | null, m.prazo_pagamento_dias, m.dia_pagamento);
       }
       return { ...e, [m.id]: atual };
     });
@@ -594,7 +594,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
               ? item("Veículo", `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)
               : temItens(m) ? item("Serviço", `${m.itens!.length === 1 ? m.itens![0].descricao : `${m.itens!.length} itens`}${m.placa ? ` · ${formatPlaca(m.placa)}` : ""}`)
               : item("Serviço", `${m.descricao ?? ""}${m.placa ? ` · ${formatPlaca(m.placa)}${m.veiculo_tipo ? ` (${m.veiculo_tipo})` : ""}` : ""}`)}
-            {m.contrato_id && item("Prazo de pagamento", `${m.prazo_pagamento_dias} dias`)}
+            {m.contrato_id && item("Pagamento", m.dia_pagamento ? `Todo dia ${m.dia_pagamento} do mês seguinte` : `${m.prazo_pagamento_dias} dias`)}
           </div>
           <div className="rounded-md border">
             <Table>

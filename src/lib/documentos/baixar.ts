@@ -52,7 +52,7 @@ export function baixarPropostaPDF(id: string) {
 export function baixarContratoPDF(id: string) {
   return gerar(async () => {
     const { data: c, error } = await createClient().from("contratos")
-      .select(`numero, tipo_cobranca, valor_mensal, dia_corte_inicio, prazo_pagamento_dias, data_inicio, data_fim,
+      .select(`numero, tipo_cobranca, valor_mensal, dia_corte_inicio, prazo_pagamento_dias, dia_pagamento, data_inicio, data_fim,
         empresas(${EMPRESA}), clientes(${CLIENTE}), obras(nome),
         veiculos(placa, marca, modelo, ano, chassi, cor, km_atual, horimetro_atual, proprietario)`)
       .eq("id", id).maybeSingle();

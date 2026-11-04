@@ -16,6 +16,8 @@ const contratoBase = z.object({
   valor_repasse_mensal: moedaOpc,
   dia_corte_inicio: z.coerce.number().refine((v) => v === 1 || v === 21, "Corte deve ser dia 1 ou 21"),
   prazo_pagamento_dias: z.number({ invalid_type_error: "Informe o prazo" }).int().min(0).max(365),
+  /** data do pagamento: preenchida, a fatura vence nesse dia do mês seguinte à emissão (o prazo em dias deixa de valer) */
+  data_pagamento: dataOpc,
   data_inicio: dataObr("a data de início"),
   data_fim: dataOpc,
   /** por hora: horário do dia (as horas da fatura saem daqui) */
@@ -36,7 +38,9 @@ const validarDatas = (c: { data_inicio: string; data_fim: string | null; tipo_co
 };
 
 /** o que é gravado em contratos */
-export const contratoSchema = contratoBase.superRefine(validarDatas);
+export const contratoSchema = contratoBase.superRefine(validarDatas)
+  // o dia da data do pagamento é o que vale no vencimento (app.calcular_vencimento usa dia_pagamento)
+  .transform((c) => ({ ...c, dia_pagamento: c.data_pagamento ? Number(c.data_pagamento.slice(8, 10)) : null }));
 
 /** formulário: aceita cliente sem cadastro (CLIENTE_NOVO + nome digitado), que é cadastrado ao salvar */
 export const contratoFormSchema = contratoBase.extend(clienteFormCampos).superRefine((c, ctx) => {

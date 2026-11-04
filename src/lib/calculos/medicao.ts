@@ -146,8 +146,16 @@ export function horasEntre(inicio: string, fim: string): number {
 }
 
 /** Vencimento = emissão + prazo (dias corridos). */
-export function calcularVencimento(dataEmissao: ISODate | null | undefined, prazoDias: number): ISODate | null {
-  return dataEmissao ? addDias(dataEmissao, prazoDias) : null;
+/**
+ * Vencimento da fatura: com dia fixo, esse dia do mês seguinte ao da emissão (dia 31 em mês curto = último dia);
+ * sem dia fixo, emissão + prazo em dias. Espelho de app.calcular_vencimento (0065).
+ */
+export function calcularVencimento(dataEmissao: ISODate | null | undefined, prazoDias: number, diaPagamento?: number | null): ISODate | null {
+  if (!dataEmissao) return null;
+  if (!diaPagamento) return addDias(dataEmissao, prazoDias);
+  const ano = Number(dataEmissao.slice(0, 4)), mes = Number(dataEmissao.slice(5, 7)); // mês seguinte = índice mes (0-based)
+  const ultimo = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(ano, mes, Math.min(diaPagamento, ultimo))).toISOString().slice(0, 10) as ISODate;
 }
 
 export type StatusMedicao = "a_faturar" | "faturado" | "recebido_parcial" | "recebido" | "cancelado";

@@ -10,6 +10,8 @@ import type { Bloco, Documento } from "./pdf";
 
 export interface DadosContrato {
   numero: string | null; tipo_cobranca: "mensal" | "diaria" | "hora"; valor_mensal: number; dia_corte_inicio: number; prazo_pagamento_dias: number;
+  /** vencimento por dia fixo do mês seguinte à emissão (no lugar do prazo em dias) */
+  dia_pagamento?: number | null;
   data_inicio: string; data_fim: string | null; obra: string | null;
   empresa: EmpresaDoc; cliente: ClienteDoc;
   veiculo: {
@@ -50,7 +52,9 @@ export function montarContrato(c: DadosContrato): Documento {
   const periodo = c.dia_corte_inicio === 21
     ? "o período compreendido entre o dia 21 (vinte e um) de cada mês e o dia 20 (vinte) do mês seguinte"
     : "o período compreendido entre o primeiro e o último dia de cada mês";
-  const pagamento = `${extensoDias(c.prazo_pagamento_dias)} dias contados da emissão da respectiva fatura`;
+  const pagamento = c.dia_pagamento
+    ? `todo dia ${extensoDias(c.dia_pagamento)} do mês seguinte ao da emissão da respectiva fatura`
+    : `${extensoDias(c.prazo_pagamento_dias)} dias contados da emissão da respectiva fatura`;
   const veiculoCurto = [v.marca, v.modelo, v.ano && `(${v.ano})`].filter(Boolean).join(" ") + ` — Placa ${formatPlaca(v.placa)}`;
   const comMotorista = v.proprietario === "proprio";
   const enderecoCli = enderecoCompleto(cli) || "[ENDEREÇO COMPLETO]";
@@ -75,7 +79,7 @@ export function montarContrato(c: DadosContrato): Documento {
       ["Prazo", `${prazoDias != null ? `${prazoDias} dias` : "Indeterminado"} — cláusula 2`],
       [diaria ? "Valor da diária" : hora ? "Valor da hora" : "Valor mensal", `${formatBRL(c.valor_mensal)} por veículo/equipamento — cláusula 3`],
       ["Mobilização/desmobilização", `Retirada e devolução em ${local} — cláusula 3`],
-      ["Pagamento", `${c.prazo_pagamento_dias} dias após emissão da fatura, mediante medição mensal — cláusula 4`],
+      ["Pagamento", `${c.dia_pagamento ? `Todo dia ${c.dia_pagamento} do mês seguinte à emissão da fatura` : `${c.prazo_pagamento_dias} dias após emissão da fatura`}, mediante medição mensal — cláusula 4`],
       ["Foro", `Comarca de ${local} — cláusula 24`],
     ] },
 
@@ -112,7 +116,7 @@ export function montarContrato(c: DadosContrato): Documento {
       "Serão realizadas medições mensais.",
       `A medição mensal será realizada tomando-se por base ${periodo}.`,
       `A LOCATÁRIA deverá enviar ou validar a medição até o 5º (quinto) dia ${c.dia_corte_inicio === 21 ? "após o fechamento de cada período" : "do mês subsequente"}.`,
-      `O pagamento será efetuado no prazo de ${pagamento}/nota fiscal, por transferência bancária para conta indicada pela LOCADORA.`,
+      `O pagamento será efetuado ${c.dia_pagamento ? "" : "no prazo de "}${pagamento}/nota fiscal, por transferência bancária para conta indicada pela LOCADORA.`,
       "A ausência de manifestação da LOCATÁRIA sobre a medição apresentada, dentro de 05 dias úteis de seu recebimento, autorizará a LOCADORA a solicitar formalmente sua validação, sem prejuízo da comprovação do período efetivamente disponibilizado por outros documentos operacionais.",
       "Eventual divergência sobre parte da medição deverá ser comunicada por escrito e de forma fundamentada, não autorizando a retenção de valores incontroversos.",
       "O atraso de qualquer pagamento sujeitará a LOCATÁRIA, independentemente de notificação, ao pagamento de multa moratória de 2% (dois por cento) sobre o débito, juros de mora de 1% (um por cento) ao mês, calculados proporcionalmente aos dias de atraso, e atualização monetária pelo IPCA, ou índice oficial que venha a substituí-lo.",

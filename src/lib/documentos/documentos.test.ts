@@ -201,3 +201,12 @@ describe("fatura — emitente e cliente completos", () => {
     expect(t).toContain("Av. Wilson Rosado, 1 · Bairro do Planalto — Mossoró/RN · CEP 59633-629");
   });
 });
+
+describe("contrato — pagamento por dia fixo", () => {
+  it("cláusula e quadro com o dia do mês seguinte", () => {
+    const t = texto(montarContrato({ ...contrato, dia_pagamento: 10 }));
+    expect(t).toContain("O pagamento será efetuado todo dia 10 (dez) do mês seguinte ao da emissão da respectiva fatura/nota fiscal");
+    expect(t).toContain("Todo dia 10 do mês seguinte à emissão da fatura");
+    expect(texto(montarContrato(contrato))).toContain("no prazo de 15 (quinze) dias contados da emissão");
+  });
+});

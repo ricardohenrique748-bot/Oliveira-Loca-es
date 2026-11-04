@@ -231,3 +231,19 @@ describe("horasEntre", () => {
     expect(horasEntre("22:00", "02:00")).toBe(4);
   });
 });
+
+describe("vencimento por dia fixo do mês seguinte", () => {
+  it("dia 10: vence no dia 10 do mês seguinte à emissão", () => {
+    expect(calcularVencimento("2026-10-31", 30, 10)).toBe("2026-11-10");
+    expect(calcularVencimento("2026-11-03", 30, 10)).toBe("2026-12-10");
+    expect(calcularVencimento("2026-12-15", 30, 5)).toBe("2027-01-05");
+  });
+  it("dia 31 em mês curto: último dia do mês", () => {
+    expect(calcularVencimento("2027-01-20", 30, 31)).toBe("2027-02-28");
+    expect(calcularVencimento("2026-10-20", 30, 31)).toBe("2026-11-30");
+  });
+  it("sem dia fixo: emissão + prazo, como antes", () => {
+    expect(calcularVencimento("2026-11-03", 30, null)).toBe("2026-12-03");
+    expect(calcularVencimento(null, 30, 10)).toBeNull();
+  });
+});

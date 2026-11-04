@@ -18,7 +18,7 @@ export default function ContratosPage() {
     const p = lerParams(searchParams, { ordem: "data_inicio", desc: true });
     const supabase = createClient();
     let q = supabase.from("contratos")
-      .select(`id, numero, empresa_id, cliente_id, obra_id, veiculo_id, tipo_cobranca, valor_mensal, valor_repasse_mensal, dia_corte_inicio, prazo_pagamento_dias,
+      .select(`id, numero, empresa_id, cliente_id, obra_id, veiculo_id, tipo_cobranca, valor_mensal, valor_repasse_mensal, dia_corte_inicio, prazo_pagamento_dias, dia_pagamento, data_pagamento,
         data_inicio, data_fim, hora_inicio, hora_fim, data_desmobilizacao, status, observacoes, anexo_url,
         empresas(apelido), clientes(razao_social, nome_fantasia), obras(nome), veiculos!inner(placa, modelo, proprietario)`, { count: "exact" });
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
@@ -46,6 +46,8 @@ export default function ContratosPage() {
         valor_repasse_mensal: c.valor_repasse_mensal,
         dia_corte_inicio: c.dia_corte_inicio,
         prazo_pagamento_dias: c.prazo_pagamento_dias,
+        dia_pagamento: c.dia_pagamento,
+        data_pagamento: c.data_pagamento,
         data_inicio: c.data_inicio,
         data_fim: c.data_fim,
         hora_inicio: c.hora_inicio?.slice(0, 5) ?? null,
