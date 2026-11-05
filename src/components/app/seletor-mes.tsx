@@ -8,10 +8,12 @@ const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "o
 const MESES_LONGO = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 /** Seletor de mês (valor "AAAA-MM") com calendário: setas para o ano e grade dos 12 meses. */
-export function SeletorMes({ id, value, onChange, min, max, className }: {
+export function SeletorMes({ id, value, onChange, min, max, className, limpavel }: {
   id?: string; value: string; onChange: (v: string) => void;
   /** limites opcionais "AAAA-MM": meses fora ficam desabilitados */
   min?: string; max?: string; className?: string;
+  /** mostra "Limpar" (chama onChange("")) — útil em filtros opcionais */
+  limpavel?: boolean;
 }) {
   const [aberto, setAberto] = React.useState(false);
   const anoValor = Number(value.slice(0, 4)) || new Date().getFullYear();
@@ -51,8 +53,14 @@ export function SeletorMes({ id, value, onChange, min, max, className }: {
             );
           })}
         </div>
-        <button type="button" className="mt-2 w-full rounded-md py-1.5 text-xs text-muted-foreground hover:bg-accent"
-          onClick={() => { onChange(atual); setAberto(false); }}>Este mês</button>
+        <div className="mt-2 flex gap-1">
+          {limpavel && (
+            <button type="button" className="flex-1 rounded-md py-1.5 text-xs text-muted-foreground hover:bg-accent"
+              onClick={() => { onChange(""); setAberto(false); }}>Limpar</button>
+          )}
+          <button type="button" className="flex-1 rounded-md py-1.5 text-xs text-muted-foreground hover:bg-accent"
+            onClick={() => { onChange(atual); setAberto(false); }}>Este mês</button>
+        </div>
       </PopoverContent>
     </Popover>
   );

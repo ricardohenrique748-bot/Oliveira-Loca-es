@@ -16,6 +16,7 @@ import { DataTable } from "@/components/app/data-table";
 import { Formulario, type Campo } from "@/components/app/formulario";
 import { BarraFiltros, BuscaUrl, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
 import { InputMoeda } from "@/components/app/campos";
+import { SeletorMes } from "@/components/app/seletor-mes";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { addCompetencia, addDias, gerarParcelas, hojeSP, somar } from "@/lib/calculos";
 import { formatBRL, formatCompetencia, formatData, formatPlaca } from "@/lib/format";
@@ -191,7 +192,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
           <Label className="text-xs text-muted-foreground">Mês</Label>
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon-sm" aria-label="Mês anterior" onClick={() => url.set({ mes: addCompetencia(mes, -1), id: null, dia: null })}><ChevronLeft /></Button>
-            <Input type="month" className="h-9 w-40" value={mes} onChange={(e) => e.target.value && url.set({ mes: e.target.value, id: null, dia: null })} aria-label="Mês" />
+            <SeletorMes className="h-9 w-48 whitespace-nowrap" value={mes} onChange={(v) => v && url.set({ mes: v, id: null, dia: null })} />
             <Button variant="outline" size="icon-sm" aria-label="Próximo mês" onClick={() => url.set({ mes: addCompetencia(mes, 1), id: null, dia: null })}><ChevronRight /></Button>
           </div>
         </div>

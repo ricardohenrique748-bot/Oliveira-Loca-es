@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { Label } from "@/components/ui/basicos";
+import { SeletorMes } from "@/components/app/seletor-mes";
 import { cn } from "@/lib/utils";
 
 /** Lê/escreve parâmetros da URL (filtros, paginação). Mudar filtro volta para a página 1. */
@@ -71,7 +72,9 @@ export function FiltroDataUrl({ param, rotulo, tipo = "date" }: { param: string;
   return (
     <div className="flex flex-col gap-1">
       <Label htmlFor={`f-${param}`} className="text-xs text-muted-foreground">{rotulo}</Label>
-      <Input id={`f-${param}`} type={tipo} className="h-9 w-40" value={get(param) ?? ""} onChange={(e) => set({ [param]: e.target.value || null })} />
+      {tipo === "month"
+        ? <SeletorMes id={`f-${param}`} limpavel className="h-9 w-48 whitespace-nowrap" value={get(param) ?? ""} onChange={(v) => set({ [param]: v || null })} />
+        : <Input id={`f-${param}`} type={tipo} className="h-9 w-40" value={get(param) ?? ""} onChange={(e) => set({ [param]: e.target.value || null })} />}
     </div>
   );
 }

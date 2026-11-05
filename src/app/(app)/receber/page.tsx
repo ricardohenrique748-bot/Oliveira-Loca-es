@@ -51,8 +51,9 @@ export default function ReceberPage() {
       const prox = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, "0")}`;
       q = q.gte("data_emissao", `${mesFat}-01`).lt("data_emissao", `${prox}-01`);
     }
-    const nf = p.get("nf")?.replace(/[^\w]/g, "");
-    if (nf) q = q.ilike("numero_nf", `%${nf}%`);
+    // nº da fatura: NF, nº do contrato (ex.: TD-013/26, o que sai no cabeçalho do PDF) ou nº da OS da avulsa
+    const nf = p.get("nf")?.trim().replace(/[^\w\-/]/g, "");
+    if (nf) q = q.or(`numero_nf.ilike.%${nf}%,contrato_numero.ilike.%${nf}%,numero_os.ilike.%${nf}%`);
     // sem contrato = fatura avulsa (contrato_id nulo)
     if (p.get("contrato") === "com") q = q.not("contrato_id", "is", null);
     else if (p.get("contrato") === "sem") q = q.is("contrato_id", null);

@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { Input } from "@/components/ui/input";
+import { SeletorMes } from "@/components/app/seletor-mes";
 import { Label } from "@/components/ui/basicos";
 import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { BarraFiltros, BuscaUrl, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
@@ -21,7 +21,7 @@ export function FiltrosDashboard({ empresas, empresaId, mes, clientes }: { empre
       </div>
       <div className="flex flex-col gap-1">
         <Label htmlFor="dash-mes" className="text-xs text-muted-foreground">Período</Label>
-        <Input id="dash-mes" type="month" className="h-9 w-40" value={mes} onChange={(e) => url.set({ mes: e.target.value || null })} />
+        <SeletorMes id="dash-mes" className="h-9 w-48 whitespace-nowrap" value={mes} onChange={(v) => url.set({ mes: v || null })} />
       </div>
       <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={clientes} />
       <div className="flex flex-col gap-1">

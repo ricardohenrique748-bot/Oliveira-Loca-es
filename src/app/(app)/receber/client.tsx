@@ -170,7 +170,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
         <FiltroDataUrl param="mes_fat" rotulo="Mês faturado" tipo="month" />
         <div className="flex flex-col gap-1">
           <Label className="text-xs text-muted-foreground">Nº da fatura</Label>
-          <BuscaUrl param="nf" placeholder="Nº da NF…" className="sm:w-36" />
+          <BuscaUrl param="nf" placeholder="NF ou TD-013/26…" className="sm:w-44" />
         </div>
         <FiltroDataUrl param="venc_de" rotulo="Vencimento de" />
         <FiltroDataUrl param="venc_ate" rotulo="Vencimento até" />
