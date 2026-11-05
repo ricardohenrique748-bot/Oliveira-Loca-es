@@ -8,6 +8,7 @@ import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { opcoesContrato } from "../dados";
 import { DetalheContrato } from "./client";
+import type { DadosAssinatura } from "./assinatura";
 
 export default function ContratoDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -17,20 +18,24 @@ export default function ContratoDetalhePage() {
     if (!id) return null;
     const s = await exigirSessao("contratos");
     const supabase = createClient();
-    const { data: c } = await supabase
+    const { data: c, error } = await supabase
       .from("contratos")
       .select(`id, numero, empresa_id, cliente_id, obra_id, veiculo_id, tipo_cobranca, valor_mensal, valor_repasse_mensal, dia_corte_inicio, prazo_pagamento_dias, dia_pagamento, data_pagamento,
         data_inicio, data_fim, hora_inicio, hora_fim, data_desmobilizacao, status, observacoes, anexo_url, empresas(apelido), clientes(razao_social, nome_fantasia), obras(nome), veiculos!inner(placa, modelo, proprietario)`)
       .eq("id", id)
       .maybeSingle();
 
-    if (!c) return { naoEncontrado: true } as const;
+    // erro de consulta não é "não encontrado": mostra o motivo
+    if (error) return { naoEncontrado: true, erro: error.message } as const;
+    if (!c) return { naoEncontrado: true, erro: null } as const;
 
-    const [{ data: medicoes }, opcoes, cfg] = await Promise.all([
+    const [{ data: medicoes }, opcoes, cfg, { data: ass, error: errAss }] = await Promise.all([
       supabase.from("medicoes_v").select("id, periodo_inicio, periodo_fim, dias, valor_final, acrescimos, descontos, numero_nf, data_emissao, data_vencimento, status_exibicao, valor_recebido, repasse_liquido, margem, final")
         .eq("contrato_id", id).order("periodo_inicio", { ascending: false }),
       opcoesContrato(supabase, null),
       getConfig(),
+      // separado: se a migration 0067 (assinatura) ainda não estiver no banco, o contrato abre mesmo assim, só sem a assinatura
+      supabase.from("contratos").select("assinatura_status, assinatura_signatario, assinatura_enviada_em, assinatura_concluida_em, assinatura_arquivo").eq("id", id).maybeSingle(),
     ]);
 
     return {
@@ -64,6 +69,11 @@ export default function ContratoDetalhePage() {
         modelo: c.veiculos.modelo,
         proprietario: c.veiculos.proprietario,
       },
+      assinatura: errAss ? null : {
+        id: c.id, cliente_id: c.cliente_id,
+        assinatura_status: (ass?.assinatura_status ?? null) as DadosAssinatura["assinatura_status"], assinatura_signatario: ass?.assinatura_signatario ?? null,
+        assinatura_enviada_em: ass?.assinatura_enviada_em ?? null, assinatura_concluida_em: ass?.assinatura_concluida_em ?? null, assinatura_arquivo: ass?.assinatura_arquivo ?? null,
+      } satisfies DadosAssinatura,
       medicoes: (medicoes ?? []) as never,
       opcoes,
       empresas: s.empresas.map((e) => ({ value: e.id, label: e.apelido })),
@@ -77,7 +87,7 @@ export default function ContratoDetalhePage() {
   if (data.naoEncontrado) {
     return (
       <div className="py-12 text-center space-y-4">
-        <p className="text-muted-foreground">Contrato não encontrado.</p>
+        <p className="text-muted-foreground">{data.erro ? `Não foi possível abrir o contrato: ${data.erro}` : "Contrato não encontrado."}</p>
         <Link to="/contratos" className="text-primary-ink underline">Voltar para contratos</Link>
       </div>
     );

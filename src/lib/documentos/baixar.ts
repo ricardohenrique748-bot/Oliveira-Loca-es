@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { montarContrato, type DadosContrato } from "./contrato";
 import { montarFatura, type DadosFatura } from "./fatura";
 import { montarProposta, type DadosProposta } from "./proposta";
-import { baixarDocumentoPDF } from "./pdf";
+import { baixarDocumentoPDF, documentoPDFBase64 } from "./pdf";
 import { montarReciboDescontos, montarReciboRepasse, type DadosReciboRepasse } from "./recibo-repasse";
 export type { ItemRecibo } from "./recibo-repasse";
 import { hojeSP } from "@/lib/calculos";
@@ -50,22 +50,31 @@ export function baixarPropostaPDF(id: string) {
 }
 
 export function baixarContratoPDF(id: string) {
-  return gerar(async () => {
-    const { data: c, error } = await createClient().from("contratos")
-      .select(`numero, tipo_cobranca, valor_mensal, dia_corte_inicio, prazo_pagamento_dias, dia_pagamento, data_inicio, data_fim,
-        empresas(${EMPRESA}), clientes(${CLIENTE}), obras(nome),
-        veiculos(placa, marca, modelo, ano, chassi, cor, km_atual, horimetro_atual, proprietario)`)
-      .eq("id", id).maybeSingle();
-    if (error) throw error;
-    if (!c?.empresas || !c.clientes || !c.veiculos) return null;
-    const dados: DadosContrato = {
-      ...c,
-      tipo_cobranca: c.tipo_cobranca as DadosContrato["tipo_cobranca"], valor_mensal: Number(c.valor_mensal),
-      empresa: c.empresas, cliente: c.clientes, obra: c.obras?.nome ?? null,
-      veiculo: { ...c.veiculos, km_atual: Number(c.veiculos.km_atual), horimetro_atual: Number(c.veiculos.horimetro_atual) },
-    };
-    return montarContrato(dados);
-  });
+  return gerar(() => documentoContrato(id));
+}
+
+/** PDF do contrato em base64, para mandar à Clicksign */
+export async function contratoPDFBase64(id: string): Promise<string> {
+  const d = await documentoContrato(id);
+  if (!d) throw new Error("Contrato sem empresa, cliente ou veículo");
+  return documentoPDFBase64(d);
+}
+
+async function documentoContrato(id: string) {
+  const { data: c, error } = await createClient().from("contratos")
+    .select(`numero, tipo_cobranca, valor_mensal, dia_corte_inicio, prazo_pagamento_dias, dia_pagamento, data_inicio, data_fim,
+      empresas(${EMPRESA}), clientes(${CLIENTE}), obras(nome),
+      veiculos(placa, marca, modelo, ano, chassi, cor, km_atual, horimetro_atual, proprietario)`)
+    .eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!c?.empresas || !c.clientes || !c.veiculos) return null;
+  const dados: DadosContrato = {
+    ...c,
+    tipo_cobranca: c.tipo_cobranca as DadosContrato["tipo_cobranca"], valor_mensal: Number(c.valor_mensal),
+    empresa: c.empresas, cliente: c.clientes, obra: c.obras?.nome ?? null,
+    veiculo: { ...c.veiculos, km_atual: Number(c.veiculos.km_atual), horimetro_atual: Number(c.veiculos.horimetro_atual) },
+  };
+  return montarContrato(dados);
 }
 
 export function baixarFaturaPDF(id: string, baseDias: number) {

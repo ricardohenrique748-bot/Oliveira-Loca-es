@@ -610,6 +610,13 @@ export type Database = {
       contratos: {
         Row: {
           anexo_url: string | null
+          assinatura_arquivo: string | null
+          assinatura_concluida_em: string | null
+          assinatura_documento_id: string | null
+          assinatura_enviada_em: string | null
+          assinatura_envelope_id: string | null
+          assinatura_signatario: string | null
+          assinatura_status: string | null
           cliente_id: string
           created_at: string
           created_by: string | null
@@ -636,6 +643,13 @@ export type Database = {
         }
         Insert: {
           anexo_url?: string | null
+          assinatura_arquivo?: string | null
+          assinatura_concluida_em?: string | null
+          assinatura_documento_id?: string | null
+          assinatura_enviada_em?: string | null
+          assinatura_envelope_id?: string | null
+          assinatura_signatario?: string | null
+          assinatura_status?: string | null
           cliente_id: string
           created_at?: string
           created_by?: string | null
@@ -662,6 +676,13 @@ export type Database = {
         }
         Update: {
           anexo_url?: string | null
+          assinatura_arquivo?: string | null
+          assinatura_concluida_em?: string | null
+          assinatura_documento_id?: string | null
+          assinatura_enviada_em?: string | null
+          assinatura_envelope_id?: string | null
+          assinatura_signatario?: string | null
+          assinatura_status?: string | null
           cliente_id?: string
           created_at?: string
           created_by?: string | null

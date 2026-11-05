@@ -72,6 +72,15 @@ export async function baixarDocumentoPDF(d: Documento) {
   await entregarArquivo(doc.output("blob"), `${d.arquivo.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w-]+/g, "_")}.pdf`);
 }
 
+/** o mesmo PDF do download, em base64 puro (sem "data:"), para enviar à assinatura eletrônica */
+export async function documentoPDFBase64(d: Documento): Promise<string> {
+  const doc = await renderizarPDF(d, await carregarLogo());
+  const bytes = new Uint8Array(doc.output("arraybuffer"));
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 /** desenha o documento; `imgLogo` é um data URL JPEG (sem ele, sai o nome da marca em texto) */
 export async function renderizarPDF(d: Documento, imgLogo: string | null): Promise<JsPDF> {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);

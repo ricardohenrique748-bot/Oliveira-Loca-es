@@ -20,6 +20,7 @@ import { salvarContrato } from "../actions";
 import { camposContrato, DialogoDesmobilizar, DialogoRenovar, valoresContrato, type ContratoFormTela, type LinhaContrato } from "../client";
 import type { OpcoesContrato } from "../dados";
 import { DialogoLancarMedicao } from "../../medicoes/lancar";
+import { BotaoEnviarAssinatura, SituacaoAssinatura, type DadosAssinatura } from "./assinatura";
 
 type Medicao = {
   id: string; periodo_inicio: string; periodo_fim: string; dias: number; valor_final: number; acrescimos: number; descontos: number;
@@ -40,8 +41,8 @@ const colunas: ColumnDef<Medicao, unknown>[] = [
   { accessorKey: "status_exibicao", header: "Status", cell: ({ getValue }) => <StatusBadge status={getValue() as string} /> },
 ];
 
-export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeEditar, podeLancar, baseDias }: {
-  contrato: LinhaContrato; medicoes: Medicao[]; opcoes: OpcoesContrato; empresas: Opcao[]; podeEditar: boolean; podeLancar: boolean; baseDias: number;
+export function DetalheContrato({ contrato: c, assinatura, medicoes, opcoes, empresas, podeEditar, podeLancar, baseDias }: {
+  contrato: LinhaContrato; assinatura: DadosAssinatura | null; medicoes: Medicao[]; opcoes: OpcoesContrato; empresas: Opcao[]; podeEditar: boolean; podeLancar: boolean; baseDias: number;
 }) {
   const router = useRouter();
   const [editando, setEditando] = React.useState(false);
@@ -61,6 +62,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
         acoes={<>
           <StatusBadge status={c.status} className="text-sm" />
           <Button variant="outline" size="sm" onClick={() => baixarContratoPDF(c.id)}><FileDown /> PDF do contrato</Button>
+          {assinatura && podeEditar && c.status !== "encerrado" && <BotaoEnviarAssinatura c={assinatura} />}
           {podeEditar && <Button variant="outline" size="sm" onClick={() => setEditando(true)}><Pencil /> Editar</Button>}
           {podeEditar && c.status === "ativo" && <Button variant="outline" size="sm" onClick={() => setDesmob(true)}><LogOut /> Desmobilizar</Button>}
           {/* diária / hora vale um dia: mais dias só renovando */}
@@ -86,6 +88,7 @@ export function DetalheContrato({ contrato: c, medicoes, opcoes, empresas, podeE
             <div><dt className="text-xs text-muted-foreground">{c.data_desmobilizacao ? "Desmobilização" : avulsa ? "Último dia" : "Término previsto"}</dt><dd>{formatData(c.data_desmobilizacao ?? c.data_fim)}</dd></div>
             <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Veículo</dt>
               <dd><Link className="underline" href={`/cadastros/veiculos/${c.veiculo_id}`}>{formatPlaca(c.placa)} {c.modelo}</Link>{c.proprietario === "locador" ? " (sublocado · sem motorista)" : " (frota própria · com motorista)"}</dd></div>
+            {assinatura && <SituacaoAssinatura c={assinatura} />}
             {c.anexo_url && <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Contrato do cliente</dt><dd><LinkAnexo referencia={c.anexo_url} /></dd></div>}
             {c.observacoes && <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Observações</dt><dd className="whitespace-pre-wrap">{c.observacoes}</dd></div>}
           </dl>
