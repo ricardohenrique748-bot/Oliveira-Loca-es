@@ -44,6 +44,20 @@ export default function ReceberPage() {
     }
     if (p.get("cliente")) q = q.eq("cliente_id", p.get("cliente")!);
     if (p.get("id")) q = q.eq("id", p.get("id")!);
+    // mês de faturamento = mês da emissão da NF (AAAA-MM)
+    const mesFat = p.get("mes_fat");
+    if (mesFat && /^\d{4}-\d{2}$/.test(mesFat)) {
+      const [a, m] = mesFat.split("-").map(Number);
+      const prox = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, "0")}`;
+      q = q.gte("data_emissao", `${mesFat}-01`).lt("data_emissao", `${prox}-01`);
+    }
+    const nf = p.get("nf")?.replace(/[^\w]/g, "");
+    if (nf) q = q.ilike("numero_nf", `%${nf}%`);
+    // sem contrato = fatura avulsa (contrato_id nulo)
+    if (p.get("contrato") === "com") q = q.not("contrato_id", "is", null);
+    else if (p.get("contrato") === "sem") q = q.is("contrato_id", null);
+    if (p.get("venc_de")) q = q.gte("data_vencimento", p.get("venc_de")!);
+    if (p.get("venc_ate")) q = q.lte("data_vencimento", p.get("venc_ate")!);
     if (p.q) q = q.or(`placa.ilike.%${p.q.toUpperCase().replace(/[^A-Z0-9]/g, "")}%,numero_nf.ilike.%${p.q.replace(/[^\w]/g, "")}%`);
     const ordem = ["data_vencimento", "valor_final", "saldo", "data_emissao", "cliente_fantasia"].includes(p.ordem!) ? p.ordem! : "data_vencimento";
 

@@ -14,7 +14,7 @@ import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { BotaoCopiar, Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { KpiCard } from "@/components/app/kpi";
 import { DataTable } from "@/components/app/data-table";
-import { BarraFiltros, BuscaUrl, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
+import { BarraFiltros, BuscaUrl, FiltroDataUrl, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { formatBRL, formatData, formatPct, formatPeriodo, formatPlaca, hojeSP, linkEmail, linkWhatsApp, preencherTemplate } from "@/lib/format";
@@ -163,6 +163,16 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
           { value: "recebido", label: "Recebidas" }, { value: "todos", label: "Todas" },
         ]} />
         <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={clientes} />
+        <FiltroSelectUrl param="contrato" rotulo="Contrato" opcoes={[
+          { value: "com", label: "Com contrato" }, { value: "sem", label: "Sem contrato (avulsa)" },
+        ]} />
+        <FiltroDataUrl param="mes_fat" rotulo="Mês faturado" tipo="month" />
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs text-muted-foreground">Nº da fatura</Label>
+          <BuscaUrl param="nf" placeholder="Nº da NF…" className="sm:w-36" />
+        </div>
+        <FiltroDataUrl param="venc_de" rotulo="Vencimento de" />
+        <FiltroDataUrl param="venc_ate" rotulo="Vencimento até" />
         <BuscaUrl placeholder="Placa ou NF…" />
       </BarraFiltros>
 
