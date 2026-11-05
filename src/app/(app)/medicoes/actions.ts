@@ -4,7 +4,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { edicaoMedicaoSchema, lancamentoAvulsoSchema, lancamentoMedicaoSchema, type ItemAvulsoSalvo } from "@/lib/schemas/operacao";
-import { addDias, cobrancaAvulsa, diffDias, horasEntre, minData, periodoContendo, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
+import { addDias, cobrancaAvulsa, diffDias, horasEntre, minData, periodoContendo, placaLivreParaAvulsa, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
 import { formatPlaca } from "@/lib/format";
 
 // fatura avulsa com placa muda o status do veículo (0048)
@@ -201,8 +201,14 @@ export async function lancarFaturaAvulsa(dados: unknown) {
     const periodoFim = d.itens.map((i) => i.periodo_fim).sort().at(-1)!;
     const placas = new Set(d.itens.map((i) => i.veiculo_id ?? null));
     const ids = [...placas].filter((x): x is string => !!x);
-    const { data: veics } = ids.length ? await supabase.from("veiculos").select("id, placa, status, proprietario").in("id", ids) : { data: [] };
-    const ocupada = veics?.find((v) => v.status !== "disponivel" && v.status !== "parado");
+    const [{ data: veics }, { data: comContrato }] = ids.length
+      ? await Promise.all([
+          supabase.from("veiculos").select("id, placa, status, proprietario, locado_avulsa_ate").in("id", ids),
+          supabase.from("contratos").select("veiculo_id").eq("status", "ativo").in("veiculo_id", ids),
+        ])
+      : [{ data: [] }, { data: [] }];
+    // locada só por outra avulsa (sem contrato) não trava: dá para faturar a mesma placa várias vezes
+    const ocupada = veics?.find((v) => !placaLivreParaAvulsa(v, !!comContrato?.some((c) => c.veiculo_id === v.id)));
     if (ocupada) throw new Error(`A placa ${formatPlaca(ocupada.placa)} está ${ocupada.status === "locado" ? "locada" : "em manutenção ou vendida"} — escolha um veículo disponível`);
     // repasse ao locador: só em placa sublocada; um por placa (soma dos itens dela) — o banco cria os repasses
     const comRepasse = d.itens.filter((i) => i.valor_repasse);

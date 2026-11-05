@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { podeEscrever } from "@/lib/permissoes";
 import { lerParams } from "@/lib/consulta";
 import { getConfig } from "@/lib/config";
-import { addCompetencia, competenciaDe, hojeSP } from "@/lib/calculos";
+import { addCompetencia, competenciaDe, hojeSP, placaLivreParaAvulsa } from "@/lib/calculos";
 import { formatPlaca } from "@/lib/format";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { Button } from "@/components/ui/button";
@@ -45,16 +45,19 @@ export default function MedicoesPage() {
     // placas de todos os contratos (inclusive antigos), para o filtro do histórico
     let qp = supabase.from("contratos").select("veiculos(placa)");
     if (s.empresaId) qp = qp.eq("empresa_id", s.empresaId);
-    // placas para a fatura avulsa: só as livres (locada ou em manutenção não aluga de novo)
-    let qv = supabase.from("veiculos").select("id, placa, tipo, proprietario").in("status", ["disponivel", "parado"]).order("placa");
+    // placas para a fatura avulsa: as livres, e as locadas só por outra avulsa (contrato ativo ou manutenção não aluga de novo)
+    let qv = supabase.from("veiculos").select("id, placa, tipo, proprietario, status, locado_avulsa_ate").in("status", ["disponivel", "parado", "locado"]).order("placa");
     if (s.empresaId) qv = qv.eq("empresa_id", s.empresaId);
-    const [{ data: linhas, count, error: erroLinhas }, { data: clientes }, { data: contratos }, { data: placas }, { data: veiculos }] = await Promise.all([
+    const [{ data: linhas, count, error: erroLinhas }, { data: clientes }, { data: contratos }, { data: placas }, { data: todosVeiculos }, { data: comContrato }] = await Promise.all([
       (historico ? q.order("periodo_inicio", { ascending: false }).order("placa") : q.order("empresa_apelido").order("cliente_fantasia").order("placa").order("periodo_inicio")).range(p.de, p.ate),
       supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("ativo", true).order("nome_fantasia"),
       qc,
       qp,
       qv,
+      supabase.from("contratos").select("veiculo_id").eq("status", "ativo"),
     ]);
+    const emContrato = new Set((comContrato ?? []).map((c) => c.veiculo_id));
+    const veiculos = (todosVeiculos ?? []).filter((v) => placaLivreParaAvulsa(v, emContrato.has(v.id)));
     // sem isso a falha (ex.: migration não aplicada) virava "nenhuma fatura" e parecia que as faturas sumiram
     if (erroLinhas) throw new Error(`Não foi possível carregar as faturas: ${erroLinhas.message}`);
 
