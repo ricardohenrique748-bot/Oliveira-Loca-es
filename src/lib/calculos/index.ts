@@ -6,3 +6,4 @@ export * from "./parcelas";
 export * from "./preventiva";
 export * from "./indicadores";
 export * from "./placa-avulsa";
+export * from "./descricao-km";

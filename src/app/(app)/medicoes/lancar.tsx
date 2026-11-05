@@ -10,7 +10,7 @@ import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { SelectBusca } from "@/components/ui/select-busca";
 import { Moeda } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
-import { baseCobranca, cobrancaAvulsa, diffDias, hojeSP, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde, somar } from "@/lib/calculos";
+import { baseCobranca, cobrancaAvulsa, descricaoKm, diffDias, hojeSP, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde, somar } from "@/lib/calculos";
 import { formatPeriodo, formatPlaca } from "@/lib/format";
 import { FORMAS_FATURA, UNIDADES_AVULSA, type FormaFatura, type UnidadeAvulsa } from "@/lib/schemas/operacao";
 import { clienteSchema } from "@/lib/schemas/cadastros";
@@ -176,7 +176,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
         // repasse só em placa sublocada; vai no item do serviço (o do km fica sem)
         const repasse = i.veiculo && sublocados?.includes(i.veiculo) && i.repasse ? i.repasse : null;
         const servico = { ...base, descricao: i.descricao, quantidade: i.quantidade, unidade: i.unidade, valor_unitario: i.valorUnitario, valor_repasse: repasse };
-        return i.km > 0 ? [servico, { ...base, descricao: `${i.descricao.trim()} - KM rodado`, quantidade: i.km, unidade: "km" as const, valor_unitario: i.valorKm }] : [servico];
+        return i.km > 0 ? [servico, { ...base, descricao: descricaoKm(i.descricao), quantidade: i.km, unidade: "km" as const, valor_unitario: i.valorKm }] : [servico];
       }),
       acrescimos, descontos, data_vencimento: vencimento || null, forma_pagamento: forma, observacoes: observacoes || null,
     });
