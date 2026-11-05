@@ -22,7 +22,7 @@ export default function ReceberPage() {
     const cfg = await getConfig();
     const hoje = hojeSP();
 
-    let q = supabase.from("medicoes_v").select(`id, empresa_id, empresa_apelido, cliente_id, cliente_fantasia, obra_id, obra_nome, placa, periodo_inicio, periodo_fim,
+    let q = supabase.from("medicoes_v").select(`id, empresa_id, empresa_apelido, cliente_id, cliente_fantasia, obra_id, obra_nome, contrato_id, contrato_numero, placa, periodo_inicio, periodo_fim,
       numero_nf, data_emissao, data_vencimento, valor_final, valor_recebido, saldo, status, status_exibicao, dias_atraso, data_ultimo_recebimento`, { count: "exact" });
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     const status = p.get("status") ?? "abertos";

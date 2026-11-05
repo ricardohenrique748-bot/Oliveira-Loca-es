@@ -53,7 +53,7 @@ export async function buscarFaturasAbertas(busca: string) {
   return executar(async () => {
     const s = await exigirEscrita("receber");
     const supabase = await createClient();
-    let q = supabase.from("medicoes_v").select(`id, empresa_id, empresa_apelido, cliente_id, cliente_fantasia, obra_id, obra_nome, placa, periodo_inicio, periodo_fim,
+    let q = supabase.from("medicoes_v").select(`id, empresa_id, empresa_apelido, cliente_id, cliente_fantasia, obra_id, obra_nome, contrato_id, contrato_numero, placa, periodo_inicio, periodo_fim,
       numero_nf, data_emissao, data_vencimento, valor_final, valor_recebido, saldo, status, status_exibicao, dias_atraso, data_ultimo_recebimento`)
       .in("status", ["faturado", "recebido_parcial"]).gt("saldo", 0);
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);

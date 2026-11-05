@@ -26,6 +26,7 @@ import {
 
 export type LinhaReceber = {
   id: string; empresa_id: string; empresa_apelido: string; cliente_id: string; cliente_fantasia: string; obra_id: string | null; obra_nome: string | null;
+  contrato_id?: string | null; contrato_numero?: string | null;
   placa: string | null; periodo_inicio: string; periodo_fim: string; numero_nf: string | null; data_emissao: string | null; data_vencimento: string | null;
   valor_final: number; valor_recebido: number; saldo: number; status: string; status_exibicao: string; dias_atraso: number | null; data_ultimo_recebimento: string | null;
   boleto?: Boleto | null;
@@ -177,7 +178,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
       </BarraFiltros>
 
       <DataTable colunas={colunas} dados={linhas} getId={(m) => m.id} total={total} pagina={pagina} tamanho={tamanho} rodape compacta
-        selecionavel={podeEditar}
+        selecionavel={podeEditar} aoClicarLinha={(m) => setBaixando(m)}
         classeLinha={(m) => (m.status_exibicao === "vencido" ? "border-l-2 border-l-status-critico" : undefined)}
         acoesLote={(sel) => <Button size="xs" onClick={() => setLote(sel)}><HandCoins /> Baixa total em lote</Button>}
         exportar={{ nome: "contas_a_receber", titulo: "Contas a receber", colunas: [
@@ -298,11 +299,24 @@ function DialogoBaixa({ medicao: m, contas, podeEditar, onOpenChange, onFeito }:
     <Dialog open={!!m} onOpenChange={onOpenChange}>
       <DialogContent tamanho="md">
         <DialogHeader>
-          <DialogTitle>Baixa de recebimento</DialogTitle>
-          <DialogDescription>{m && <>{(m.placa ? formatPlaca(m.placa) : "Avulsa")} · {m.cliente_fantasia} · NF {m.numero_nf ?? "—"} · venc. {formatData(m.data_vencimento)}</>}</DialogDescription>
+          <DialogTitle>{m ? `Fatura ${m.numero_nf ? `NF ${m.numero_nf}` : "sem NF"}` : "Fatura"}</DialogTitle>
+          <DialogDescription>{m && <>{(m.placa ? formatPlaca(m.placa) : "Avulsa")} · {m.cliente_fantasia} · {m.empresa_apelido}</>}</DialogDescription>
         </DialogHeader>
         {m && (
           <div className="space-y-4">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+              <div><dt className="text-xs text-muted-foreground">Cliente</dt><dd className="truncate" title={m.cliente_fantasia}>{m.cliente_fantasia}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Obra</dt><dd className="truncate" title={m.obra_nome ?? undefined}>{m.obra_nome ?? "—"}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Contrato</dt><dd>{m.contrato_id
+                ? <Link href={`/contratos/${m.contrato_id}`} className="underline">{m.contrato_numero ?? "Abrir"}</Link>
+                : <span className="text-muted-foreground">Avulsa</span>}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Período</dt><dd className="whitespace-nowrap">{formatPeriodo(m.periodo_inicio, m.periodo_fim)}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Emissão</dt><dd>{formatData(m.data_emissao)}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Vencimento</dt><dd className="whitespace-nowrap">{formatData(m.data_vencimento)}
+                {m.status_exibicao === "vencido" && m.dias_atraso ? <Badge variant="critico" className="ml-1 px-1.5 py-0 text-[11px]">{m.dias_atraso} d</Badge> : null}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Status</dt><dd><StatusBadge status={m.status_exibicao} /></dd></div>
+              {m.data_ultimo_recebimento && <div><dt className="text-xs text-muted-foreground">Último recebimento</dt><dd>{formatData(m.data_ultimo_recebimento)}</dd></div>}
+            </dl>
             <div className="grid grid-cols-3 gap-2 rounded-md bg-muted p-3 text-sm">
               <div><p className="text-xs text-muted-foreground">Valor</p><Moeda valor={m.valor_final} /></div>
               <div><p className="text-xs text-muted-foreground">Recebido</p><Moeda valor={m.valor_recebido} /></div>
