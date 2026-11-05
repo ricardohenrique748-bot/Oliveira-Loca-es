@@ -71,15 +71,23 @@ export function baixarContratoPDF(id: string) {
 export function baixarFaturaPDF(id: string, baseDias: number) {
   return gerar(async () => {
     const { data: m, error } = await createClient().from("medicoes")
-      .select(`periodo_inicio, periodo_fim, dias, valor_mensal, valor_base, acrescimos, descontos, valor_final, numero_nf, data_emissao,
+      .select(`cliente_id, periodo_inicio, periodo_fim, dias, valor_mensal, valor_base, acrescimos, descontos, valor_final, numero_nf, data_emissao,
         data_vencimento, forma_pagamento, acrescimos_itens, descontos_itens, observacoes, descricao, unidade, itens, numero_os,
-        empresas(${EMPRESA}), clientes(${CLIENTE}), veiculos(placa, tipo), contratos(numero, tipo_cobranca, clientes(${CLIENTE}), obras(nome), veiculos(placa, tipo))`)
+        empresas(${EMPRESA}), clientes(${CLIENTE}), veiculos(placa, tipo), contratos(numero, cliente_id, tipo_cobranca, clientes(${CLIENTE}), obras(nome), veiculos(placa, tipo))`)
       .eq("id", id).maybeSingle();
     if (error) throw error;
     // sem contrato (fatura avulsa): o cliente vem da própria fatura e não há veículo
     const c = m?.contratos;
     const cliente = c?.clientes ?? m?.clientes;
     if (!m?.empresas || !cliente || (c && !c.veiculos)) return null;
+    // sem obra no contrato (ou fatura avulsa): usa a obra do cliente, se ele tiver só uma ativa
+    let obra = c?.obras?.nome ?? null;
+    const clienteId = c?.cliente_id ?? m.cliente_id;
+    if (!obra && clienteId) {
+      const { data: obras } = await createClient().from("obras").select("nome")
+        .eq("cliente_id", clienteId).eq("ativo", true).limit(2);
+      if (obras?.length === 1) obra = obras[0].nome;
+    }
     const dados: DadosFatura = {
       ...m,
       valor_mensal: Number(m.valor_mensal), valor_base: Number(m.valor_base), acrescimos: Number(m.acrescimos),
@@ -89,7 +97,7 @@ export function baixarFaturaPDF(id: string, baseDias: number) {
       descontos_itens: ((m.descontos_itens ?? []) as DadosFatura["descontos_itens"]).map((a) => ({ descricao: a.descricao, valor: Number(a.valor) })),
       itens: (m.itens ?? []) as unknown as DadosFatura["itens"],
       contrato_numero: c?.numero == null ? null : String(c.numero), tipo_cobranca: (c?.tipo_cobranca ?? "avulsa") as DadosFatura["tipo_cobranca"], base_dias: baseDias,
-      placa: (c?.veiculos ?? m.veiculos)?.placa ?? null, veiculo_tipo: (c?.veiculos ?? m.veiculos)?.tipo ?? null, obra: c?.obras?.nome ?? null,
+      placa: (c?.veiculos ?? m.veiculos)?.placa ?? null, veiculo_tipo: (c?.veiculos ?? m.veiculos)?.tipo ?? null, obra,
       empresa: m.empresas, cliente,
     };
     return montarFatura(dados);
