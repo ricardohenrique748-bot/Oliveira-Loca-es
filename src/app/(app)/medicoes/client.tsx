@@ -191,6 +191,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
             </Button>
           </div>
         </div>
+        <FiltroSelectUrl param="tipo" rotulo="Tipo" vazio="Todas" opcoes={[{ value: "contrato", label: "Com contrato" }, { value: "avulsa", label: "Avulsas" }]} />
         <FiltroSelectUrl param="status" rotulo="Status" opcoes={STATUS_OPCOES} />
         <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={clientes} />
         <FiltroSelectUrl param="placa" rotulo="Placa" opcoes={placas} vazio="Todas" />
@@ -259,9 +260,12 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                   <TableCell><Checkbox aria-label={`Selecionar ${m.placa}`} checked={selecao.has(m.id)} onCheckedChange={() => alternar(m.id)} /></TableCell>
                   <TableCell className="cursor-pointer" onClick={() => setDetalhe(m)} title={`${m.empresa_apelido} · ${m.cliente_fantasia}${m.obra_nome ? ` · ${m.obra_nome}` : ""}`}>
                     <div className="flex items-center gap-1">
-                      {m.contrato_numero != null && <span className="font-mono text-sm font-semibold hover:underline">{m.contrato_numero}</span>}
+                      {/* placa em destaque; o número do contrato fica menor ao lado */}
                       {m.contrato_id
-                        ? <span className={cn("font-mono", m.contrato_numero != null ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{formatPlaca(m.placa)}</span>
+                        ? <>
+                            <span className="font-mono text-base font-bold tracking-wide hover:underline">{formatPlaca(m.placa)}</span>
+                            {m.contrato_numero != null && <span className="font-mono text-xs text-muted-foreground">{m.contrato_numero}</span>}
+                          </>
                         : <><Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Avulsa</Badge>{m.numero_os && <span className="shrink-0 font-mono text-sm font-semibold">OS {m.numero_os}</span>}{m.placa && <span className="font-mono text-sm font-semibold">{formatPlaca(m.placa)}</span>}<span className={cn("truncate", m.placa ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{m.descricao}</span></>}
                       {m.proprietario === "locador" && <Badge variant="info" className="px-1.5 py-0 text-[10px]">Sub</Badge>}
                       {m.final && <Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Final</Badge>}
@@ -317,7 +321,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
             <Card key={m.id} className={cn("space-y-2 p-3", selecao.has(m.id) && "border-primary")}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-mono font-semibold">{m.contrato_id ? <>{m.contrato_numero != null ? `${m.contrato_numero} · ` : ""}{formatPlaca(m.placa)}</> : <span className="font-sans">Avulsa · {m.placa ? `${formatPlaca(m.placa)} · ` : ""}{m.descricao}</span>} <span className="font-sans text-xs font-normal text-muted-foreground">{m.empresa_apelido}</span></p>
+                  <p className="font-mono font-semibold">{m.contrato_id ? <><span className="text-base font-bold">{formatPlaca(m.placa)}</span>{m.contrato_numero != null && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{m.contrato_numero}</span>}</> : <span className="font-sans">Avulsa · {m.placa ? `${formatPlaca(m.placa)} · ` : ""}{m.descricao}</span>} <span className="font-sans text-xs font-normal text-muted-foreground">{m.empresa_apelido}</span></p>
                   <p className="text-xs text-muted-foreground">{m.cliente_fantasia} · {formatPeriodo(m.periodo_inicio, m.periodo_fim)}</p>
                 </div>
                 <div className="flex items-center gap-2"><StatusBadge status={m.status_exibicao} /><Checkbox aria-label="Selecionar" checked={selecao.has(m.id)} onCheckedChange={() => alternar(m.id)} /></div>

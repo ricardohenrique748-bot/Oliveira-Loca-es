@@ -37,6 +37,9 @@ export default function MedicoesPage() {
     else if (comp === "todas") q = q.in("status", ["a_faturar"]);
     else if (!historico) q = q.neq("status", "cancelado");
     if (p.get("cliente")) q = q.eq("cliente_id", p.get("cliente")!);
+    // tipo: com contrato ou avulsa (sem contrato)
+    if (p.get("tipo") === "contrato") q = q.not("contrato_id", "is", null);
+    else if (p.get("tipo") === "avulsa") q = q.is("contrato_id", null);
     const placa = (p.get("placa") ?? p.q).toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (placa) q = q.ilike("placa", `%${placa}%`);
 
