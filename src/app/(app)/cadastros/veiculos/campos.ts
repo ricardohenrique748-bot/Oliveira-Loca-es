@@ -7,7 +7,8 @@ export const STATUS_VEICULO: Opcao[] = [
   { value: "parado", label: "Parado" }, { value: "vendido", label: "Vendido" },
 ];
 
-export function camposVeiculo(empresas: Opcao[], locadores: Opcao[]): Campo<VeiculoForm>[] {
+/** A empresa do veículo não é escolhida aqui: vem do contrato (ao salvar um contrato ativo, a placa passa para a empresa dele). */
+export function camposVeiculo(_empresas: Opcao[], locadores: Opcao[]): Campo<VeiculoForm>[] {
   return [
     { nome: "placa", rotulo: "Placa", tipo: "placa", obrigatorio: true, col: 2, ajuda: "Mercosul ou antiga" },
     { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: opcoesDe(ROTULOS.tipoVeiculo), col: 2 },
@@ -18,7 +19,6 @@ export function camposVeiculo(empresas: Opcao[], locadores: Opcao[]): Campo<Veic
     { nome: "renavam", rotulo: "RENAVAM", col: 2, ajuda: "Usado na consulta de multas" },
     { nome: "chassi", rotulo: "Chassi", col: 2, ajuda: "Sai no contrato" },
     { nome: "cor", rotulo: "Cor", col: 2 },
-    { nome: "empresa_id", rotulo: "Empresa", tipo: "select", opcoes: empresas, obrigatorio: true, col: 2 },
     { nome: "proprietario", rotulo: "Propriedade", tipo: "select", opcoes: opcoesDe(ROTULOS.proprietario), col: 2 },
     { nome: "locador_id", rotulo: "Locador", tipo: "select", opcoes: locadores, vazio: "—", col: 2, visivel: (v) => v.proprietario === "locador", obrigatorio: true },
     { nome: "km_atual", rotulo: "Km atual", tipo: "numero", col: 2 },

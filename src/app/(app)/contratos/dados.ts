@@ -1,9 +1,9 @@
 import type { SupabaseServer } from "@/lib/supabase/server";
 
 /** Opções para o formulário de contrato (clientes, obras, veículos). */
-export async function opcoesContrato(supabase: SupabaseServer, empresaId: string | null) {
-  let qv = supabase.from("veiculos").select("id, placa, modelo, proprietario, empresa_id, status").neq("status", "vendido").order("placa");
-  if (empresaId) qv = qv.eq("empresa_id", empresaId);
+/** Veículos de todas as empresas: a placa não fica presa a uma empresa, ela segue o contrato. */
+export async function opcoesContrato(supabase: SupabaseServer, _empresaId: string | null) {
+  const qv = supabase.from("veiculos").select("id, placa, modelo, proprietario, empresa_id, status").neq("status", "vendido").order("placa");
   const [{ data: clientes }, { data: obras }, { data: veiculos }] = await Promise.all([
     supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("ativo", true).order("nome_fantasia"),
     supabase.from("obras").select("id, cliente_id, nome").eq("ativo", true).order("nome"),

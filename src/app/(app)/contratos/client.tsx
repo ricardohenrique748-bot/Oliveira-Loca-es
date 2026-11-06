@@ -55,7 +55,8 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
     // placa locada (ou em manutenção) não entra em contrato novo; a do próprio contrato continua na lista
     { nome: "veiculo_id", rotulo: "Veículo", tipo: "select", obrigatorio: true, col: 4, opcoes: (v) => opcoes.veiculos.filter((x) =>
       (x.status === "disponivel" || x.status === "parado" || x.value === v.veiculo_id)
-      && (!v.empresa_id || x.empresa_id === v.empresa_id) && (!v.sublocado || (x.proprietario === "locador") === (v.sublocado === "sim"))) },
+      // qualquer empresa: a placa passa para a empresa do contrato ao salvar
+      && (!v.sublocado || (x.proprietario === "locador") === (v.sublocado === "sim"))) },
     { nome: "valor_mensal", rotulo: "Valor mensal (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: mensal },
     { nome: "valor_mensal", rotulo: "Valor da diária (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: diaria, ajuda: "Diária = 10 horas. Hora extra = 10% da diária (ex.: diária R$ 1.800 → hora extra R$ 180)" },
     { nome: "valor_mensal", rotulo: "Valor da hora (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: hora, ajuda: "Fatura = horas trabalhadas × valor da hora" },
