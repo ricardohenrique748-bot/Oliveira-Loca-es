@@ -12,7 +12,7 @@ import { montarDPS } from "../../src/lib/nfse/dps.js";
 import { assinarDPS, lerCertificado } from "../../src/lib/nfse/assinar.js";
 import { corpoEnvio, lerResposta, SEFIN, xmlParaEnvio } from "../../src/lib/nfse/envio.js";
 
-type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: { medicaoId?: string } };
+type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: { medicaoId?: string; descricao?: string; previa?: boolean } };
 type Res = { status: (n: number) => { json: (b: unknown) => void } };
 
 // mesma regra de src/lib/supabase/env.ts: sem variável ou apontando para o projeto legado, usa o projeto atual (onde o usuário loga)
@@ -57,6 +57,7 @@ export default async function handler(req: Req, res: Res) {
   if (req.method !== "POST") return res.status(405).json({ erro: "Use POST" });
   const token = String(req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
   const medicaoId = req.body?.medicaoId;
+  const previa = req.body?.previa === true;
   if (!token) return res.status(401).json({ erro: "Faça login novamente" });
   if (!medicaoId) return res.status(400).json({ erro: "Informe a fatura" });
 
@@ -69,10 +70,10 @@ export default async function handler(req: Req, res: Res) {
   if (!usuario.user) return res.status(401).json({ erro: `Login não reconhecido (${errUser?.message ?? "sem usuário"}): saia e entre de novo no sistema` });
 
   const { data: m, error } = await sb.from("medicoes")
-    .select(`id, empresa_id, status, valor_final, periodo_inicio, periodo_fim, nfse_chave, nfse_ambiente, descricao, itens,
+    .select(`id, empresa_id, status, valor_final, periodo_inicio, periodo_fim, nfse_chave, nfse_ambiente, descricao, itens, cliente_id,
       clientes(razao_social, cnpj), veiculos(placa),
       empresas(cnpj, regime_tributario, codigo_ibge, nfse_codigo_servico, nfse_aliquota_iss, nfse_aliquota_simples, nfse_texto_complementar),
-      contratos(numero, clientes(razao_social, cnpj), veiculos(placa, tipo))`)
+      contratos(numero, cliente_id, clientes(razao_social, cnpj), veiculos(placa, tipo))`)
     .eq("id", medicaoId).maybeSingle();
   if (error || !m) return res.status(404).json({ erro: "Fatura não encontrada ou sem permissão" });
   if (m.status === "cancelado") return res.status(400).json({ erro: "Fatura cancelada não emite nota" });
@@ -81,7 +82,7 @@ export default async function handler(req: Req, res: Res) {
   const e = m.empresas as unknown as { cnpj: string | null; regime_tributario: "mei" | "simples_nacional" | "normal" | null;
     codigo_ibge: string | null; nfse_codigo_servico: string | null; nfse_aliquota_iss: number | null; nfse_aliquota_simples: number | null;
     nfse_texto_complementar: string | null } | null;
-  const c = m.contratos as unknown as { numero: string | null; clientes: { razao_social: string; cnpj: string | null } | null; veiculos: { placa: string; tipo: string } | null } | null;
+  const c = m.contratos as unknown as { numero: string | null; cliente_id?: string | null; clientes: { razao_social: string; cnpj: string | null } | null; veiculos: { placa: string; tipo: string } | null } | null;
   if (!e?.cnpj || !e.codigo_ibge || !e.regime_tributario || !e.nfse_codigo_servico)
     return res.status(400).json({ erro: "Complete os dados fiscais da empresa em Cadastros → Empresas" });
   // alíquota do ISS só vai na nota no regime normal; ME/EPP do Simples informa o percentual de tributos do DAS
@@ -92,6 +93,35 @@ export default async function handler(req: Req, res: Res) {
   // fatura avulsa (sem contrato): cliente na própria fatura, descrição digitada no lançamento
   const tomadorCliente = c?.clientes ?? (m.clientes as unknown as { razao_social: string; cnpj: string | null } | null);
   if (!tomadorCliente) return res.status(400).json({ erro: "Fatura sem cliente" });
+
+  // descrição do serviço: quem emite escreve na hora (obra, CNO, endereço, vencimento, PIX...)
+  const sugestao = [
+    c ? `Locação de ${c.veiculos?.tipo ?? "veículo"} placa ${c.veiculos?.placa ?? ""} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}${c.numero ? ` – contrato ${c.numero}` : ""}`
+      : `${descricaoAvulsa(m.descricao, (m.veiculos as unknown as { placa: string } | null)?.placa, m.itens)} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}`,
+    e.nfse_texto_complementar,
+  ].filter(Boolean).join("\n");
+  if (previa) {
+    // a última descrição usada para o mesmo cliente (as notas dele costumam repetir obra, CNO, endereço...)
+    const clienteId = (m as { cliente_id?: string | null }).cliente_id ?? c?.cliente_id ?? null;
+    let ultima: string | null = null;
+    if (clienteId) {
+      const { data: ctts } = await sb.from("contratos").select("id").eq("cliente_id", clienteId);
+      const ids = (ctts ?? []).map((x) => x.id as string);
+      const { data: ult } = await sb.from("medicoes").select("nfse_descricao")
+        .or(`cliente_id.eq.${clienteId}${ids.length ? `,contrato_id.in.(${ids.join(",")})` : ""}`)
+        .not("nfse_descricao", "is", null).neq("id", m.id)
+        .order("nfse_emitida_em", { ascending: false, nullsFirst: false }).limit(1);
+      ultima = (ult?.[0] as { nfse_descricao?: string } | undefined)?.nfse_descricao ?? null;
+    }
+    const { data: propria } = await sb.from("medicoes").select("nfse_descricao").eq("id", m.id).maybeSingle();
+    const desta = (propria as { nfse_descricao?: string | null } | null)?.nfse_descricao ?? null;
+    return res.status(200).json({ ok: true, previa: true, sugestao, descricao: desta ?? ultima ?? sugestao, origem: desta ? "fatura" : ultima ? "cliente" : "sugestao" });
+  }
+  const descricaoServico = req.body?.descricao === undefined ? sugestao : String(req.body.descricao).trim();
+  if (!descricaoServico) return res.status(400).json({ erro: "Escreva a descrição do serviço da nota" });
+  if (descricaoServico.length > 2000) return res.status(400).json({ erro: `A descrição do serviço passou de 2000 caracteres (${descricaoServico.length})` });
+  // guarda antes de enviar: se a Receita recusar, a descrição não se perde
+  if (req.body?.descricao !== undefined) await sb.from("medicoes").update({ nfse_descricao: descricaoServico }).eq("id", m.id);
 
   let numero: number | null = null;
   let xmlEnviado: string | null = null;
@@ -117,12 +147,8 @@ export default async function handler(req: Req, res: Res) {
         codigoServico: e.nfse_codigo_servico, aliquotaIss: Number(e.nfse_aliquota_iss ?? 0),
         aliquotaSimples: e.nfse_aliquota_simples == null ? null : Number(e.nfse_aliquota_simples) },
       tomador: { documento: tomadorCliente.cnpj, nome: tomadorCliente.razao_social },
-      servico: {
-        descricao: c
-          ? `Locação de ${c.veiculos?.tipo ?? "veículo"} placa ${c.veiculos?.placa ?? ""} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}${c.numero ? ` – contrato ${c.numero}` : ""}`
-          : `${descricaoAvulsa(m.descricao, (m.veiculos as unknown as { placa: string } | null)?.placa, m.itens)} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}`,
-        inicio: m.periodo_inicio, complemento: e.nfse_texto_complementar,
-      },
+      // vai exatamente o texto da tela (o complemento da empresa já entra na sugestão, editável)
+      servico: { descricao: descricaoServico, inicio: m.periodo_inicio, complemento: null },
       valor: Number(m.valor_final),
     });
     xmlEnviado = xmlParaEnvio(assinarDPS(xml, pfx, senha));

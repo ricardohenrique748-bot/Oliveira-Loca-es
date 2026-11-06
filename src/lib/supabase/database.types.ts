@@ -1138,6 +1138,7 @@ export type Database = {
           itens: Json
           nfse_ambiente: string | null
           nfse_chave: string | null
+          nfse_descricao: string | null
           nfse_dps: number | null
           nfse_emitida_em: string | null
           nfse_erro: string | null
@@ -1175,6 +1176,7 @@ export type Database = {
           itens?: Json
           nfse_ambiente?: string | null
           nfse_chave?: string | null
+          nfse_descricao?: string | null
           nfse_dps?: number | null
           nfse_emitida_em?: string | null
           nfse_erro?: string | null
@@ -1212,6 +1214,7 @@ export type Database = {
           itens?: Json
           nfse_ambiente?: string | null
           nfse_chave?: string | null
+          nfse_descricao?: string | null
           nfse_dps?: number | null
           nfse_emitida_em?: string | null
           nfse_erro?: string | null

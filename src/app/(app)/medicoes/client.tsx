@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Ban, CalendarPlus, CheckCheck, Eye, FileDown, FileSpreadsheet, FileText, History, Loader2, Plus, Save, Trash2, Undo2, Wand2 } from "lucide-react";
 import { Badge, Card, Checkbox, Label, Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/overlays";
 import type { Opcao } from "@/components/ui/select";
 import { Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
@@ -528,17 +528,36 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
     }
   };
   /** NFS-e no Emissor Nacional pela função da Vercel (certificado fica lá); o ambiente é o da variável NFSE_AMBIENTE */
-  const emitirNota = async () => {
+  /** descrição do serviço da nota: escrita por quem emite (abre preenchida com a última do cliente ou a sugestão) */
+  const [descNota, setDescNota] = React.useState<{ texto: string; sugestao: string; origem: string } | null>(null);
+  const chamarEmissao = async (corpo: Record<string, unknown>) => {
+    const { data } = await createClient().auth.getSession();
+    const r = await fetch("/api/nfse/emitir", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+      body: JSON.stringify(corpo),
+    });
+    return { r, j: (await r.json().catch(() => ({}))) as { ok?: boolean; erro?: string; chave?: string; numero?: string; ambiente?: string; aviso?: string; descricao?: string; sugestao?: string; origem?: string } };
+  };
+  const abrirEmissao = async () => {
     if (!m) return;
     setEmitindo(true);
     try {
-      const { data } = await createClient().auth.getSession();
-      const r = await fetch("/api/nfse/emitir", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
-        body: JSON.stringify({ medicaoId: m.id }),
-      });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; erro?: string; chave?: string; numero?: string; ambiente?: string; aviso?: string };
-      if (j.ok) { toast.success(`NFS-e ${j.numero ?? ""} emitida (${j.ambiente}) · chave ${j.chave}`, { duration: 15_000 }); void carregarNota(m.id); onSalvo(); }
+      const { r, j } = await chamarEmissao({ medicaoId: m.id, previa: true });
+      if (!j.ok) return void toast.error(`NFS-e: ${j.erro ?? `HTTP ${r.status}`}`, { duration: 30_000 });
+      setDescNota({ texto: j.descricao ?? "", sugestao: j.sugestao ?? "", origem: j.origem ?? "sugestao" });
+    } catch (e) {
+      toast.error(`Falha ao preparar a emissão: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setEmitindo(false);
+    }
+  };
+  const emitirNota = async (descricao: string) => {
+    if (!m) return;
+    if (!descricao.trim()) return void toast.error("Escreva a descrição do serviço da nota");
+    setEmitindo(true);
+    try {
+      const { r, j } = await chamarEmissao({ medicaoId: m.id, descricao });
+      if (j.ok) { setDescNota(null); toast.success(`NFS-e ${j.numero ?? ""} emitida (${j.ambiente}) · chave ${j.chave}`, { duration: 15_000 }); void carregarNota(m.id); onSalvo(); }
       else toast.error(`NFS-e não emitida${j.ambiente ? ` (${j.ambiente})` : ""}: ${j.erro ?? `HTTP ${r.status}`}`, { duration: 30_000 });
       // o envio aconteceu mas o histórico (nfse_tentativas) não gravou: avisar, senão a evidência some sem ninguém saber
       if (j.aviso) toast.warning(j.aviso, { duration: 30_000 });
@@ -654,7 +673,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
             {ed && <Button variant="outline" disabled={!mudou || salvando} onClick={salvarAjuste}>{salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar ajustes</Button>}
             {podeEditar && m.status !== "cancelado" && !nota && (
-              <Button variant="outline" disabled={emitindo || mudou} title={mudou ? "Salve os ajustes antes de emitir" : "Emite a NFS-e no Emissor Nacional"} onClick={emitirNota}>
+              <Button variant="outline" disabled={emitindo || mudou} title={mudou ? "Salve os ajustes antes de emitir" : "Escreva a descrição do serviço e emita a NFS-e no Emissor Nacional"} onClick={() => void abrirEmissao()}>
                 {emitindo ? <Loader2 className="animate-spin" /> : <FileText />} Emitir NF
               </Button>
             )}
@@ -674,6 +693,36 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             </Button>
           </DialogFooter>
           <DialogoTentativasNFSe medicaoId={m.id} rotulo={m.contrato_id ? String(m.contrato_numero ?? formatPlaca(m.placa)) : `avulsa · ${m.cliente_fantasia}`} aberto={verEnvios} onOpenChange={setVerEnvios} />
+          <Dialog open={!!descNota} onOpenChange={(v) => { if (!v && !emitindo) setDescNota(null); }}>
+            <DialogContent tamanho="lg">
+              <DialogHeader>
+                <DialogTitle>Emitir NFS-e</DialogTitle>
+                <DialogDescription>
+                  Escreva a descrição do serviço exatamente como deve sair na nota: obra, CNO, endereço, vencimento, PIX…
+                  {descNota?.origem === "cliente" && " Veio preenchida com a última descrição usada para este cliente."}
+                  {descNota?.origem === "fatura" && " Veio preenchida com o que você escreveu da última vez para esta fatura."}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-1.5">
+                <Label htmlFor="nfse-descricao">Descrição do serviço</Label>
+                <Textarea id="nfse-descricao" rows={9} maxLength={2000} value={descNota?.texto ?? ""} autoFocus
+                  onChange={(e) => setDescNota((d) => d && { ...d, texto: e.target.value })} />
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>{(descNota?.texto.length ?? 0)}/2000 caracteres · {m.cliente_fantasia} · <Moeda valor={m.valor_final} /></span>
+                  <span className="flex gap-1">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setDescNota((d) => d && { ...d, texto: d.sugestao })}>Usar dados da fatura</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setDescNota((d) => d && { ...d, texto: "" })}>Limpar</Button>
+                  </span>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" disabled={emitindo} onClick={() => setDescNota(null)}>Cancelar</Button>
+                <Button disabled={emitindo || !descNota?.texto.trim()} onClick={() => descNota && void emitirNota(descNota.texto)}>
+                  {emitindo ? <Loader2 className="animate-spin" /> : <FileText />} Emitir NF
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>}
       </DialogContent>
     </Dialog>
