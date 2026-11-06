@@ -92,6 +92,9 @@ function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opc
       { nome: "parcelas", rotulo: "Nº de parcelas", tipo: "numero", col: 1, visivel: (v) => v.repeticao === "parcelada" },
       { nome: "parcela_inicial", rotulo: "Começa na", tipo: "numero", col: 1, visivel: (v) => v.repeticao === "parcelada", ajuda: "ex.: 15 de 53" },
       { nome: "modo_valor", rotulo: "O valor é", tipo: "select", col: 2, visivel: (v) => v.repeticao === "parcelada", opcoes: [{ value: "parcela", label: "de cada parcela" }, { value: "total", label: "total (dividir)" }] },
+      // anexos já no lançamento (boleto, nota fiscal…); parcelada com vários boletos: um para cada parcela, na ordem
+      { nome: "anexo_url", rotulo: "Anexos (boleto, nota fiscal…)", tipo: "personalizado", col: 6,
+        render: ({ value, onChange }) => <CampoAnexo bucket="anexos" pasta="contas" valor={value ?? null} onChange={onChange} multiplo /> },
     );
   }
   lista.push(
