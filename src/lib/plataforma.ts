@@ -47,8 +47,9 @@ export async function entregarArquivo(blob: Blob, nome: string) {
     const a = document.createElement("a");
     a.href = url;
     a.download = nome;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    document.body.appendChild(a); a.click(); a.remove();
+    // o Chrome abre o PDF pelo aviso de download usando este link: apagar cedo dá "Falha ao carregar o documento PDF"
+    setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
     return;
   }
   const [{ Filesystem, Directory }, { Share }] = await Promise.all([import("@capacitor/filesystem"), import("@capacitor/share")]);

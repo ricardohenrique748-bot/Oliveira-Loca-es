@@ -20,6 +20,7 @@ import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
 import { FORMAS_FATURA, UNIDADES_AVULSA, formatQuantidadeAvulsa, type FormaFatura, type ItemAvulsoSalvo, type ItemFatura, type UnidadeAvulsa } from "@/lib/schemas/operacao";
 import { SelectSimples } from "@/components/ui/select";
 import { baixarFaturaPDF } from "@/lib/documentos/baixar";
+import { entregarArquivo } from "@/lib/plataforma";
 import { cn } from "@/lib/utils";
 import {
   cancelarMedicoes, dadosLembrete, excluirCanceladas, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarMedicoes, voltarParaAFaturar,
@@ -519,11 +520,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
         arquivo = await gerarDanfsePDF(lerNFSe(j.xml, j.chave ?? nota.chave));
         toast.info("O PDF da Receita está fora do ar: o DANFSe foi montado pelo sistema a partir do XML da nota", { duration: 8_000 });
       } else arquivo = await r.blob();
-      const url = URL.createObjectURL(arquivo);
-      const a = document.createElement("a");
-      a.href = url; a.download = `NFSe_${nota.chave}.${formato}`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      await entregarArquivo(arquivo, `NFSe_${nota.chave}.${formato}`);
     } catch (e) {
       toast.error(`Falha ao baixar a NF: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
