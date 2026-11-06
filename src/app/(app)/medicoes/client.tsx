@@ -510,7 +510,16 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
         });
         return;
       }
-      const url = URL.createObjectURL(await r.blob());
+      let arquivo: Blob;
+      if (formato === "pdf" && r.headers.get("content-type")?.includes("application/json")) {
+        // PDF da Receita fora do ar: veio o XML autorizado e o sistema monta o DANFSe no mesmo desenho
+        const j = (await r.json()) as { danfseLocal?: boolean; xml?: string; chave?: string };
+        if (!j.xml) throw new Error("a Receita não devolveu o PDF nem o XML");
+        const { gerarDanfsePDF, lerNFSe } = await import("@/lib/nfse/danfse");
+        arquivo = await gerarDanfsePDF(lerNFSe(j.xml, j.chave ?? nota.chave));
+        toast.info("O PDF da Receita está fora do ar: o DANFSe foi montado pelo sistema a partir do XML da nota", { duration: 8_000 });
+      } else arquivo = await r.blob();
+      const url = URL.createObjectURL(arquivo);
       const a = document.createElement("a");
       a.href = url; a.download = `NFSe_${nota.chave}.${formato}`;
       document.body.appendChild(a); a.click(); a.remove();

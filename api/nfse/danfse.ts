@@ -25,9 +25,9 @@ const ADN = {
   producao: "https://adn.nfse.gov.br/danfse",
 } as const;
 
-function getComCertificado(url: string, cert: { chavePem: string; certPem: string }): Promise<{ status: number; tipo: string; corpo: Buffer }> {
+function getComCertificado(url: string, cert: { chavePem: string; certPem: string }, limite = 50_000): Promise<{ status: number; tipo: string; corpo: Buffer }> {
   return new Promise((resolve, reject) => {
-    const r = request(url, { method: "GET", key: cert.chavePem, cert: cert.certPem, timeout: 50_000 }, (res) => {
+    const r = request(url, { method: "GET", key: cert.chavePem, cert: cert.certPem, timeout: limite }, (res) => {
       const partes: Buffer[] = [];
       res.on("data", (c: Buffer) => partes.push(c));
       res.on("end", () => resolve({ status: res.statusCode ?? 0, tipo: String(res.headers["content-type"] ?? ""), corpo: Buffer.concat(partes) }));
@@ -40,13 +40,13 @@ function getComCertificado(url: string, cert: { chavePem: string; certPem: strin
 
 /** o ADN cai com frequência (503 / sem servidor): tenta de novo algumas vezes antes de desistir (cabe nos 60 s da função) */
 async function getComRetentativa(url: string, cert: { chavePem: string; certPem: string }) {
-  const esperas = [0, 2_000, 5_000, 8_000];
+  const esperas = [0, 2_000, 4_000];
   let ultimo: { status: number; tipo: string; corpo: Buffer } | null = null;
   let erro: unknown = null;
   for (const ms of esperas) {
     if (ms) await new Promise((r) => setTimeout(r, ms));
     try {
-      ultimo = await getComCertificado(url, cert);
+      ultimo = await getComCertificado(url, cert, 10_000);
       erro = null;
       if (ultimo.status < 500) return ultimo;
     } catch (e) {
@@ -56,6 +56,20 @@ async function getComRetentativa(url: string, cert: { chavePem: string; certPem:
   if (!ultimo) throw erro;
   return ultimo;
 }
+
+/** XML da NFS-e na Sefin pela chave (vem em JSON, compactado em gzip + base64) */
+async function consultaSefin(base: string, chave: string, cert: { chavePem: string; certPem: string }) {
+  // uma tentativa só: somada às do ADN, fica dentro dos 60 s da função
+  const r = await getComCertificado(`${base}/${chave}`, cert, 20_000);
+  let xml: Buffer | null = null;
+  try {
+    const j = JSON.parse(r.corpo.toString("utf8")) as { nfseXmlGZipB64?: string };
+    if (r.status === 200 && j.nfseXmlGZipB64) xml = gunzipSync(Buffer.from(j.nfseXmlGZipB64, "base64"));
+  } catch { xml = null; }
+  return { status: r.status, corpo: r.corpo, xml };
+}
+const xmlDaNFSe = async (base: string, chave: string, cert: { chavePem: string; certPem: string }) =>
+  (await consultaSefin(base, chave, cert).catch(() => null))?.xml ?? null;
 
 /** trecho da resposta de erro para a mensagem (sem binário) */
 const trecho = (b: Buffer) => b.toString("utf8").replace(/\s+/g, " ").slice(0, 300);
@@ -82,22 +96,21 @@ export default async function handler(req: Req, res: Res) {
     const cert = lerCertificado(pfx, senha);
     if (formato === "pdf") {
       const r = await getComRetentativa(`${ADN[ambiente]}/${chave}`, cert);
-      if (r.status >= 500)
-        return res.status(503).json({ erro: `O serviço de PDF da Receita (ADN) está fora do ar agora (HTTP ${r.status}). A nota está emitida e válida: tente de novo em alguns minutos, baixe o XML, ou pegue o PDF na Consulta Pública (www.nfse.gov.br/consultapublica) com a chave ${chave}`, chave });
+      if (r.status >= 500) {
+        // ADN fora do ar: manda o XML autorizado (Sefin) para o navegador montar o DANFSe no mesmo desenho
+        const x = await xmlDaNFSe(SEFIN[ambiente], chave, cert);
+        if (x) return res.status(200).json({ danfseLocal: true, chave, xml: x.toString("utf8") });
+        return res.status(503).json({ erro: `O serviço de PDF da Receita (ADN) está fora do ar agora (HTTP ${r.status}). A nota está emitida e válida: tente de novo em alguns minutos, ou pegue o PDF na Consulta Pública (www.nfse.gov.br/consultapublica) com a chave ${chave}`, chave });
+      }
       if (r.status !== 200 || !r.corpo.subarray(0, 5).toString("latin1").startsWith("%PDF"))
         return res.status(502).json({ erro: `A Receita não devolveu o PDF (HTTP ${r.status}): ${trecho(r.corpo)}`, chave });
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="NFSe_${chave}.pdf"`);
       return res.status(200).send(r.corpo);
     }
-    // XML: consulta da NFS-e na Sefin pela chave (vem compactado em gzip + base64)
-    const r = await getComCertificado(`${SEFIN[ambiente]}/${chave}`, cert);
-    let xml: Buffer | null = null;
-    try {
-      const j = JSON.parse(r.corpo.toString("utf8")) as { nfseXmlGZipB64?: string };
-      if (j.nfseXmlGZipB64) xml = gunzipSync(Buffer.from(j.nfseXmlGZipB64, "base64"));
-    } catch { xml = null; }
-    if (r.status !== 200 || !xml) return res.status(502).json({ erro: `A Receita não devolveu o XML (HTTP ${r.status}): ${trecho(r.corpo)}` });
+    const consulta = await consultaSefin(SEFIN[ambiente], chave, cert);
+    const xml = consulta.xml;
+    if (!xml) return res.status(502).json({ erro: `A Receita não devolveu o XML (HTTP ${consulta.status}): ${trecho(consulta.corpo)}` });
     res.setHeader("Content-Type", "application/xml; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="NFSe_${chave}.xml"`);
     return res.status(200).send(xml);
