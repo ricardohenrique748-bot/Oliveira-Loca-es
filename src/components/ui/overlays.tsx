@@ -27,10 +27,12 @@ DialogOverlay.displayName = "DialogOverlay";
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { tamanho?: "sm" | "md" | "lg" | "xl" }
->(({ className, children, tamanho = "md", ...props }, ref) => (
+>(({ className, children, tamanho = "md", onInteractOutside, ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogOverlay />
     <DialogPrimitive.Content ref={ref}
+      // clicar fora (ou num aviso/toast) não fecha a janela: só o X, o botão Fechar/Cancelar ou o Esc
+      onInteractOutside={(e) => { onInteractOutside?.(e); e.preventDefault(); }}
       className={cn(
         "fixed left-1/2 top-1/2 z-50 grid grid-cols-[minmax(0,1fr)] max-h-[92vh] w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border bg-background p-5 shadow-xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         { sm: "max-w-md", md: "max-w-xl", lg: "max-w-3xl", xl: "max-w-5xl" }[tamanho],
