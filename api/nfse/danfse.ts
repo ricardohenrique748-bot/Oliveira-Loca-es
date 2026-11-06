@@ -38,6 +38,25 @@ function getComCertificado(url: string, cert: { chavePem: string; certPem: strin
   });
 }
 
+/** o ADN cai com frequência (503 / sem servidor): tenta de novo algumas vezes antes de desistir (cabe nos 60 s da função) */
+async function getComRetentativa(url: string, cert: { chavePem: string; certPem: string }) {
+  const esperas = [0, 2_000, 5_000, 8_000];
+  let ultimo: { status: number; tipo: string; corpo: Buffer } | null = null;
+  let erro: unknown = null;
+  for (const ms of esperas) {
+    if (ms) await new Promise((r) => setTimeout(r, ms));
+    try {
+      ultimo = await getComCertificado(url, cert);
+      erro = null;
+      if (ultimo.status < 500) return ultimo;
+    } catch (e) {
+      erro = e;
+    }
+  }
+  if (!ultimo) throw erro;
+  return ultimo;
+}
+
 /** trecho da resposta de erro para a mensagem (sem binário) */
 const trecho = (b: Buffer) => b.toString("utf8").replace(/\s+/g, " ").slice(0, 300);
 
@@ -62,9 +81,11 @@ export default async function handler(req: Req, res: Res) {
   try {
     const cert = lerCertificado(pfx, senha);
     if (formato === "pdf") {
-      const r = await getComCertificado(`${ADN[ambiente]}/${chave}`, cert);
+      const r = await getComRetentativa(`${ADN[ambiente]}/${chave}`, cert);
+      if (r.status >= 500)
+        return res.status(503).json({ erro: `O serviço de PDF da Receita (ADN) está fora do ar agora (HTTP ${r.status}). A nota está emitida e válida: tente de novo em alguns minutos, baixe o XML, ou pegue o PDF na Consulta Pública (www.nfse.gov.br/consultapublica) com a chave ${chave}`, chave });
       if (r.status !== 200 || !r.corpo.subarray(0, 5).toString("latin1").startsWith("%PDF"))
-        return res.status(502).json({ erro: `A Receita não devolveu o PDF (HTTP ${r.status}): ${trecho(r.corpo)}` });
+        return res.status(502).json({ erro: `A Receita não devolveu o PDF (HTTP ${r.status}): ${trecho(r.corpo)}`, chave });
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="NFSe_${chave}.pdf"`);
       return res.status(200).send(r.corpo);

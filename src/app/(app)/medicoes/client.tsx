@@ -501,8 +501,13 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
         body: JSON.stringify({ medicaoId: m.id, formato }),
       });
       if (!r.ok) {
-        const j = (await r.json().catch(() => ({}))) as { erro?: string };
-        toast.error(`Não foi possível baixar a NF: ${j.erro ?? `HTTP ${r.status}`}`, { duration: 20_000 });
+        const j = (await r.json().catch(() => ({}))) as { erro?: string; chave?: string };
+        // Receita fora do ar: a chave serve para pegar o PDF na Consulta Pública (www.nfse.gov.br/consultapublica)
+        const chave = j.chave ?? nota.chave;
+        toast.error(`Não foi possível baixar a NF: ${j.erro ?? `HTTP ${r.status}`}`, {
+          duration: 30_000,
+          action: { label: "Copiar chave", onClick: () => { void navigator.clipboard.writeText(chave).then(() => toast.success("Chave da NFS-e copiada")); } },
+        });
         return;
       }
       const url = URL.createObjectURL(await r.blob());
