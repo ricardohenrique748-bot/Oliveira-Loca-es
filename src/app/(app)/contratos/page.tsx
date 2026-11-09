@@ -7,7 +7,7 @@ import { lerParams } from "@/lib/consulta";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { ContratosCliente } from "./client";
-import { opcoesContrato } from "./dados";
+import { opcoesContrato, placasDosContratos } from "./dados";
 
 export default function ContratosPage() {
   const { sessao } = useAuth();
@@ -26,12 +26,22 @@ export default function ContratosPage() {
     if (status !== "todos") q = q.eq("status", status as "ativo");
     if (p.get("cliente")) q = q.eq("cliente_id", p.get("cliente")!);
     if (p.get("corte")) q = q.eq("dia_corte_inicio", Number(p.get("corte")));
-    if (p.q) q = q.ilike("veiculos.placa", `%${p.q.toUpperCase().replace(/[^A-Z0-9]/g, "")}%`);
+    if (p.q) {
+      // a placa buscada pode ser a principal ou uma das outras placas do contrato
+      const busca = p.q.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const { data: vs } = await supabase.from("veiculos").select("id").ilike("placa", `%${busca}%`);
+      const veics = (vs ?? []).map((v) => v.id);
+      const { data: dele } = veics.length ? await supabase.from("contrato_placas").select("contrato_id").in("veiculo_id", veics) : { data: [] };
+      const ids = (dele ?? []).map((x) => x.contrato_id);
+      q = q.or([`veiculo_id.in.(${veics.length ? veics.join(",") : "00000000-0000-0000-0000-000000000000"})`, ...(ids.length ? [`id.in.(${ids.join(",")})`] : [])].join(","));
+    }
     const ordem = ["data_inicio", "valor_mensal", "status"].includes(p.ordem!) ? p.ordem! : "data_inicio";
     const [{ data: linhas, count }, opcoes] = await Promise.all([
       q.order(ordem, { ascending: !p.desc }).range(p.de, p.ate),
       opcoesContrato(supabase, s.empresaId),
     ]);
+
+    const extras = await placasDosContratos(supabase, (linhas ?? []).map((c) => c.id));
 
     return {
       linhas: (linhas ?? []).map((c) => ({
@@ -62,6 +72,7 @@ export default function ContratosPage() {
         placa: c.veiculos.placa,
         modelo: c.veiculos.modelo,
         proprietario: c.veiculos.proprietario,
+        placas_extras: extras ? extras.get(c.id) ?? [] : undefined,
       })),
       total: count ?? 0,
       pagina: p.pagina,

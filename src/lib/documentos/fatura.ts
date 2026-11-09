@@ -4,7 +4,8 @@
  */
 import { formatBRL, formatCompetencia, formatData, formatPeriodo, formatPlaca, maskCpfCnpj } from "@/lib/format";
 import { ROTULOS } from "@/lib/schemas/cadastros";
-import { FORMAS_FATURA, formatQuantidadeAvulsa, type FormaFatura, type ItemAvulsoSalvo, type ItemFatura } from "@/lib/schemas/operacao";
+import { FORMAS_FATURA, formatQuantidadeAvulsa, type FormaFatura, type ItemAvulsoSalvo, type ItemFatura, type PlacaFatura } from "@/lib/schemas/operacao";
+import { baseCobranca, calcularValorMedicao } from "@/lib/calculos";
 import type { Bloco, Documento } from "./pdf";
 import { enderecoCompleto, type ClienteDoc, type EmpresaDoc } from "./proposta";
 
@@ -22,6 +23,8 @@ export interface DadosFatura {
   unidade?: string | null;
   /** avulsa com vários itens: uma linha por item */
   itens?: ItemAvulsoSalvo[] | null;
+  /** contrato com várias placas: uma linha por placa */
+  placas?: PlacaFatura[] | null;
   empresa: EmpresaDoc; cliente: ClienteDoc & { cep?: string | null };
 }
 
@@ -50,7 +53,13 @@ export function montarFatura(d: DadosFatura): Documento {
   const qtd = avulsa ? formatQuantidadeAvulsa(d.dias, d.unidade) : hora ? `${d.dias} h` : `${d.dias} ${diaria ? (d.dias === 1 ? "diária" : "diárias") : d.dias === 1 ? "dia" : "dias"}`;
 
   const periodo = formatPeriodo(d.periodo_inicio, d.periodo_fim);
-  const itens: string[][] = d.itens?.length
+  const base = baseCobranca(d.tipo_cobranca, d.base_dias);
+  const qtdPlaca = (dias: number) => hora ? `${dias} h` : `${dias} ${diaria ? (dias === 1 ? "diária" : "diárias") : dias === 1 ? "dia" : "dias"}`;
+  const itens: string[][] = d.placas?.length
+    ? d.placas.map((p) => [descricaoPadrao({ tipo_cobranca: d.tipo_cobranca, placa: p.placa, veiculo_tipo: p.tipo as DadosFatura["veiculo_tipo"] }),
+        formatPeriodo(p.periodo_inicio, p.periodo_fim), qtdPlaca(p.dias), formatBRL(p.valor_mensal),
+        formatBRL(calcularValorMedicao({ valorMensal: p.valor_mensal, dias: p.dias, baseDias: base }).valorFinal)])
+    : d.itens?.length
     ? d.itens.map((i) => [descricaoPadrao({ tipo_cobranca: "avulsa", descricao: i.descricao, placa: i.placa, veiculo_tipo: null }),
         i.periodo_inicio && i.periodo_fim ? formatPeriodo(i.periodo_inicio, i.periodo_fim) : periodo,
         formatQuantidadeAvulsa(i.quantidade, i.unidade), formatBRL(i.valor_unitario), formatBRL(Math.round(i.quantidade * i.valor_unitario * 100) / 100)])
@@ -76,7 +85,7 @@ export function montarFatura(d: DadosFatura): Documento {
     ] },
     { t: "secao", texto: "Dados da fatura" },
     { t: "campos", colunas: 2, pares: [
-      avulsa && !d.contrato_numero ? ["OS", d.numero_os ?? ""] : ["Contrato", d.contrato_numero ?? ""], ["Placa", d.placa ? formatPlaca(d.placa) : ""],
+      avulsa && !d.contrato_numero ? ["OS", d.numero_os ?? ""] : ["Contrato", d.contrato_numero ?? ""], [d.placas?.length ? "Placas" : "Placa", d.placas?.length ? d.placas.map((p) => formatPlaca(p.placa)).join(", ") : d.placa ? formatPlaca(d.placa) : ""],
       ["Nota fiscal", d.numero_nf ?? ""], ["Pagamento", FORMAS_FATURA[d.forma_pagamento] ?? d.forma_pagamento],
       ["Emissão", formatData(d.data_emissao)], ["Vencimento", formatData(d.data_vencimento)],
     ] },

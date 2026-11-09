@@ -210,3 +210,34 @@ describe("contrato — pagamento por dia fixo", () => {
     expect(texto(montarContrato(contrato))).toContain("no prazo de 15 (quinze) dias contados da emissão");
   });
 });
+
+describe("contrato com várias placas", () => {
+  const outros = [{ placa: "ABC1D23", marca: "Volvo", modelo: "FH 540", ano: 2021, chassi: "9BV123", cor: "Branca", valor_mensal: 9000 }];
+
+  it("fatura: uma linha por placa, com os dias e o proporcional de cada uma", () => {
+    const d = montarFatura({
+      contrato_numero: "OL-020/26", tipo_cobranca: "mensal", base_dias: 30, periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 30,
+      valor_mensal: 27000, valor_base: 24000, acrescimos: 0, descontos: 0, valor_final: 24000, numero_nf: null, data_emissao: null, data_vencimento: null,
+      forma_pagamento: "boleto", acrescimos_itens: [], descontos_itens: [], observacoes: null,
+      placa: "DWK9E10", veiculo_tipo: "caminhao", obra: null, empresa: propostaGuindaste.empresa, cliente: propostaGuindaste.cliente,
+      placas: [
+        { veiculo_id: "1", placa: "DWK9E10", tipo: "caminhao", proprietario: "proprio", principal: true, valor_mensal: 18000, valor_repasse_mensal: null, dias: 30, periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31" },
+        { veiculo_id: "2", placa: "ABC1D23", tipo: "munck", proprietario: "locador", principal: false, valor_mensal: 9000, valor_repasse_mensal: 6000, dias: 20, periodo_inicio: "2026-10-12", periodo_fim: "2026-10-31" },
+      ],
+    });
+    const tabela = d.blocos.find((b) => b.t === "tabela");
+    expect(tabela && tabela.t === "tabela" && tabela.linhas).toEqual([
+      ["Locação de caminhão placa DWK9E10", "01/10 a 31/10/2026", "30 dias", "R$ 18.000,00", "R$ 18.000,00"],
+      ["Locação de munck placa ABC1D23", "12/10 a 31/10/2026", "20 dias", "R$ 9.000,00", "R$ 6.000,00"],
+    ]);
+    expect(texto(d)).toContain("DWK9E10, ABC1D23");
+  });
+
+  it("contrato: todas as placas no objeto e o valor de cada uma", () => {
+    const t = texto(montarContrato({ ...contrato, outros_veiculos: outros }));
+    expect(t).toContain("dos seguintes veículos/equipamentos");
+    expect(t).toContain("ABC1D23");
+    expect(t).toContain("para a placa ABC1D23");
+    expect(t).toMatch(/total R\$/);
+  });
+});

@@ -20,3 +20,21 @@ export async function opcoesContrato(supabase: SupabaseServer, _empresaId: strin
 }
 
 export type OpcoesContrato = Awaited<ReturnType<typeof opcoesContrato>>;
+
+export type PlacaExtra = { veiculo_id: string; placa: string; valor_mensal: number; valor_repasse_mensal: number | null; data_inicio: string | null; data_fim: string | null };
+
+/** Outras placas de cada contrato (a principal é contratos.veiculo_id). null = tabela ainda não existe no banco (migration 0071). */
+export async function placasDosContratos(supabase: SupabaseServer, ids: string[]): Promise<Map<string, PlacaExtra[]> | null> {
+  const mapa = new Map<string, PlacaExtra[]>();
+  if (!ids.length) return mapa;
+  const { data, error } = await supabase.from("contrato_placas")
+    .select("contrato_id, veiculo_id, valor_mensal, valor_repasse_mensal, data_inicio, data_fim, ordem, veiculos(placa)")
+    .in("contrato_id", ids).order("ordem").order("created_at");
+  if (error) return null;
+  for (const p of data ?? []) {
+    const lista = mapa.get(p.contrato_id) ?? [];
+    lista.push({ veiculo_id: p.veiculo_id, placa: p.veiculos?.placa ?? "", valor_mensal: p.valor_mensal, valor_repasse_mensal: p.valor_repasse_mensal, data_inicio: p.data_inicio, data_fim: p.data_fim });
+    mapa.set(p.contrato_id, lista);
+  }
+  return mapa;
+}

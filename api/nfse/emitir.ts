@@ -94,9 +94,16 @@ export default async function handler(req: Req, res: Res) {
   const tomadorCliente = c?.clientes ?? (m.clientes as unknown as { razao_social: string; cnpj: string | null } | null);
   if (!tomadorCliente) return res.status(400).json({ erro: "Fatura sem cliente" });
 
+  // contrato com várias placas: uma linha por placa (consulta à parte: sem a migration 0071 fica como antes)
+  const { data: comPlacas } = c ? await sb.from("medicoes").select("placas").eq("id", medicaoId).maybeSingle() : { data: null };
+  const placas = (Array.isArray(comPlacas?.placas) ? comPlacas.placas : []) as { placa: string; tipo: string | null; dias: number; periodo_inicio: string; periodo_fim: string }[];
+
   // descrição do serviço: quem emite escreve na hora (obra, CNO, endereço, vencimento, PIX...)
   const sugestao = [
-    c ? `Locação de ${c.veiculos?.tipo ?? "veículo"} placa ${c.veiculos?.placa ?? ""} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}${c.numero ? ` – contrato ${c.numero}` : ""}`
+    c && placas.length
+      ? `Locação de ${placas.length} veículos – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}${c.numero ? ` – contrato ${c.numero}` : ""}: `
+        + placas.map((p) => `${p.tipo ?? "veículo"} placa ${p.placa} (${p.dias} dias${p.periodo_inicio !== m.periodo_inicio || p.periodo_fim !== m.periodo_fim ? `, ${dataBR(p.periodo_inicio)} a ${dataBR(p.periodo_fim)}` : ""})`).join("; ")
+    : c ? `Locação de ${c.veiculos?.tipo ?? "veículo"} placa ${c.veiculos?.placa ?? ""} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}${c.numero ? ` – contrato ${c.numero}` : ""}`
       : `${descricaoAvulsa(m.descricao, (m.veiculos as unknown as { placa: string } | null)?.placa, m.itens)} – período ${dataBR(m.periodo_inicio)} a ${dataBR(m.periodo_fim)}`,
     e.nfse_texto_complementar,
   ].filter(Boolean).join("\n");

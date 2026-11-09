@@ -3,7 +3,8 @@ import { z } from "zod";
 import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
-import { edicaoMedicaoSchema, lancamentoAvulsoSchema, lancamentoMedicaoSchema, type ItemAvulsoSalvo } from "@/lib/schemas/operacao";
+import { edicaoMedicaoSchema, lancamentoAvulsoSchema, lancamentoMedicaoSchema, type ItemAvulsoSalvo, type PlacaFatura } from "@/lib/schemas/operacao";
+import type { Json } from "@/lib/supabase/database.types";
 import { addDias, cobrancaAvulsa, diffDias, horasEntre, minData, periodoContendo, placaLivreParaAvulsa, proximoPeriodo, somar, type DiaCorte, type Periodo, type TipoCobranca } from "@/lib/calculos";
 import { formatPlaca } from "@/lib/format";
 
@@ -240,14 +241,25 @@ export async function salvarMedicoes(edicoes: unknown) {
     await exigirEscrita("medicoes");
     const lista = z.array(edicaoMedicaoSchema).max(500).parse(edicoes);
     const supabase = await createClient();
-    for (const { id, ...campos } of lista) {
+    for (const { id, placas_dias, ...dados } of lista) {
+      const campos: typeof dados & { placas?: PlacaFatura[] } = dados;
       const { data: atual } = await supabase.from("medicoes").select("status").eq("id", id).single();
       if (!atual) throw new Error("Fatura não encontrada");
       if (atual.status === "cancelado" || atual.status === "recebido") throw new Error("Faturas recebidas ou canceladas não podem ser editadas");
       if (atual.status !== "a_faturar" && campos.dias !== undefined) delete campos.dias;
+      // várias placas: os dias digitados ficam marcados (o banco não os recalcula) e a principal vira os dias da fatura
+      if (placas_dias?.length && atual.status === "a_faturar") {
+        const { data: m } = await supabase.from("medicoes").select("placas").eq("id", id).single();
+        const placas = ((m?.placas ?? []) as unknown as PlacaFatura[]).map((p) => {
+          const novo = placas_dias.find((x) => x.veiculo_id === p.veiculo_id);
+          return novo && novo.dias !== p.dias ? { ...p, dias: novo.dias, dias_manual: true } : p;
+        });
+        campos.placas = placas;
+        delete campos.dias;
+      }
       if (campos.acrescimos_itens) campos.acrescimos = somar(campos.acrescimos_itens.map((i) => i.valor));
       if (campos.descontos_itens) campos.descontos = somar(campos.descontos_itens.map((i) => i.valor));
-      checar(await supabase.from("medicoes").update(campos).eq("id", id));
+      checar(await supabase.from("medicoes").update(campos as Omit<typeof campos, "placas"> & { placas?: Json }).eq("id", id));
     }
     return { salvas: lista.length };
   }, REVALIDAR, "Faturas salvas");

@@ -13,8 +13,8 @@ import { LinkAnexo } from "@/components/app/anexo";
 import { DataTable } from "@/components/app/data-table";
 import { FormularioDialog } from "@/components/app/formulario";
 import { contratoFormSchema } from "@/lib/schemas/operacao";
-import { formatData, formatPeriodo, formatPlaca } from "@/lib/format";
-import { cobrancaAvulsa, rotuloValorCobranca } from "@/lib/calculos";
+import { formatBRL, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
+import { cobrancaAvulsa, rotuloValorCobranca, somar } from "@/lib/calculos";
 import { baixarContratoPDF } from "@/lib/documentos/baixar";
 import { salvarContrato } from "../actions";
 import { camposContrato, DialogoDesmobilizar, DialogoRenovar, valoresContrato, type ContratoFormTela, type LinhaContrato } from "../client";
@@ -50,6 +50,8 @@ export function DetalheContrato({ contrato: c, assinatura, medicoes, opcoes, emp
   const [desmob, setDesmob] = React.useState(false);
   const [renovar, setRenovar] = React.useState(false);
   const avulsa = cobrancaAvulsa(c.tipo_cobranca);
+  const extras = c.placas_extras ?? [];
+  const valorTotal = somar([c.valor_mensal, ...extras.map((p) => p.valor_mensal ?? 0)]);
   const faturado = medicoes.filter((m) => m.status_exibicao !== "cancelado").reduce((s, m) => s + m.valor_final, 0);
   const margem = medicoes.filter((m) => m.status_exibicao !== "cancelado").reduce((s, m) => s + m.margem, 0);
   const aReceber = medicoes.filter((m) => ["faturado", "recebido_parcial", "vencido"].includes(m.status_exibicao)).reduce((s, m) => s + m.valor_final - m.valor_recebido, 0);
@@ -57,7 +59,7 @@ export function DetalheContrato({ contrato: c, assinatura, medicoes, opcoes, emp
   return (
     <div className="space-y-4">
       <Cabecalho voltar={{ href: "/contratos", rotulo: "Contratos" }}
-        titulo={`${formatPlaca(c.placa)} · ${c.cliente}`}
+        titulo={`${formatPlaca(c.placa)}${extras.length ? ` + ${extras.length}` : ""} · ${c.cliente}`}
         descricao={<span>{c.numero ? `Contrato ${c.numero} · ` : ""}{c.empresa}{c.obra ? ` · ${c.obra}` : ""}</span>}
         acoes={<>
           <StatusBadge status={c.status} className="text-sm" />
@@ -72,7 +74,8 @@ export function DetalheContrato({ contrato: c, assinatura, medicoes, opcoes, emp
         </>} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard titulo={rotuloValorCobranca(c.tipo_cobranca)} valor={<Moeda valor={c.valor_mensal} />} sub={c.valor_repasse_mensal != null ? <>Repasse <Moeda valor={c.valor_repasse_mensal} /></> : "Frota própria"} />
+        <KpiCard titulo={rotuloValorCobranca(c.tipo_cobranca)} valor={<Moeda valor={valorTotal} />}
+          sub={extras.length ? `${extras.length + 1} placas` : c.valor_repasse_mensal != null ? <>Repasse <Moeda valor={c.valor_repasse_mensal} /></> : "Frota própria"} />
         <KpiCard titulo="Total medido" valor={<Moeda valor={faturado} />} sub={`${medicoes.length} medições`} />
         <KpiCard titulo="Margem acumulada" valor={<Moeda valor={margem} sinal />} />
         <KpiCard titulo="A receber" valor={<Moeda valor={aReceber} />} tom={aReceber > 0 ? "alerta" : undefined} />
@@ -86,8 +89,14 @@ export function DetalheContrato({ contrato: c, assinatura, medicoes, opcoes, emp
             <div><dt className="text-xs text-muted-foreground">Pagamento</dt><dd>{c.dia_pagamento ? `Todo dia ${c.dia_pagamento} do mês seguinte à emissão` : `${c.prazo_pagamento_dias} dias após a emissão`}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Início</dt><dd>{formatData(c.data_inicio)}{c.tipo_cobranca === "hora" && c.hora_inicio && c.hora_fim ? ` · ${c.hora_inicio} às ${c.hora_fim}` : ""}</dd></div>
             <div><dt className="text-xs text-muted-foreground">{c.data_desmobilizacao ? "Desmobilização" : avulsa ? "Último dia" : "Término previsto"}</dt><dd>{formatData(c.data_desmobilizacao ?? c.data_fim)}</dd></div>
-            <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Veículo</dt>
-              <dd><Link className="underline" href={`/cadastros/veiculos/${c.veiculo_id}`}>{formatPlaca(c.placa)} {c.modelo}</Link>{c.proprietario === "locador" ? " (sublocado · sem motorista)" : " (frota própria · com motorista)"}</dd></div>
+            <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">{extras.length ? "Veículos" : "Veículo"}</dt>
+              <dd><Link className="underline" href={`/cadastros/veiculos/${c.veiculo_id}`}>{formatPlaca(c.placa)} {c.modelo}</Link>{c.proprietario === "locador" ? " (sublocado · sem motorista)" : " (frota própria · com motorista)"}
+                {extras.length > 0 && <> · {formatBRL(c.valor_mensal)}{c.valor_repasse_mensal != null && <> · repasse {formatBRL(c.valor_repasse_mensal)}</>}</>}</dd>
+              {extras.map((p) => (
+                <dd key={p.veiculo_id}><Link className="underline" href={`/cadastros/veiculos/${p.veiculo_id}`}>{formatPlaca(p.placa)}</Link>
+                  {" · "}{formatBRL(p.valor_mensal)}{p.valor_repasse_mensal != null && <> · repasse {formatBRL(p.valor_repasse_mensal)}</>}
+                  {(p.data_inicio || p.data_fim) && <span className="text-muted-foreground"> · {p.data_inicio ? `de ${formatData(p.data_inicio)}` : "desde o início"}{p.data_fim ? ` até ${formatData(p.data_fim)}` : ""}</span>}</dd>
+              ))}</div>
             {assinatura && <SituacaoAssinatura c={assinatura} />}
             {c.anexo_url && <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Contrato do cliente</dt><dd><LinkAnexo referencia={c.anexo_url} /></dd></div>}
             {c.observacoes && <div className="col-span-2 sm:col-span-4"><dt className="text-xs text-muted-foreground">Observações</dt><dd className="whitespace-pre-wrap">{c.observacoes}</dd></div>}

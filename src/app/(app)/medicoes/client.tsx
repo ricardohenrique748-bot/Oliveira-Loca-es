@@ -17,7 +17,7 @@ import { SeletorMes } from "@/components/app/seletor-mes";
 import { baseCobranca, cobrancaAvulsa, rotuloValorCobranca, calcularHoraExtra, calcularValorMedicao, calcularVencimento, hojeSP, somar, type TipoCobrancaFatura } from "@/lib/calculos";
 import { formatBRL, formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { exportarPDF, exportarXLSX, type ColunaExport } from "@/lib/exportar";
-import { FORMAS_FATURA, UNIDADES_AVULSA, formatQuantidadeAvulsa, type FormaFatura, type ItemAvulsoSalvo, type ItemFatura, type UnidadeAvulsa } from "@/lib/schemas/operacao";
+import { FORMAS_FATURA, UNIDADES_AVULSA, formatQuantidadeAvulsa, type FormaFatura, type ItemAvulsoSalvo, type ItemFatura, type PlacaFatura, type UnidadeAvulsa } from "@/lib/schemas/operacao";
 import { SelectSimples } from "@/components/ui/select";
 import { baixarFaturaPDF } from "@/lib/documentos/baixar";
 import { entregarArquivo } from "@/lib/plataforma";
@@ -40,7 +40,12 @@ export type LinhaMedicao = {
   tipo_cobranca: TipoCobrancaFatura | null; descricao: string | null; unidade: string | null; numero_os: string | null; forma_pagamento: string | null; acrescimos_itens: ItemFatura[] | null; descontos_itens: ItemFatura[] | null;
   /** fatura avulsa com vários itens (vazio = um item só, nas colunas dias / unidade / valor_mensal) */
   itens: ItemAvulsoSalvo[] | null;
+  /** contrato com várias placas: uma linha por placa (vazio = contrato de uma placa só) */
+  placas?: PlacaFatura[] | null;
 };
+
+/** Fatura de contrato com várias placas: o valor vem das placas, não se edita na grade */
+const temPlacas = (m: LinhaMedicao) => (m.placas?.length ?? 0) > 0;
 
 /** Fatura avulsa com vários itens: quantidade e valor vêm dos itens, não se editam na grade */
 const temItens = (m: LinhaMedicao) => (m.itens?.length ?? 0) > 0;
@@ -264,6 +269,7 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                       {m.contrato_id
                         ? <>
                             <span className="font-mono text-base font-bold tracking-wide hover:underline">{formatPlaca(m.placa)}</span>
+                            {temPlacas(m) && <span className="font-mono text-xs font-semibold" title={m.placas!.map((p) => formatPlaca(p.placa)).join(", ")}>+{m.placas!.length - 1}</span>}
                             {m.contrato_numero != null && <span className="font-mono text-xs text-muted-foreground">{m.contrato_numero}</span>}
                           </>
                         : <><Badge variant="neutro" className="px-1.5 py-0 text-[10px]">Avulsa</Badge>{m.numero_os && <span className="shrink-0 font-mono text-sm font-semibold">OS {m.numero_os}</span>}{m.placa && <span className="font-mono text-sm font-semibold">{formatPlaca(m.placa)}</span>}<span className={cn("truncate", m.placa ? "text-muted-foreground" : "text-sm font-semibold hover:underline")}>{m.descricao}</span></>}
@@ -281,10 +287,10 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
                   </TableCell>
                   <TableCell className="text-right leading-tight">
                     <span className="text-sm font-semibold"><Moeda valor={valorFinal} /></span><br />
-                    {ed && !temItens(m)
+                    {ed && !temItens(m) && !temPlacas(m)
                       ? <InputMoeda data-linha={i} data-col="valor_mensal" aria-label={rotuloValorCobranca(m.tipo_cobranca)} title={rotuloValorCobranca(m.tipo_cobranca)}
                           className="mt-0.5 h-6 w-28 pl-7 text-right text-[11px]" permitirVazio={false} value={valor(m, "valor_mensal")} onChange={(v) => editar(m, "valor_mensal", v ?? 0)} />
-                      : <span className="text-[11px] text-muted-foreground" title={rotuloValorCobranca(m.tipo_cobranca)}>{temItens(m) ? rotuloItens(m) : <>{m.tipo_cobranca === "avulsa" ? "unit." : "mensal"} <Moeda valor={m.valor_mensal} /></>}</span>}
+                      : <span className="text-[11px] text-muted-foreground" title={rotuloValorCobranca(m.tipo_cobranca)}>{temItens(m) ? rotuloItens(m) : <>{m.tipo_cobranca === "avulsa" ? "unit." : temPlacas(m) ? `${m.placas!.length} placas` : "mensal"} <Moeda valor={m.valor_mensal} /></>}</span>}
                   </TableCell>
                   <TableCell><Input data-linha={i} data-col="numero_nf" aria-label="Número da NF" className={campo} disabled={!ed} value={valor(m, "numero_nf") ?? ""} onChange={(e) => editar(m, "numero_nf", e.target.value || null)} /></TableCell>
                   <TableCell><Input data-linha={i} data-col="data_emissao" aria-label="Data de emissão" type="date" className={data} disabled={!ed} value={valor(m, "data_emissao") ?? ""} onChange={(e) => editar(m, "data_emissao", e.target.value || null)} /></TableCell>
@@ -572,27 +578,33 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
     }
   };
   // dias, acréscimos e descontos saíram da grade: ajustam-se aqui
-  const [ajuste, setAjuste] = React.useState({ dias: 0, os: "", forma: "boleto" as FormaFatura, acrescimos: [] as ItemFatura[], descontos: [] as ItemFatura[] });
+  const [ajuste, setAjuste] = React.useState({ dias: 0, os: "", forma: "boleto" as FormaFatura, acrescimos: [] as ItemFatura[], descontos: [] as ItemFatura[], placas: [] as number[] });
   const [salvando, setSalvando] = React.useState(false);
   const [horas, setHoras] = React.useState<number | null>(null);
   const formaAtual = (m?.forma_pagamento ?? "boleto") as FormaFatura;
   const salvos = React.useMemo(() => JSON.stringify([itensDe(m, "acrescimos"), itensDe(m, "descontos")]), [m]);
   React.useEffect(() => {
     setHoras(null);
-    if (m) setAjuste({ dias: m.dias, os: m.numero_os ?? "", forma: (m.forma_pagamento ?? "boleto") as FormaFatura, acrescimos: itensDe(m, "acrescimos"), descontos: itensDe(m, "descontos") });
+    if (m) setAjuste({ dias: m.dias, os: m.numero_os ?? "", forma: (m.forma_pagamento ?? "boleto") as FormaFatura, acrescimos: itensDe(m, "acrescimos"), descontos: itensDe(m, "descontos"), placas: (m.placas ?? []).map((p) => p.dias) });
   }, [m]);
   const ed = !!m && podeEditar && (m.status === "a_faturar" || m.status === "faturado");
   const acrescimos = somar(ajuste.acrescimos.map((i) => i.valor ?? 0));
   const descontos = somar(ajuste.descontos.map((i) => i.valor ?? 0));
   const mudouItens = JSON.stringify([ajuste.acrescimos, ajuste.descontos]) !== salvos;
   const mudouOS = !!m && ajuste.os.trim() !== (m.numero_os ?? "");
-  const mudou = !!m && (ajuste.dias !== m.dias || mudouOS || ajuste.forma !== formaAtual || mudouItens);
-  const total = m ? calcularValorMedicao({ valorMensal: m.valor_mensal, dias: ajuste.dias, acrescimos, descontos, baseDias: baseCobranca(m.tipo_cobranca, baseDias) }).valorFinal : 0;
+  const mudouPlacas = !!m && (m.placas ?? []).some((p, k) => ajuste.placas[k] !== p.dias);
+  const mudou = !!m && (ajuste.dias !== m.dias || mudouOS || ajuste.forma !== formaAtual || mudouItens || mudouPlacas);
+  // várias placas: cada uma proporcional aos dias dela
+  const valorPlaca = (p: PlacaFatura, dias: number) => m ? calcularValorMedicao({ valorMensal: p.valor_mensal, dias, acrescimos: 0, descontos: 0, baseDias: baseCobranca(m.tipo_cobranca, baseDias) }).valorFinal : 0;
+  const total = !m ? 0 : temPlacas(m)
+    ? Math.max(0, somar([...m.placas!.map((p, k) => valorPlaca(p, ajuste.placas[k] ?? p.dias)), acrescimos, -descontos]))
+    : calcularValorMedicao({ valorMensal: m.valor_mensal, dias: ajuste.dias, acrescimos, descontos, baseDias: baseCobranca(m.tipo_cobranca, baseDias) }).valorFinal;
   const salvarAjuste = async () => {
     if (!m) return;
     setSalvando(true);
     const r = await rodarAcao(salvarMedicoes([{
-      id: m.id, ...(ajuste.dias !== m.dias ? { dias: ajuste.dias } : {}),
+      id: m.id, ...(!temPlacas(m) && ajuste.dias !== m.dias ? { dias: ajuste.dias } : {}),
+      ...(mudouPlacas ? { placas_dias: m.placas!.map((p, k) => ({ veiculo_id: p.veiculo_id, dias: ajuste.placas[k] ?? p.dias })) } : {}),
       acrescimos_itens: preenchidos(ajuste.acrescimos), descontos_itens: preenchidos(ajuste.descontos),
       ...(ajuste.forma !== formaAtual ? { forma_pagamento: ajuste.forma } : {}),
       ...(mudouOS ? { numero_os: ajuste.os.trim() || null } : {}),
@@ -625,7 +637,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
                 : item("OS", m.numero_os ?? "Sem contrato (avulsa)")}
             {item("Período", m.contrato_id ? `${formatPeriodo(m.periodo_inicio, m.periodo_fim)} (${m.dias} dias)` : formatPeriodo(m.periodo_inicio, m.periodo_fim))}
             {m.contrato_id
-              ? item("Veículo", `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)
+              ? item(temPlacas(m) ? "Veículos" : "Veículo", temPlacas(m) ? m.placas!.map((p) => formatPlaca(p.placa)).join(", ") : `${formatPlaca(m.placa)}${m.veiculo_tipo ? ` · ${m.veiculo_tipo}` : ""}${m.proprietario === "locador" ? " · sublocado" : ""}`)
               : temItens(m) ? item("Serviço", `${m.itens!.length === 1 ? m.itens![0].descricao : `${m.itens!.length} itens`}${m.placa ? ` · ${formatPlaca(m.placa)}` : ""}`)
               : item("Serviço", `${m.descricao ?? ""}${m.placa ? ` · ${formatPlaca(m.placa)}${m.veiculo_tipo ? ` (${m.veiculo_tipo})` : ""}` : ""}`)}
             {m.contrato_id && item("Pagamento", m.dia_pagamento ? `Todo dia ${m.dia_pagamento} do mês seguinte` : `${m.prazo_pagamento_dias} dias`)}
@@ -639,13 +651,27 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
                     <span className="block text-xs text-muted-foreground">{it.periodo_inicio && it.periodo_fim ? `${formatPeriodo(it.periodo_inicio, it.periodo_fim)} · ` : ""}{formatQuantidadeAvulsa(it.quantidade, it.unidade)} × <Moeda valor={it.valor_unitario} /></span></TableCell>
                     <TableCell className="text-right"><Moeda valor={Math.round(it.quantidade * it.valor_unitario * 100) / 100} /></TableCell></TableRow>
                 ))
+                : temPlacas(m) ? m.placas!.map((p, k) => (
+                  <TableRow key={p.veiculo_id}>
+                    <TableCell><span className="font-mono font-semibold">{formatPlaca(p.placa)}</span>{p.proprietario === "locador" && <Badge variant="info" className="ml-2 px-1.5 py-0 text-[10px]">Sub</Badge>}
+                      <span className="block text-xs text-muted-foreground">{formatPeriodo(p.periodo_inicio, p.periodo_fim)} · <Moeda valor={p.valor_mensal} />{m.tipo_cobranca === "mensal" ? ` ÷ ${baseDias}` : ""} × {m.tipo_cobranca === "hora" ? "horas" : m.tipo_cobranca === "diaria" ? "diárias" : "dias"}
+                        {p.valor_repasse_mensal != null && <> · repasse <Moeda valor={p.valor_repasse_mensal} /></>}</span></TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <InputNumero aria-label={`Dias da placa ${formatPlaca(p.placa)}`} className="h-8 w-16 text-right" value={ajuste.placas[k] ?? p.dias} disabled={!ed || m.status !== "a_faturar"}
+                          onChange={(v) => setAjuste((a) => ({ ...a, placas: m.placas!.map((x, j) => (j === k ? Math.min(31, v ?? 0) : a.placas[j] ?? x.dias)) }))} />
+                        <span className="w-28"><Moeda valor={valorPlaca(p, ajuste.placas[k] ?? p.dias)} /></span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
                 : <TableRow><TableCell>{m.tipo_cobranca === "diaria" ? "Valor da diária (10 h)" : rotuloValorCobranca(m.tipo_cobranca)}</TableCell><TableCell className="text-right"><Moeda valor={m.valor_mensal} /></TableCell></TableRow>}
                 {/* diária = 10 h; o que passar vira o item "Hora extra" dos acréscimos (10% da diária por hora) */}
                 {m.tipo_cobranca === "diaria" && <TableRow><TableCell>Horas trabalhadas <span className="text-xs text-muted-foreground">(passou de 10 h por diária = hora extra, 10% da diária cada)</span></TableCell><TableCell className="text-right">
                   <InputNumero aria-label="Horas trabalhadas" className="ml-auto h-8 w-20 text-right" casas={1} value={horas} placeholder="h" disabled={!ed}
                     onChange={(v) => { setHoras(v); if (v != null) setAjuste((a) => ({ ...a, acrescimos: comHoraExtra(a.acrescimos, m.valor_mensal, a.dias, v) })); }} />
                 </TableCell></TableRow>}
-                {!temItens(m) && <TableRow><TableCell>{m.tipo_cobranca === "diaria" ? "Diárias" : m.tipo_cobranca === "hora" ? "Horas trabalhadas (hora × horas)" : m.tipo_cobranca === "avulsa" ? `Quantidade${m.unidade ? ` de ${UNIDADES_AVULSA[m.unidade as UnidadeAvulsa]?.toLowerCase() ?? m.unidade}` : ""} (unitário × quantidade)` : `Dias (mensal ÷ ${baseDias} × dias)`}</TableCell><TableCell className="text-right">
+                {!temItens(m) && !temPlacas(m) && <TableRow><TableCell>{m.tipo_cobranca === "diaria" ? "Diárias" : m.tipo_cobranca === "hora" ? "Horas trabalhadas (hora × horas)" : m.tipo_cobranca === "avulsa" ? `Quantidade${m.unidade ? ` de ${UNIDADES_AVULSA[m.unidade as UnidadeAvulsa]?.toLowerCase() ?? m.unidade}` : ""} (unitário × quantidade)` : `Dias (mensal ÷ ${baseDias} × dias)`}</TableCell><TableCell className="text-right">
                   <InputNumero aria-label={m.tipo_cobranca === "hora" ? "Horas" : m.tipo_cobranca === "avulsa" ? "Quantidade" : "Dias"} className="ml-auto h-8 w-20 text-right" value={ajuste.dias} disabled={!ed || m.status !== "a_faturar"}
                     onChange={(v) => setAjuste((a) => ({ ...a, dias: Math.min(m.tipo_cobranca === "avulsa" ? 99_999 : 31, v ?? 0) }))} />
                 </TableCell></TableRow>}

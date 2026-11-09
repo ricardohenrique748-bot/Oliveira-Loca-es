@@ -6,7 +6,7 @@ import { enviarAoFaturamento, faturarDiaria } from "../medicoes/actions";
 import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
-import { contratoSchema, desmobilizarSchema, renovacaoSchema } from "@/lib/schemas/operacao";
+import { contratoSchema, desmobilizarSchema, placasContratoSchema, renovacaoSchema } from "@/lib/schemas/operacao";
 import { cobrancaAvulsa } from "@/lib/calculos";
 
 export async function salvarContrato(id: string | null, dados: unknown) {
@@ -15,22 +15,50 @@ export async function salvarContrato(id: string | null, dados: unknown) {
   // diária / hora vale um dia só: o último dia do contrato é o próprio início (mais dias = renovar)
   const form = cliente.dados as { tipo_cobranca?: string; data_inicio?: string | null; data_fim?: string | null };
   const valores = !id && cobrancaAvulsa(form.tipo_cobranca) ? { ...form, data_fim: form.data_inicio } : form;
-  // placa já locada não entra em outro contrato (ao editar, só se trocar de placa)
+  // as outras placas do contrato (só quando o formulário as manda)
+  const temExtras = Array.isArray((valores as { placas_extras?: unknown }).placas_extras);
+  const extras = placasContratoSchema.safeParse((valores as { placas_extras?: unknown }).placas_extras ?? []);
+  if (!extras.success) return { ok: false as const, erro: extras.error.issues[0]?.message ?? "Placas do contrato inválidas" };
+  // placa já locada não entra em outro contrato (ao editar, só as que entram agora)
   const veiculoId = (valores as { veiculo_id?: string }).veiculo_id;
   if (veiculoId) {
     const supabase = await createClient();
     const atual = id ? (await supabase.from("contratos").select("veiculo_id").eq("id", id).maybeSingle()).data?.veiculo_id : null;
-    if (veiculoId !== atual) {
-      const { data: v } = await supabase.from("veiculos").select("placa, status").eq("id", veiculoId).maybeSingle();
-      if (v && v.status !== "disponivel" && v.status !== "parado")
-        return { ok: false as const, erro: `A placa ${v.placa} está ${v.status === "locado" ? "locada em outro contrato" : "em manutenção ou vendida"} — escolha um veículo disponível` };
+    const jaNoContrato = new Set<string>([atual ?? ""]);
+    if (id && temExtras) for (const p of (await supabase.from("contrato_placas").select("veiculo_id").eq("contrato_id", id)).data ?? []) jaNoContrato.add(p.veiculo_id);
+    const novas = [veiculoId, ...(temExtras ? extras.data.map((p) => p.veiculo_id) : [])].filter((v) => !jaNoContrato.has(v));
+    if (novas.length) {
+      const { data: vs } = await supabase.from("veiculos").select("placa, status").in("id", novas);
+      const ocupada = (vs ?? []).find((v) => v.status !== "disponivel" && v.status !== "parado");
+      if (ocupada)
+        return { ok: false as const, erro: `A placa ${ocupada.placa} está ${ocupada.status === "locado" ? "locada em outro contrato" : "em manutenção ou vendida"} — escolha um veículo disponível` };
     }
   }
   const r = await salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados: valores, schema: contratoSchema, revalidar: ["/contratos", "/medicoes", "/dashboard", "/cadastros/veiculos", "/manutencao"] });
-  if (!r.ok || id) return r;
+  if (!r.ok) return r;
+  if (temExtras && (id || extras.data.length)) {
+    const s = await salvarPlacasContrato(r.dados.id, extras.data.filter((p) => p.veiculo_id !== veiculoId));
+    if (!s.ok) return { ok: false as const, erro: `Contrato salvo, mas as outras placas não: ${s.erro}` };
+  }
+  if (id) return r;
   // contrato novo já entra no faturamento; se falhar, o contrato fica salvo e a fatura sai pelo "Gerar faturas do período"
   const f = await enviarAoFaturamento(r.dados.id);
   return { ...r, mensagem: f.ok && f.dados.geradas ? "Contrato criado e enviado ao faturamento" : "Contrato criado" };
+}
+
+/** Grava as outras placas do contrato: tira as que saíram, atualiza as que ficaram e inclui as novas (os gatilhos acertam veículo e faturas pendentes). */
+async function salvarPlacasContrato(contratoId: string, placas: { veiculo_id: string; valor_mensal: number; valor_repasse_mensal: number | null; data_inicio: string | null; data_fim: string | null }[]) {
+  return executar(async () => {
+    const supabase = await createClient();
+    const atuais = checar(await supabase.from("contrato_placas").select("id, veiculo_id").eq("contrato_id", contratoId)) ?? [];
+    const sairam = atuais.filter((a) => !placas.some((p) => p.veiculo_id === a.veiculo_id)).map((a) => a.id);
+    if (sairam.length) checar(await supabase.from("contrato_placas").delete().in("id", sairam));
+    if (placas.length) checar(await supabase.from("contrato_placas").upsert(
+      placas.map((p, i) => ({ contrato_id: contratoId, veiculo_id: p.veiculo_id, valor_mensal: p.valor_mensal, valor_repasse_mensal: p.valor_repasse_mensal,
+        data_inicio: p.data_inicio, data_fim: p.data_fim, ordem: i })),
+      { onConflict: "contrato_id,veiculo_id" }));
+    return null;
+  }, ["/contratos", "/medicoes", "/cadastros/veiculos"]);
 }
 
 /** Exclui o contrato com as medições dele (e recebimentos, boletos e repasses delas). */

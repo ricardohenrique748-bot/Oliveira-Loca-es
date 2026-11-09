@@ -607,6 +607,63 @@ export type Database = {
           },
         ]
       }
+      contrato_placas: {
+        Row: {
+          contrato_id: string
+          created_at: string
+          created_by: string | null
+          data_fim: string | null
+          data_inicio: string | null
+          id: string
+          ordem: number
+          updated_at: string
+          valor_mensal: number
+          valor_repasse_mensal: number | null
+          veiculo_id: string
+        }
+        Insert: {
+          contrato_id: string
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          id?: string
+          ordem?: number
+          updated_at?: string
+          valor_mensal: number
+          valor_repasse_mensal?: number | null
+          veiculo_id: string
+        }
+        Update: {
+          contrato_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          id?: string
+          ordem?: number
+          updated_at?: string
+          valor_mensal?: number
+          valor_repasse_mensal?: number | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrato_placas_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_placas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contratos: {
         Row: {
           anexo_url: string | null
@@ -1147,6 +1204,7 @@ export type Database = {
           observacoes: string | null
           periodo_fim: string
           repasses_avulsos: Json
+          placas: Json
           periodo_inicio: string
           status: Database["public"]["Enums"]["status_medicao"]
           unidade: string | null
@@ -1185,6 +1243,7 @@ export type Database = {
           observacoes?: string | null
           periodo_fim: string
           repasses_avulsos?: Json
+          placas?: Json
           periodo_inicio: string
           status?: Database["public"]["Enums"]["status_medicao"]
           unidade?: string | null
@@ -1223,6 +1282,7 @@ export type Database = {
           observacoes?: string | null
           periodo_fim?: string
           repasses_avulsos?: Json
+          placas?: Json
           periodo_inicio?: string
           status?: Database["public"]["Enums"]["status_medicao"]
           unidade?: string | null
@@ -2401,6 +2461,8 @@ export type Database = {
           periodo_fim: string | null
           periodo_inicio: string | null
           placa: string | null
+          placas: Json | null
+          placas_texto: string | null
           prazo_pagamento_dias: number | null
           proprietario: Database["public"]["Enums"]["proprietario_veiculo"] | null
           repasse_bruto: number | null

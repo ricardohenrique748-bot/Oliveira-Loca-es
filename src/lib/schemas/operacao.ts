@@ -42,10 +42,25 @@ export const contratoSchema = contratoBase.superRefine(validarDatas)
   // o dia da data do pagamento é o que vale no vencimento (app.calcular_vencimento usa dia_pagamento)
   .transform((c) => ({ ...c, dia_pagamento: c.data_pagamento ? Number(c.data_pagamento.slice(8, 10)) : null }));
 
+/** Placa a mais no contrato: valor e repasse próprios; início/fim vazios = as datas do contrato. */
+export const placaContratoSchema = z.object({
+  veiculo_id: uuidObr("a placa"),
+  valor_mensal: moedaObr("o valor da placa").refine((v) => v > 0, "Informe o valor da placa"),
+  valor_repasse_mensal: moedaOpc,
+  data_inicio: dataOpc,
+  data_fim: dataOpc,
+}).refine((p) => !p.data_fim || !p.data_inicio || p.data_fim >= p.data_inicio, { path: ["data_fim"], message: "Fim antes do início" });
+export type PlacaContrato = z.input<typeof placaContratoSchema>;
+
+/** as outras placas do contrato (a principal é veiculo_id): sem repetir placa */
+export const placasContratoSchema = z.array(placaContratoSchema).max(50).default([]);
+
 /** formulário: aceita cliente sem cadastro (CLIENTE_NOVO + nome digitado), que é cadastrado ao salvar */
-export const contratoFormSchema = contratoBase.extend(clienteFormCampos).superRefine((c, ctx) => {
+export const contratoFormSchema = contratoBase.extend({ ...clienteFormCampos, placas_extras: placasContratoSchema.optional() }).superRefine((c, ctx) => {
   validarDatas(c, ctx);
   validarClienteForm(c, ctx);
+  const todas = [c.veiculo_id, ...(c.placas_extras ?? []).map((p) => p.veiculo_id)];
+  if (new Set(todas).size !== todas.length) ctx.addIssue({ code: "custom", path: ["placas_extras"], message: "A mesma placa aparece duas vezes no contrato" });
 });
 export type ContratoForm = z.input<typeof contratoFormSchema>;
 
@@ -69,9 +84,17 @@ const itensFatura = (nome: string) => z.array(z.object({
   valor: z.number().positive(`Valor do ${nome} deve ser maior que zero`),
 })).max(50);
 
+/** Linha de placa da fatura de contrato com várias placas (medicoes.placas, montada pelo banco) */
+export type PlacaFatura = {
+  veiculo_id: string; placa: string; tipo: string | null; proprietario: string | null; principal: boolean;
+  valor_mensal: number; valor_repasse_mensal: number | null; dias: number; dias_manual?: boolean; periodo_inicio: string; periodo_fim: string;
+};
+
 /** Edição na grade de medições (estilo planilha) */
 export const edicaoMedicaoSchema = z.object({
   id: z.string().uuid(),
+  /** contrato com várias placas: dias de cada placa, digitados à mão */
+  placas_dias: z.array(z.object({ veiculo_id: z.string().uuid(), dias: z.number().int().min(0).max(31) })).max(50).optional(),
   /** até 31 com contrato (o banco confere); fatura avulsa usa como quantidade */
   dias: z.number().int().min(0).max(99_999).optional(),
   /** valor mensal (ou da diária) desta medição; o contrato só dá o valor inicial */

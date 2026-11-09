@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CalendarPlus, FileDown, LogOut } from "lucide-react";
+import { CalendarPlus, FileDown, LogOut, Plus, Trash2 } from "lucide-react";
 import { CrudSimples } from "@/components/app/crud";
 import { Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { FiltroSelectUrl } from "@/components/app/url";
@@ -11,9 +11,10 @@ import type { Campo } from "@/components/app/formulario";
 import { Badge, Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Opcao } from "@/components/ui/select";
-import { contratoFormSchema, type ContratoForm } from "@/lib/schemas/operacao";
-import { cobrancaAvulsa, horasEntre, type TipoCobranca } from "@/lib/calculos";
+import { SelectSimples, type Opcao } from "@/components/ui/select";
+import { InputMoeda } from "@/components/app/campos";
+import { contratoFormSchema, type ContratoForm, type PlacaContrato } from "@/lib/schemas/operacao";
+import { cobrancaAvulsa, horasEntre, somar, type TipoCobranca } from "@/lib/calculos";
 import { CLIENTE_NOVO } from "@/lib/schemas/cadastros";
 import { formatBRL, formatData, formatPlaca, hojeSP } from "@/lib/format";
 import { baixarContratoPDF } from "@/lib/documentos/baixar";
@@ -25,6 +26,8 @@ export type LinhaContrato = {
   tipo_cobranca: TipoCobranca; valor_mensal: number; valor_repasse_mensal: number | null; dia_corte_inicio: number; prazo_pagamento_dias: number; dia_pagamento: number | null; data_pagamento: string | null;
   data_inicio: string; data_fim: string | null; hora_inicio: string | null; hora_fim: string | null; data_desmobilizacao: string | null; status: "ativo" | "encerrado" | "suspenso"; observacoes: string | null; anexo_url: string | null;
   empresa: string; cliente: string; obra: string | null; placa: string; modelo: string | null; proprietario: "proprio" | "locador";
+  /** as outras placas do contrato (a principal é veiculo_id / placa) */
+  placas_extras?: (PlacaContrato & { placa: string })[];
 };
 
 /** Campo "sublocado" só existe na tela (filtra os veículos); o schema o descarta ao salvar. */
@@ -63,6 +66,12 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
     { nome: "valor_repasse_mensal", rotulo: "Repasse mensal (locador)", tipo: "moeda", col: 3, visivel: (v) => mensal(v) && locador(v), ajuda: "Valor fixo mensal pago ao dono do veículo" },
     { nome: "valor_repasse_mensal", rotulo: "Repasse por dia (locador)", tipo: "moeda", col: 3, visivel: (v) => diaria(v) && locador(v), ajuda: "Valor por dia pago ao dono do veículo" },
     { nome: "valor_repasse_mensal", rotulo: "Repasse por hora (locador)", tipo: "moeda", col: 3, visivel: (v) => hora(v) && locador(v), ajuda: "Valor por hora pago ao dono do veículo" },
+    // mais de uma placa no mesmo contrato: cada uma com o seu valor; a fatura sai uma só, com uma linha por placa
+    { nome: "placas_extras", rotulo: "Outras placas do contrato", tipo: "personalizado", col: 6,
+      render: ({ value, onChange, valores }) => (
+        <EditorPlacas placas={(value as PlacaContrato[] | undefined) ?? []} onChange={onChange} veiculos={opcoes.veiculos} principal={valores.veiculo_id ?? null}
+          valorPrincipal={valores.valor_mensal ?? 0} unidade={valores.tipo_cobranca === "hora" ? "hora" : valores.tipo_cobranca === "diaria" ? "diária" : "mês"} mensal={mensal(valores)} />
+      ) },
     { nome: "dia_corte_inicio", rotulo: "Período de medição", tipo: "select", col: 2, visivel: mensal, opcoes: [{ value: "1", label: "Dia 01 ao fim do mês" }, { value: "21", label: "Dia 21 ao dia 20" }] },
     { nome: "prazo_pagamento_dias", rotulo: "Prazo de pagamento (dias)", tipo: "numero", col: 2, visivel: mensal, ajuda: "Vale quando a data do pagamento está vazia" },
     { nome: "data_pagamento", rotulo: "Data do pagamento", tipo: "data", col: 2, visivel: mensal,
@@ -81,7 +90,61 @@ export function valoresContrato(c: LinhaContrato): ContratoFormTela {
     sublocado: c.proprietario === "locador" ? "sim" : "nao", tipo_cobranca: c.tipo_cobranca, empresa_id: c.empresa_id, cliente_id: c.cliente_id, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
     valor_mensal: c.valor_mensal, valor_repasse_mensal: c.valor_repasse_mensal, dia_corte_inicio: c.dia_corte_inicio as never,
     prazo_pagamento_dias: c.prazo_pagamento_dias, data_pagamento: c.data_pagamento, data_inicio: c.data_inicio, data_fim: c.data_fim, hora_inicio: c.hora_inicio, hora_fim: c.hora_fim, status: c.status, observacoes: c.observacoes, anexo_url: c.anexo_url,
+    // sem a lista (tabela ainda não criada no banco): o formulário não mexe nas outras placas
+    placas_extras: c.placas_extras?.map(({ placa: _placa, ...p }) => p),
   };
+}
+
+const PLACA_VAZIA = { veiculo_id: undefined, valor_mensal: undefined, valor_repasse_mensal: null, data_inicio: null, data_fim: null } as unknown as PlacaContrato;
+
+/** As outras placas do contrato: placa, valor, repasse (sublocada) e, se quiser, início/fim próprios. */
+function EditorPlacas({ placas, onChange, veiculos, principal, valorPrincipal, unidade, mensal }: {
+  placas: PlacaContrato[]; onChange: (v: PlacaContrato[]) => void; veiculos: OpcoesContrato["veiculos"];
+  principal: string | null; valorPrincipal: number; unidade: string; mensal: boolean;
+}) {
+  const alterar = (i: number, p: Partial<PlacaContrato>) => onChange(placas.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const total = somar([valorPrincipal, ...placas.map((p) => p.valor_mensal ?? 0)]);
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-xs text-muted-foreground">
+        A placa escolhida em <strong>Veículo</strong> é a principal. Inclua aqui as outras placas deste contrato, cada uma com o seu valor. A fatura sai <strong>uma só</strong>, com uma linha por placa.
+        {mensal && <> Início e fim em branco = as datas do contrato. Com datas, a fatura cobra só os dias da placa no período.</>}
+      </p>
+      {placas.map((p, i) => {
+        const locador = veiculos.find((x) => x.value === p.veiculo_id)?.proprietario === "locador";
+        // placa livre (ou já desta linha) e que não está em outra linha nem é a principal
+        const opcoesPlaca = veiculos.filter((x) => (x.status === "disponivel" || x.status === "parado" || x.value === p.veiculo_id)
+          && x.value !== principal && !placas.some((o, j) => j !== i && o.veiculo_id === x.value));
+        return (
+          <div key={i} className="grid grid-cols-6 items-end gap-2 border-b pb-2 last:border-0">
+            <div className="col-span-6 space-y-1 sm:col-span-2"><Label className="text-xs">Placa</Label>
+              <SelectSimples value={p.veiculo_id ?? null} vazio="—" opcoes={opcoesPlaca} aria-label="Placa"
+                onChange={(v) => alterar(i, { veiculo_id: (v ?? undefined) as string, ...(veiculos.find((x) => x.value === v)?.proprietario === "locador" ? {} : { valor_repasse_mensal: null }) })} /></div>
+            <div className="col-span-3 space-y-1 sm:col-span-1"><Label className="text-xs">Valor/{unidade}</Label>
+              <InputMoeda value={p.valor_mensal ?? null} onChange={(v) => alterar(i, { valor_mensal: (v ?? undefined) as number })} aria-label="Valor da placa" /></div>
+            <div className="col-span-3 space-y-1 sm:col-span-1"><Label className="text-xs">Repasse/{unidade}</Label>
+              <InputMoeda value={p.valor_repasse_mensal ?? null} onChange={(v) => alterar(i, { valor_repasse_mensal: v })} disabled={!locador}
+                aria-label="Repasse da placa" placeholder={locador ? "" : "só sublocada"} /></div>
+            {mensal ? (
+              <>
+                <div className="col-span-3 space-y-1 sm:col-span-1"><Label className="text-xs">Início</Label>
+                  <Input type="date" value={p.data_inicio ?? ""} onChange={(e) => alterar(i, { data_inicio: e.target.value || null })} aria-label="Início da placa" /></div>
+                <div className="col-span-2 space-y-1 sm:col-span-1"><Label className="text-xs">Fim</Label>
+                  <Input type="date" value={p.data_fim ?? ""} min={p.data_inicio ?? undefined} onChange={(e) => alterar(i, { data_fim: e.target.value || null })} aria-label="Fim da placa" /></div>
+              </>
+            ) : <div className="col-span-5 sm:col-span-2" />}
+            <div className="col-span-1 flex justify-end sm:col-span-6 sm:-mt-1">
+              <Button type="button" variant="ghost" size="icon-sm" title="Tirar esta placa do contrato" aria-label="Tirar placa" onClick={() => onChange(placas.filter((_, j) => j !== i))}><Trash2 /></Button>
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => onChange([...placas, { ...PLACA_VAZIA }])}><Plus /> Adicionar placa</Button>
+        {placas.length > 0 && <p className="text-sm text-muted-foreground">Total do contrato: <strong>{formatBRL(total)}</strong>/{unidade} ({placas.length + 1} placas)</p>}
+      </div>
+    </div>
+  );
 }
 
 export function DialogoDesmobilizar({ contrato, aberto, onOpenChange }: { contrato: LinhaContrato | null; aberto: boolean; onOpenChange: (v: boolean) => void }) {
@@ -173,15 +236,18 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
     { accessorKey: "placa", header: "Placa", meta: { tituloMobile: true }, cell: ({ row: { original: c } }) => (
       <div className="whitespace-nowrap"><span className="font-mono font-semibold tracking-wider">{formatPlaca(c.placa)}</span>
         {c.proprietario === "locador" && <Badge variant="info" className="ml-2">Sublocado</Badge>}
+        {!!c.placas_extras?.length && <p className="font-mono text-xs font-semibold tracking-wider">+ {c.placas_extras.map((p) => formatPlaca(p.placa)).join(", ")}</p>}
         <p className="text-xs text-muted-foreground">{[c.modelo, c.empresa].filter(Boolean).join(" · ")}</p></div>
     ) },
     { id: "cliente", header: "Cliente / obra", cell: ({ row: { original: c } }) => <div><p>{c.cliente}</p>{c.obra && <p className="text-xs text-muted-foreground">{c.obra}</p>}</div> },
     // repasse e margem só fazem sentido no sublocado (frota própria = 100%)
     { accessorKey: "valor_mensal", header: "Valor", meta: { direita: true, ordem: "valor_mensal" }, cell: ({ row: { original: c } }) => {
       const m = c.valor_mensal - (c.valor_repasse_mensal ?? 0);
+      const extras = c.placas_extras ?? [];
       return (
         <div className="whitespace-nowrap">
-          <Moeda valor={c.valor_mensal} />{c.tipo_cobranca !== "mensal" && <span className="text-xs text-muted-foreground">{c.tipo_cobranca === "hora" ? "/h" : "/dia"}</span>}
+          <Moeda valor={somar([c.valor_mensal, ...extras.map((p) => p.valor_mensal ?? 0)])} />
+          {extras.length > 0 && <span className="text-xs text-muted-foreground"> ({extras.length + 1} placas)</span>}{c.tipo_cobranca !== "mensal" && <span className="text-xs text-muted-foreground">{c.tipo_cobranca === "hora" ? "/h" : "/dia"}</span>}
           {c.valor_repasse_mensal != null && (
             <p className="text-xs text-muted-foreground">repasse <Moeda valor={c.valor_repasse_mensal} /> · margem {Math.round((m / c.valor_mensal) * 100)}%</p>
           )}
@@ -210,7 +276,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
           <FiltroSelectUrl param="corte" rotulo="Período" opcoes={[{ value: "1", label: "01 → fim" }, { value: "21", label: "21 → 20" }]} />
         </>}
-        novo={{ sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_pagamento: null, data_inicio: hojeSP(), data_fim: null, hora_inicio: null, hora_fim: null, status: "ativo", observacoes: null, anexo_url: null }}
+        novo={{ placas_extras: [], sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_pagamento: null, data_inicio: hojeSP(), data_fim: null, hora_inicio: null, hora_fim: null, status: "ativo", observacoes: null, anexo_url: null }}
         paraForm={(c) => ({ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never })}
         salvar={salvarContrato} excluir={excluirContrato} podeEditar={podeEditar}
         avisoExcluir={(c) => <>O contrato <strong className="font-mono">{c.numero ?? formatPlaca(c.placa)}</strong> ({c.cliente}) será apagado <strong>junto com todas as medições dele</strong>, inclusive recebimentos, boletos e repasses. Esta ação não pode ser desfeita. Se o contrato só terminou, use <strong>Desmobilizar</strong>.</>}

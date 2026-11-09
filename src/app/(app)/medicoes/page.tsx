@@ -10,6 +10,7 @@ import { formatPlaca } from "@/lib/format";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { Button } from "@/components/ui/button";
 import { useAsyncPage } from "@/lib/use-async-page";
+import type { PlacaFatura } from "@/lib/schemas/operacao";
 import { MedicoesCliente, type LinhaMedicao } from "./client";
 
 export default function MedicoesPage() {
@@ -41,7 +42,12 @@ export default function MedicoesPage() {
     if (p.get("tipo") === "contrato") q = q.not("contrato_id", "is", null);
     else if (p.get("tipo") === "avulsa") q = q.is("contrato_id", null);
     const placa = (p.get("placa") ?? p.q).toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (placa) q = q.ilike("placa", `%${placa}%`);
+    if (placa) {
+      // a placa pode ser uma das outras placas de um contrato com várias (sem a migration 0071, só a principal)
+      const { data: outras } = await supabase.from("medicoes_v").select("id").ilike("placas_texto", `%${placa}%`).limit(500);
+      const ids = (outras ?? []).map((x) => x.id).filter((x): x is string => !!x);
+      q = ids.length ? q.or(`placa.ilike.%${placa}%,id.in.(${ids.join(",")})`) : q.ilike("placa", `%${placa}%`);
+    }
 
     let qc = supabase.from("contratos").select("id, numero, clientes(razao_social, nome_fantasia), veiculos(placa)").in("status", ["ativo", "encerrado"]);
     if (s.empresaId) qc = qc.eq("empresa_id", s.empresaId);
@@ -60,12 +66,18 @@ export default function MedicoesPage() {
       supabase.from("contratos").select("veiculo_id").eq("status", "ativo"),
     ]);
     const emContrato = new Set((comContrato ?? []).map((c) => c.veiculo_id));
+    // outras placas de contratos ativos também não entram em avulsa
+    const { data: extrasAtivas } = await supabase.from("contrato_placas").select("veiculo_id, contratos!inner(status)").eq("contratos.status", "ativo");
+    for (const x of extrasAtivas ?? []) emContrato.add(x.veiculo_id);
+    // placas de cada fatura (contrato com várias placas); consulta à parte: sem a migration 0071 a página abre igual
+    const { data: comPlacas } = linhas?.length ? await supabase.from("medicoes").select("id, placas").in("id", linhas.map((l) => l.id).filter((x): x is string => !!x)) : { data: [] };
+    const placasDe = new Map((comPlacas ?? []).map((x) => [x.id, x.placas]));
     const veiculos = (todosVeiculos ?? []).filter((v) => placaLivreParaAvulsa(v, emContrato.has(v.id)));
     // sem isso a falha (ex.: migration não aplicada) virava "nenhuma fatura" e parecia que as faturas sumiram
     if (erroLinhas) throw new Error(`Não foi possível carregar as faturas: ${erroLinhas.message}`);
 
     return {
-      linhas: (linhas ?? []) as LinhaMedicao[],
+      linhas: (linhas ?? []).map((l) => ({ ...l, placas: (placasDe.get(l.id ?? "") ?? null) as unknown as PlacaFatura[] | null })) as LinhaMedicao[],
       total: count ?? 0,
       pagina: p.pagina,
       tamanho: p.tamanho,

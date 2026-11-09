@@ -9,6 +9,7 @@ import { baixarDocumentoPDF, documentoPDFBase64 } from "./pdf";
 import { montarReciboDescontos, montarReciboRepasse, type DadosReciboRepasse } from "./recibo-repasse";
 export type { ItemRecibo } from "./recibo-repasse";
 import { hojeSP } from "@/lib/calculos";
+import type { PlacaFatura } from "@/lib/schemas/operacao";
 
 const EMPRESA = "razao_social, cnpj, endereco, cidade, uf, contato_nome, telefone, email";
 const CLIENTE = "razao_social, nome_fantasia, cnpj, endereco, cidade, uf, email, cep";
@@ -68,7 +69,11 @@ async function documentoContrato(id: string) {
     .eq("id", id).maybeSingle();
   if (error) throw error;
   if (!c?.empresas || !c.clientes || !c.veiculos) return null;
+  // outras placas do contrato (consulta à parte: sem a migration 0071 o PDF sai só com a principal)
+  const { data: outras } = await createClient().from("contrato_placas")
+    .select("valor_mensal, ordem, created_at, veiculos(placa, marca, modelo, ano, chassi, cor)").eq("contrato_id", id).order("ordem").order("created_at");
   const dados: DadosContrato = {
+    outros_veiculos: (outras ?? []).filter((o) => o.veiculos).map((o) => ({ ...o.veiculos!, valor_mensal: Number(o.valor_mensal) })),
     ...c,
     tipo_cobranca: c.tipo_cobranca as DadosContrato["tipo_cobranca"], valor_mensal: Number(c.valor_mensal),
     empresa: c.empresas, cliente: c.clientes, obra: c.obras?.nome ?? null,
@@ -97,8 +102,11 @@ export function baixarFaturaPDF(id: string, baseDias: number) {
         .eq("cliente_id", clienteId).eq("ativo", true).limit(2);
       if (obras?.length === 1) obra = obras[0].nome;
     }
+    // placas da fatura de contrato com várias (consulta à parte: sem a migration 0071 sai como antes)
+    const { data: comPlacas } = c ? await createClient().from("medicoes").select("placas").eq("id", id).maybeSingle() : { data: null };
     const dados: DadosFatura = {
       ...m,
+      placas: ((comPlacas?.placas ?? []) as unknown as PlacaFatura[]).map((p) => ({ ...p, valor_mensal: Number(p.valor_mensal), dias: Number(p.dias) })),
       valor_mensal: Number(m.valor_mensal), valor_base: Number(m.valor_base), acrescimos: Number(m.acrescimos),
       descontos: Number(m.descontos), valor_final: Number(m.valor_final),
       forma_pagamento: m.forma_pagamento as DadosFatura["forma_pagamento"],

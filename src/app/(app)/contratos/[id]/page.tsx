@@ -6,7 +6,7 @@ import { podeEscrever } from "@/lib/permissoes";
 import { getConfig } from "@/lib/config";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
-import { opcoesContrato } from "../dados";
+import { opcoesContrato, placasDosContratos } from "../dados";
 import { DetalheContrato } from "./client";
 import type { DadosAssinatura } from "./assinatura";
 
@@ -29,13 +29,14 @@ export default function ContratoDetalhePage() {
     if (error) return { naoEncontrado: true, erro: error.message } as const;
     if (!c) return { naoEncontrado: true, erro: null } as const;
 
-    const [{ data: medicoes }, opcoes, cfg, { data: ass, error: errAss }] = await Promise.all([
+    const [{ data: medicoes }, opcoes, cfg, { data: ass, error: errAss }, extras] = await Promise.all([
       supabase.from("medicoes_v").select("id, periodo_inicio, periodo_fim, dias, valor_final, acrescimos, descontos, numero_nf, data_emissao, data_vencimento, status_exibicao, valor_recebido, repasse_liquido, margem, final")
         .eq("contrato_id", id).order("periodo_inicio", { ascending: false }),
       opcoesContrato(supabase, null),
       getConfig(),
       // separado: se a migration 0067 (assinatura) ainda não estiver no banco, o contrato abre mesmo assim, só sem a assinatura
       supabase.from("contratos").select("assinatura_status, assinatura_signatario, assinatura_enviada_em, assinatura_concluida_em, assinatura_arquivo").eq("id", id).maybeSingle(),
+      placasDosContratos(supabase, [id]),
     ]);
 
     return {
@@ -68,6 +69,7 @@ export default function ContratoDetalhePage() {
         placa: c.veiculos.placa,
         modelo: c.veiculos.modelo,
         proprietario: c.veiculos.proprietario,
+        placas_extras: extras ? extras.get(c.id) ?? [] : undefined,
       },
       assinatura: errAss ? null : {
         id: c.id, cliente_id: c.cliente_id,

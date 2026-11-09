@@ -18,6 +18,8 @@ export interface DadosContrato {
     placa: string; marca: string | null; modelo: string | null; ano: number | null; chassi: string | null; cor: string | null;
     km_atual: number; horimetro_atual: number; proprietario: "proprio" | "locador";
   };
+  /** contrato com várias placas: as outras, cada uma com o seu valor (a principal usa valor_mensal) */
+  outros_veiculos?: { placa: string; marca: string | null; modelo: string | null; ano: number | null; chassi: string | null; cor: string | null; valor_mensal: number }[];
 }
 
 /** multa compensatória por rescisão antecipada sem justa causa (cláusula 14.5) */
@@ -48,14 +50,23 @@ export function montarContrato(c: DadosContrato): Documento {
   const hora = c.tipo_cobranca === "hora";
   const local = cidadeUF(e) || "São José do Rio Preto/SP";
   const prazoDias = c.data_fim ? diffDias(c.data_inicio, c.data_fim) : null;
+  const outros = c.outros_veiculos ?? [];
+  const varias = outros.length > 0;
   const valorTexto = `${formatBRL(c.valor_mensal)} (${valorPorExtenso(c.valor_mensal)})`;
+  // várias placas: o valor de cada uma ("R$ 8.000,00 (placa ABC1D23)") e o total
+  const valoresPlacas = [{ placa: v.placa, valor_mensal: c.valor_mensal }, ...outros]
+    .map((x) => `${formatBRL(x.valor_mensal)} (${valorPorExtenso(x.valor_mensal)}) para a placa ${formatPlaca(x.placa)}`).join("; ");
+  const totalPlacas = c.valor_mensal + outros.reduce((s, x) => s + x.valor_mensal, 0);
+  const unidadeValor = hora ? "por hora" : diaria ? "por diária" : "por mês";
   const periodo = c.dia_corte_inicio === 21
     ? "o período compreendido entre o dia 21 (vinte e um) de cada mês e o dia 20 (vinte) do mês seguinte"
     : "o período compreendido entre o primeiro e o último dia de cada mês";
   const pagamento = c.dia_pagamento
     ? `todo dia ${extensoDias(c.dia_pagamento)} do mês seguinte ao da emissão da respectiva fatura`
     : `${extensoDias(c.prazo_pagamento_dias)} dias contados da emissão da respectiva fatura`;
-  const veiculoCurto = [v.marca, v.modelo, v.ano && `(${v.ano})`].filter(Boolean).join(" ") + ` — Placa ${formatPlaca(v.placa)}`;
+  const veiculoCurto = varias
+    ? `${outros.length + 1} veículos/equipamentos — Placas ${[v.placa, ...outros.map((x) => x.placa)].map(formatPlaca).join(", ")}`
+    : [v.marca, v.modelo, v.ano && `(${v.ano})`].filter(Boolean).join(" ") + ` — Placa ${formatPlaca(v.placa)}`;
   const comMotorista = v.proprietario === "proprio";
   const enderecoCli = enderecoCompleto(cli) || "[ENDEREÇO COMPLETO]";
 
@@ -77,16 +88,18 @@ export function montarContrato(c: DadosContrato): Documento {
       ["Modalidade", comMotorista ? "Com motorista/operador fornecido pela LOCADORA — cláusula 8" : "Sem motorista: condução e operação pela LOCATÁRIA — cláusula 8"],
       ["Início da locação", `${formatData(c.data_inicio)} — cláusula 2`],
       ["Prazo", `${prazoDias != null ? `${prazoDias} dias` : "Indeterminado"} — cláusula 2`],
-      [diaria ? "Valor da diária" : hora ? "Valor da hora" : "Valor mensal", `${formatBRL(c.valor_mensal)} por veículo/equipamento — cláusula 3`],
+      [diaria ? "Valor da diária" : hora ? "Valor da hora" : "Valor mensal", varias
+        ? `${[{ placa: v.placa, valor_mensal: c.valor_mensal }, ...outros].map((x) => `${formatPlaca(x.placa)} ${formatBRL(x.valor_mensal)}`).join(" · ")} — total ${formatBRL(totalPlacas)} — cláusula 3`
+        : `${formatBRL(c.valor_mensal)} por veículo/equipamento — cláusula 3`],
       ["Mobilização/desmobilização", `Retirada e devolução em ${local} — cláusula 3`],
       ["Pagamento", `${c.dia_pagamento ? `Todo dia ${c.dia_pagamento} do mês seguinte à emissão da fatura` : `${c.prazo_pagamento_dias} dias após emissão da fatura`}, mediante medição mensal — cláusula 4`],
       ["Foro", `Comarca de ${local} — cláusula 24`],
     ] },
 
     ...clausula(1, "Do objeto", [
-      "O presente contrato tem por objeto a locação do seguinte veículo/equipamento:",
+      varias ? "O presente contrato tem por objeto a locação dos seguintes veículos/equipamentos:" : "O presente contrato tem por objeto a locação do seguinte veículo/equipamento:",
       { bloco: { t: "tabela", cabecalho: ["Marca", "Modelo", "Ano", "Chassi", "Placa", "Cor"],
-        linhas: [[v.marca ?? "", v.modelo ?? "", v.ano ? String(v.ano) : "", v.chassi ?? "", formatPlaca(v.placa), v.cor ?? ""]] } },
+        linhas: [v, ...outros].map((x) => [x.marca ?? "", x.modelo ?? "", x.ano ? String(x.ano) : "", x.chassi ?? "", formatPlaca(x.placa), x.cor ?? ""]) } },
       "As informações constantes desta cláusula poderão ser adaptadas a cada contratação, conforme o veículo ou equipamento efetivamente locado, sendo vedada a substituição do bem por outro sem registro e concordância entre as partes.",
       "Integram o presente contrato, para todos os efeitos, a Ordem de Serviço/Ordem de Locação, o checklist de entrega, o registro fotográfico, o checklist de devolução, propostas comerciais eventualmente aprovadas e demais documentos expressamente vinculados à contratação.",
       "Havendo divergência entre informações exclusivamente operacionais constantes da Ordem de Serviço e deste contrato, prevalecerão as disposições deste instrumento, ressalvadas condições comerciais específicas formalmente acordadas entre as partes.",
@@ -103,9 +116,12 @@ export function montarContrato(c: DadosContrato): Documento {
 
     ...clausula(3, "Do preço da locação", [
       hora
-        ? `A LOCATÁRIA pagará à LOCADORA o valor de ${valorTexto} por hora, por veículo/equipamento locado, multiplicado pelas horas trabalhadas apuradas na medição.`
+        ? (varias ? `A LOCATÁRIA pagará à LOCADORA, ${unidadeValor}, ${valoresPlacas}, totalizando ${formatBRL(totalPlacas)} (${valorPorExtenso(totalPlacas)}), multiplicado pelas horas trabalhadas apuradas na medição de cada veículo/equipamento.`
+          : `A LOCATÁRIA pagará à LOCADORA o valor de ${valorTexto} por hora, por veículo/equipamento locado, multiplicado pelas horas trabalhadas apuradas na medição.`)
         : diaria
-        ? `A LOCATÁRIA pagará à LOCADORA o valor de ${valorTexto} por diária, por veículo/equipamento locado, multiplicado pelos dias de disponibilização apurados na medição.`
+        ? (varias ? `A LOCATÁRIA pagará à LOCADORA, ${unidadeValor}, ${valoresPlacas}, totalizando ${formatBRL(totalPlacas)} (${valorPorExtenso(totalPlacas)}), multiplicado pelos dias de disponibilização de cada veículo/equipamento apurados na medição.`
+          : `A LOCATÁRIA pagará à LOCADORA o valor de ${valorTexto} por diária, por veículo/equipamento locado, multiplicado pelos dias de disponibilização apurados na medição.`)
+        : varias ? `A LOCATÁRIA pagará à LOCADORA, ${unidadeValor}, ${valoresPlacas}, totalizando ${formatBRL(totalPlacas)} (${valorPorExtenso(totalPlacas)}) por mês, proporcional aos dias de disponibilização de cada veículo/equipamento no período.`
         : `A LOCATÁRIA pagará à LOCADORA o valor de ${valorTexto} por mês, por veículo/equipamento locado.`,
       "Nas contratações futuras, o valor poderá ser definido na Ordem de Serviço/Ordem de Locação ou proposta comercial correspondente, desde que expressamente aceita pela LOCATÁRIA.",
       `A mobilização compreenderá a retirada do veículo/equipamento em ${local} e a desmobilização compreenderá sua devolução em ${local}, salvo estipulação diversa por escrito.`,
