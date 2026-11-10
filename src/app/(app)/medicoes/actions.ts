@@ -230,6 +230,8 @@ export async function lancarFaturaAvulsa(dados: unknown) {
       acrescimos_itens: d.acrescimos > 0 ? [{ descricao: "Acréscimos", valor: d.acrescimos }] : [],
       descontos_itens: d.descontos > 0 ? [{ descricao: "Descontos", valor: d.descontos }] : [],
       forma_pagamento: d.forma_pagamento, numero_os: d.numero_os || null, repasses_avulsos: repassesAvulsos,
+      // só com anexo: sem a coluna (SQL 0072 não rodado) a fatura sem anexo continua lançando
+      ...(d.anexo_url ? { anexo_url: d.anexo_url } : {}),
     }).select("id").single());
     return { id: nova!.id, competencia: periodoFim.slice(0, 7) };
   }, REVALIDAR, "Fatura lançada");
@@ -263,6 +265,20 @@ export async function salvarMedicoes(edicoes: unknown) {
     }
     return { salvas: lista.length };
   }, REVALIDAR, "Faturas salvas");
+}
+
+/** Anexos da fatura (PDF / fotos): grava a lista inteira. */
+export async function salvarAnexosFatura(id: string, anexo: string | null) {
+  return executar(async () => {
+    await exigirEscrita("medicoes");
+    const medicaoId = z.string().uuid().parse(id);
+    const valor = z.string().max(10_000).nullable().parse(anexo);
+    const supabase = await createClient();
+    const { error } = await supabase.from("medicoes").update({ anexo_url: valor }).eq("id", medicaoId);
+    if (error && /anexo_url/.test(error.message)) throw new Error("O banco ainda não tem o campo de anexos da fatura: rode o SQL 0072 no Supabase");
+    if (error) throw error;
+    return null;
+  }, REVALIDAR, "Anexos da fatura salvos");
 }
 
 /** Marca como faturado. Emissão: a já informada na linha ou a data padrão. */

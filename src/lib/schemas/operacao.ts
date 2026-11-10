@@ -181,6 +181,8 @@ export const lancamentoAvulsoSchema = z.object({
   data_vencimento: dataOpc,
   forma_pagamento: z.enum(["boleto", "pix"]).default("boleto"),
   observacoes: z.string().trim().max(1000).nullable().optional(),
+  /** PDFs / fotos da fatura: "anexos/faturas/...", um por linha */
+  anexo_url: z.string().max(10_000).nullable().optional(),
 });
 export type LancamentoAvulso = z.input<typeof lancamentoAvulsoSchema>;
 

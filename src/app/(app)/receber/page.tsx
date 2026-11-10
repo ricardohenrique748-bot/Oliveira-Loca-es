@@ -104,6 +104,7 @@ export default function ReceberPage() {
       contatos: (contatos ?? []) as ContatoCobranca[],
       templates: { email: cfg.template_cobranca_email, whatsapp: cfg.template_cobranca_whatsapp },
       podeEditar: podeEscrever(s.perfil, "receber"),
+      soAvulsas: s.soFaturasAvulsas,
     };
   }, [searchParams, sessao?.empresaId]);
 

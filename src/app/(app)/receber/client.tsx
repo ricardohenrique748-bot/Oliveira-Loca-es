@@ -45,9 +45,9 @@ const FAIXAS = [
   { chave: "90+", rotulo: "+90 dias", tom: "critico" as const },
 ];
 
-export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes, contas, contatos, templates, podeEditar }: {
+export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes, contas, contatos, templates, podeEditar, soAvulsas = false }: {
   linhas: LinhaReceber[]; total: number; pagina: number; tamanho: number; aging: Record<string, number>; clientes: Opcao[];
-  contas: Conta[]; contatos: ContatoCobranca[]; templates: { email: string; whatsapp: string }; podeEditar: boolean;
+  contas: Conta[]; contatos: ContatoCobranca[]; templates: { email: string; whatsapp: string }; podeEditar: boolean; soAvulsas?: boolean;
 }) {
   const router = useRouter();
   const url = useUrlParams();
@@ -164,9 +164,9 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
           { value: "recebido", label: "Recebidas" }, { value: "todos", label: "Todas" },
         ]} />
         <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={clientes} />
-        <FiltroSelectUrl param="contrato" rotulo="Contrato" opcoes={[
+        {!soAvulsas && <FiltroSelectUrl param="contrato" rotulo="Contrato" opcoes={[
           { value: "com", label: "Com contrato" }, { value: "sem", label: "Sem contrato (avulsa)" },
-        ]} />
+        ]} />}
         <FiltroDataUrl param="mes_fat" rotulo="Mês faturado" tipo="month" />
         <div className="flex flex-col gap-1">
           <Label className="text-xs text-muted-foreground">Nº da fatura</Label>

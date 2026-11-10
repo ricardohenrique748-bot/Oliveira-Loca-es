@@ -43,6 +43,7 @@ const usuarioSchema = z.object({
     .regex(/[A-Za-z]/, "A senha precisa ter letras").regex(/\d/, "A senha precisa ter números").nullish(),
   perfil,
   ativo: z.boolean().default(true),
+  soAvulsas: z.boolean().default(false),
   empresas: z.array(z.string().uuid()).default([]),
 });
 
@@ -62,6 +63,9 @@ export async function salvarUsuario(userId: string | null, dados: unknown) {
       p_ativo: u.ativo,
       p_empresas: u.empresas,
     }));
+    checar(await supabase.from("usuarios_perfil")
+      .update({ so_faturas_avulsas: u.perfil !== "admin" && u.soAvulsas })
+      .eq("user_id", (id as string | null) ?? userId!));
     return { id };
   }, ["/configuracoes"], userId ? "Usuário atualizado" : "Usuário criado. Passe a senha inicial ao usuário.");
 }

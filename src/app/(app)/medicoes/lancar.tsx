@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { SelectSimples, type Opcao } from "@/components/ui/select";
 import { SelectBusca } from "@/components/ui/select-busca";
 import { Moeda } from "@/components/app/comuns";
+import { CampoAnexo } from "@/components/app/anexo";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { baseCobranca, cobrancaAvulsa, descricaoKm, diffDias, hojeSP, calcularDiasCorridos, calcularDiasPeriodoLivre, calcularValorMedicao, periodoMensalDesde, somar } from "@/lib/calculos";
 import { formatPeriodo, formatPlaca } from "@/lib/format";
@@ -84,13 +85,14 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   const [acrescimos, setAcrescimos] = React.useState(0);
   const [descontos, setDescontos] = React.useState(0);
   const [observacoes, setObservacoes] = React.useState("");
+  const [anexos, setAnexos] = React.useState<string | null>(null);
   const [forma, setForma] = React.useState<FormaFatura>("boleto");
   const [carregando, setCarregando] = React.useState(false);
   // incrementa para recarregar a sugestão do contrato ao reabrir
   const [recarga, setRecarga] = React.useState(0);
 
   const limpar = React.useCallback(() => {
-    setContrato(contratoId ?? null); setInfo(null); setAcrescimos(0); setDescontos(0); setObservacoes(""); setForma("boleto"); setDiasManual(false);
+    setContrato(contratoId ?? null); setInfo(null); setAcrescimos(0); setDescontos(0); setObservacoes(""); setAnexos(null); setForma("boleto"); setDiasManual(false);
     setRecarga((n) => n + 1);
     // avulsa: mantém o modo e a empresa; o resto volta ao padrão
     setCliente(null); setNumeroOS(""); setItens([itemNovo()]); setVencimento("");
@@ -178,7 +180,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
         const servico = { ...base, descricao: i.descricao, quantidade: i.quantidade, unidade: i.unidade, valor_unitario: i.valorUnitario, valor_repasse: repasse };
         return i.km > 0 ? [servico, { ...base, descricao: descricaoKm(i.descricao), quantidade: i.km, unidade: "km" as const, valor_unitario: i.valorKm }] : [servico];
       }),
-      acrescimos, descontos, data_vencimento: vencimento || null, forma_pagamento: forma, observacoes: observacoes || null,
+      acrescimos, descontos, data_vencimento: vencimento || null, forma_pagamento: forma, observacoes: observacoes || null, anexo_url: anexos,
     });
     setCarregando(false);
     if (!r.ok) return toast.error(r.erro);
@@ -322,6 +324,10 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
             <div className="space-y-1.5">
               <Label htmlFor="avulsa-obs">Observações</Label>
               <Input id="avulsa-obs" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Anexos <span className="font-normal text-muted-foreground">(PDF ou fotos: OS assinada, canhoto, fotos do serviço…)</span></Label>
+              <CampoAnexo bucket="anexos" pasta="faturas" valor={anexos} onChange={setAnexos} multiplo rotulo="Anexar PDF ou foto" />
             </div>
             <div className="flex items-center justify-between gap-3 rounded-md bg-muted p-3 text-sm">
               <span className="text-muted-foreground">Valor = soma dos itens (valor × quantidade) + acréscimos − descontos</span>

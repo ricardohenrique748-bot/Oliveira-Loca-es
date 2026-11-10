@@ -1176,6 +1176,7 @@ export type Database = {
       }
       medicoes: {
         Row: {
+          anexo_url: string | null
           acrescimos: number
           acrescimos_itens: Json
           cliente_id: string | null
@@ -1215,6 +1216,7 @@ export type Database = {
           veiculo_id: string | null
         }
         Insert: {
+          anexo_url?: string | null
           acrescimos?: number
           acrescimos_itens?: Json
           cliente_id?: string | null
@@ -1254,6 +1256,7 @@ export type Database = {
           veiculo_id?: string | null
         }
         Update: {
+          anexo_url?: string | null
           acrescimos?: number
           acrescimos_itens?: Json
           cliente_id?: string | null
@@ -2233,6 +2236,7 @@ export type Database = {
           created_by: string | null
           nome: string
           perfil: Database["public"]["Enums"]["perfil_usuario"]
+          so_faturas_avulsas: boolean
           updated_at: string
           user_id: string
         }
@@ -2242,6 +2246,7 @@ export type Database = {
           created_by?: string | null
           nome: string
           perfil?: Database["public"]["Enums"]["perfil_usuario"]
+          so_faturas_avulsas?: boolean
           updated_at?: string
           user_id: string
         }
@@ -2251,6 +2256,7 @@ export type Database = {
           created_by?: string | null
           nome?: string
           perfil?: Database["public"]["Enums"]["perfil_usuario"]
+          so_faturas_avulsas?: boolean
           updated_at?: string
           user_id?: string
         }

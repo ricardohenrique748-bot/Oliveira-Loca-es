@@ -13,6 +13,8 @@ export interface Sessao {
   email: string;
   nome: string;
   perfil: Perfil;
+  /** só vê faturas avulsas (sem contrato); o banco também bloqueia via RLS */
+  soFaturasAvulsas: boolean;
   empresas: Empresa[];
   /** empresa selecionada no topo (null = todas) */
   empresaId: string | null;
@@ -31,7 +33,7 @@ export async function getSessao(forceRefresh = false): Promise<Sessao | null> {
     return null;
   }
   const [{ data: perfil }, { data: empresas }] = await Promise.all([
-    supabase.from("usuarios_perfil").select("nome, perfil, ativo").eq("user_id", user.id).maybeSingle(),
+    supabase.from("usuarios_perfil").select("nome, perfil, ativo, so_faturas_avulsas").eq("user_id", user.id).maybeSingle(),
     supabase.from("empresas").select("id, apelido, razao_social").eq("ativo", true).order("apelido"),
   ]);
   if (!perfil || !perfil.ativo) {
@@ -45,6 +47,7 @@ export async function getSessao(forceRefresh = false): Promise<Sessao | null> {
     email: user.email ?? "",
     nome: perfil.nome,
     perfil: perfil.perfil,
+    soFaturasAvulsas: !!perfil.so_faturas_avulsas && perfil.perfil !== "admin",
     empresas: lista,
     empresaId: lista.some((e) => e.id === escolhida) ? escolhida : null,
   };

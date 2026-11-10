@@ -21,9 +21,10 @@ import { FORMAS_FATURA, UNIDADES_AVULSA, formatQuantidadeAvulsa, type FormaFatur
 import { SelectSimples } from "@/components/ui/select";
 import { baixarFaturaPDF } from "@/lib/documentos/baixar";
 import { entregarArquivo } from "@/lib/plataforma";
+import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { cn } from "@/lib/utils";
 import {
-  cancelarMedicoes, dadosLembrete, excluirCanceladas, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarMedicoes, voltarParaAFaturar,
+  cancelarMedicoes, dadosLembrete, excluirCanceladas, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarAnexosFatura, salvarMedicoes, voltarParaAFaturar,
   type EventoHistorico, type LinhaLembrete, type LinhaPrevia,
 } from "./actions";
 import { DialogoLancarMedicao } from "./lancar";
@@ -509,6 +510,21 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
     setNota(data?.nfse_chave ? { chave: data.nfse_chave, ambiente: data.nfse_ambiente } : null);
   }, []);
   React.useEffect(() => { setNota(null); if (m) void carregarNota(m.id); }, [m, carregarNota]);
+  /** anexos da fatura (PDF / fotos); undefined = o banco ainda não tem o campo (SQL 0072) */
+  const [anexos, setAnexos] = React.useState<string | null | undefined>(undefined);
+  React.useEffect(() => {
+    setAnexos(undefined);
+    if (!m) return;
+    void createClient().from("medicoes").select("anexo_url").eq("id", m.id).maybeSingle()
+      .then(({ data, error }) => setAnexos(error ? undefined : data?.anexo_url ?? null));
+  }, [m]);
+  const alterarAnexos = async (valor: string | null) => {
+    if (!m) return;
+    const antes = anexos;
+    setAnexos(valor);
+    const r = await rodarAcao(salvarAnexosFatura(m.id, valor));
+    if (!r.ok) setAnexos(antes);
+  };
   /** baixa a NFS-e emitida (PDF/DANFSe ou XML) pela função da Vercel, que busca na Receita com o certificado */
   const baixarNota = async (formato: "pdf" | "xml") => {
     if (!m || !nota) return;
@@ -704,6 +720,10 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
             {m.repasse_liquido != null && item("Repasse líquido / margem", <><Moeda valor={m.repasse_liquido} /> / <Moeda valor={m.margem} /></>)}
           </div>
           {m.observacoes && <div className="rounded-md bg-muted p-3 text-sm"><p className="text-xs text-muted-foreground">Observações</p>{m.observacoes}</div>}
+          {anexos !== undefined && (podeEditar && m.status !== "cancelado"
+            ? <div className="space-y-1"><p className="text-xs text-muted-foreground">Anexos (PDF ou fotos)</p>
+                <CampoAnexo bucket="anexos" pasta="faturas" valor={anexos} onChange={(v) => void alterarAnexos(v)} multiplo rotulo="Anexar PDF ou foto" /></div>
+            : anexos && <div className="space-y-1"><p className="text-xs text-muted-foreground">Anexos</p><LinkAnexo referencia={anexos} /></div>)}
           <HistoricoMedicao id={m.id} />
           <p className="text-xs text-muted-foreground">Valores salvos. Edições não salvas na grade não aparecem aqui nem no PDF.{m.status === "faturado" && " Dias só mudam enquanto a fatura está “a faturar”."}</p>
           {/* rodapé grudado embaixo: os botões ficam à vista sem rolar; quebram linha em vez de alargar a janela */}

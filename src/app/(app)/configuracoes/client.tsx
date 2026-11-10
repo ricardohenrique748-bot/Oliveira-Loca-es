@@ -17,7 +17,7 @@ import { PERFIS, type Perfil } from "@/lib/permissoes";
 import { formatDataHora } from "@/lib/format";
 import { rodarJobs, salvarParametros, salvarUsuario } from "./actions";
 
-export type Usuario = { id: string; email: string; nome: string; perfil: Perfil; ativo: boolean; empresas: string[]; ultimoAcesso: string | null };
+export type Usuario = { id: string; email: string; nome: string; perfil: Perfil; ativo: boolean; soAvulsas: boolean; empresas: string[]; ultimoAcesso: string | null };
 type Parametros = {
   base_dias_mes: number; alerta_dias_fatura: number; alerta_dias_os_aberta: number; alerta_dias_pagar: number; preventiva_pct_alerta: number;
   template_cobranca_email: string; template_cobranca_whatsapp: string;
@@ -133,12 +133,12 @@ function gerarSenha() {
 
 function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario: Usuario | "novo" | null; empresas: Opcao[]; onOpenChange: (v: boolean) => void; onFeito: () => void }) {
   const u = usuario === "novo" ? null : usuario;
-  const [f, setF] = React.useState({ nome: "", email: "", senha: "", perfil: "consulta" as Perfil, ativo: true, empresas: [] as string[] });
+  const [f, setF] = React.useState({ nome: "", email: "", senha: "", perfil: "consulta" as Perfil, ativo: true, soAvulsas: false, empresas: [] as string[] });
   const [salvando, setSalvando] = React.useState(false);
   React.useEffect(() => {
     setF(u 
-      ? { nome: u.nome, email: u.email, senha: "", perfil: u.perfil, ativo: u.ativo, empresas: u.empresas } 
-      : { nome: "", email: "", senha: gerarSenha(), perfil: "consulta", ativo: true, empresas: empresas.map((e) => e.value) });
+      ? { nome: u.nome, email: u.email, senha: "", perfil: u.perfil, ativo: u.ativo, soAvulsas: u.soAvulsas, empresas: u.empresas }
+      : { nome: "", email: "", senha: gerarSenha(), perfil: "consulta", ativo: true, soAvulsas: false, empresas: empresas.map((e) => e.value) });
   }, [usuario, u, empresas]);
   return (
     <Dialog open={!!usuario} onOpenChange={onOpenChange}>
@@ -164,6 +164,12 @@ function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario:
               </label>
             ))}
           </fieldset>
+          {f.perfil !== "admin" && (
+            <label className="flex items-start gap-2 text-sm sm:col-span-2">
+              <Checkbox className="mt-0.5" checked={f.soAvulsas} onCheckedChange={(v) => setF({ ...f, soAvulsas: !!v })} />
+              <span>Ver só faturas avulsas<span className="block text-xs text-muted-foreground">Esconde as faturas com contrato em todas as telas (Contas a receber, Faturamento, Dashboard, Relatórios).</span></span>
+            </label>
+          )}
           <label className="flex items-center gap-2 text-sm sm:col-span-2"><Checkbox checked={f.ativo} onCheckedChange={(v) => setF({ ...f, ativo: !!v })} /> Usuário ativo</label>
         </div>
         <DialogFooter>
