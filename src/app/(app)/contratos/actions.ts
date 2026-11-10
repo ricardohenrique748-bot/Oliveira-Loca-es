@@ -36,20 +36,29 @@ export async function salvarContrato(id: string | null, dados: unknown) {
   }
   const r = await salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados: valores, schema: contratoSchema, revalidar: ["/contratos", "/medicoes", "/dashboard", "/cadastros/veiculos", "/manutencao"] });
   if (!r.ok) return r;
+  let erroPlacas: string | null = null;
   if (temExtras && (id || extras.data.length)) {
     const s = await salvarPlacasContrato(r.dados.id, extras.data.filter((p) => p.veiculo_id !== veiculoId));
     if (!s.ok) {
       // banco sem a tabela das placas (SQL 0071 não rodado): diz o que fazer em vez da mensagem técnica
       const semTabela = /contrato_placas/.test(s.erro) && /schema cache|does not exist/i.test(s.erro);
-      return { ok: false as const, erro: semTabela
+      erroPlacas = semTabela
         ? "Contrato salvo, mas as outras placas não: o banco ainda não tem a tabela das placas. Rode o SQL 0071 (contrato com várias placas) no Supabase e salve de novo."
-        : `Contrato salvo, mas as outras placas não: ${s.erro}` };
+        : `Contrato salvo, mas as outras placas não: ${s.erro}`;
     }
   }
-  if (id) return r;
-  // contrato novo já entra no faturamento; se falhar, o contrato fica salvo e a fatura sai pelo "Gerar faturas do período"
-  const f = await enviarAoFaturamento(r.dados.id);
-  return { ...r, mensagem: f.ok && f.dados.geradas ? "Contrato criado e enviado ao faturamento" : "Contrato criado" };
+  // contrato novo já entra no faturamento; contrato ativo editado que ainda não tem nenhuma fatura também
+  // (ex.: o envio falhou quando ele foi criado). Se falhar, a fatura sai pelo "Gerar faturas do período"
+  let enviado = false;
+  if (!id) enviado = await enviarAoFaturamento(r.dados.id).then((f) => f.ok && f.dados.geradas > 0);
+  else {
+    const supabase = await createClient();
+    const { count } = await supabase.from("medicoes").select("id", { count: "exact", head: true }).eq("contrato_id", id);
+    if (count === 0) enviado = await enviarAoFaturamento(id).then((f) => f.ok && f.dados.geradas > 0);
+  }
+  if (erroPlacas) return { ok: false as const, erro: erroPlacas };
+  if (id) return enviado ? { ...r, mensagem: "Alterações salvas e contrato enviado ao faturamento" } : r;
+  return { ...r, mensagem: enviado ? "Contrato criado e enviado ao faturamento" : "Contrato criado" };
 }
 
 /** Grava as outras placas do contrato: tira as que saíram, atualiza as que ficaram e inclui as novas (os gatilhos acertam veículo e faturas pendentes). */
