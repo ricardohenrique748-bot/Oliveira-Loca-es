@@ -38,7 +38,13 @@ export async function salvarContrato(id: string | null, dados: unknown) {
   if (!r.ok) return r;
   if (temExtras && (id || extras.data.length)) {
     const s = await salvarPlacasContrato(r.dados.id, extras.data.filter((p) => p.veiculo_id !== veiculoId));
-    if (!s.ok) return { ok: false as const, erro: `Contrato salvo, mas as outras placas não: ${s.erro}` };
+    if (!s.ok) {
+      // banco sem a tabela das placas (SQL 0071 não rodado): diz o que fazer em vez da mensagem técnica
+      const semTabela = /contrato_placas/.test(s.erro) && /schema cache|does not exist/i.test(s.erro);
+      return { ok: false as const, erro: semTabela
+        ? "Contrato salvo, mas as outras placas não: o banco ainda não tem a tabela das placas. Rode o SQL 0071 (contrato com várias placas) no Supabase e salve de novo."
+        : `Contrato salvo, mas as outras placas não: ${s.erro}` };
+    }
   }
   if (id) return r;
   // contrato novo já entra no faturamento; se falhar, o contrato fica salvo e a fatura sai pelo "Gerar faturas do período"
