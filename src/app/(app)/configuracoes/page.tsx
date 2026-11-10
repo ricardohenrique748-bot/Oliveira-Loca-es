@@ -20,7 +20,7 @@ export default function ConfiguracoesPage() {
       const admin = createAdminClient();
       const [{ data: auth }, { data: perfis }, { data: vinculos }] = await Promise.all([
         admin.auth.admin.listUsers({ perPage: 500 }),
-        admin.from("usuarios_perfil").select("user_id, nome, perfil, ativo, so_faturas_avulsas"),
+        admin.from("usuarios_perfil").select("*"),
         admin.from("usuario_empresas").select("user_id, empresa_id"),
       ]);
       usuarios = (auth?.users ?? []).map((u) => {
@@ -41,7 +41,7 @@ export default function ConfiguracoesPage() {
       try {
         const supabase = createClient();
         const [{ data: perfis }, { data: vinculos }] = await Promise.all([
-          supabase.from("usuarios_perfil").select("user_id, nome, perfil, ativo, so_faturas_avulsas"),
+          supabase.from("usuarios_perfil").select("*"),
           supabase.from("usuario_empresas").select("user_id, empresa_id"),
         ]);
         usuarios = (perfis ?? []).map((p) => ({
@@ -50,7 +50,7 @@ export default function ConfiguracoesPage() {
           nome: p.nome,
           perfil: p.perfil,
           ativo: p.ativo,
-          soAvulsas: p.so_faturas_avulsas,
+          soAvulsas: p.so_faturas_avulsas ?? false,
           empresas: (vinculos ?? []).filter((v) => v.user_id === p.user_id).map((v) => v.empresa_id),
           ultimoAcesso: null,
         })).sort((a, b) => a.nome.localeCompare(b.nome));

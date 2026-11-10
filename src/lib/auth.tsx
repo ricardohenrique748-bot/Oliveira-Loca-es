@@ -33,7 +33,7 @@ export async function getSessao(forceRefresh = false): Promise<Sessao | null> {
     return null;
   }
   const [{ data: perfil }, { data: empresas }] = await Promise.all([
-    supabase.from("usuarios_perfil").select("nome, perfil, ativo, so_faturas_avulsas").eq("user_id", user.id).maybeSingle(),
+    supabase.from("usuarios_perfil").select("*").eq("user_id", user.id).maybeSingle(),
     supabase.from("empresas").select("id, apelido, razao_social").eq("ativo", true).order("apelido"),
   ]);
   if (!perfil || !perfil.ativo) {
