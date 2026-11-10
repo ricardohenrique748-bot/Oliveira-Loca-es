@@ -100,9 +100,17 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
       return { ...e, [m.id]: atual };
     });
   };
-  const calc = (m: LinhaMedicao) => calcularValorMedicao({
-    valorMensal: valor(m, "valor_mensal"), dias: valor(m, "dias"), acrescimos: valor(m, "acrescimos"), descontos: valor(m, "descontos"), baseDias: baseCobranca(m.tipo_cobranca, baseDias),
-  });
+  const calc = (m: LinhaMedicao) => {
+    const base = baseCobranca(m.tipo_cobranca, baseDias);
+    // várias placas: cada placa com os dias dela (igual ao banco e à fatura aberta), não o total × dias da fatura
+    if (temPlacas(m)) {
+      const valorBase = somar(m.placas!.map((p) => calcularValorMedicao({ valorMensal: p.valor_mensal, dias: p.dias, baseDias: base }).valorFinal));
+      return { valorBase, valorFinal: Math.max(0, somar([valorBase, valor(m, "acrescimos"), -valor(m, "descontos")])) };
+    }
+    return calcularValorMedicao({
+      valorMensal: valor(m, "valor_mensal"), dias: valor(m, "dias"), acrescimos: valor(m, "acrescimos"), descontos: valor(m, "descontos"), baseDias: base,
+    });
+  };
   const alterados = Object.keys(edicoes).filter((id) => {
     const m = linhas.find((l) => l.id === id);
     return m && COLS.some((k) => k in edicoes[id] && edicoes[id][k] !== m[k]);
