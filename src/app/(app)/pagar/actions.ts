@@ -4,7 +4,7 @@ import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
 import { baixaContaSchema, contaPagarEdicaoSchema, contaPagarNovaSchema, estornoContaSchema } from "@/lib/schemas/financeiro";
-import { gerarParcelas, hojeSP, planejarEdicaoParcelas, vencimentosRecorrentesFaltantes } from "@/lib/calculos";
+import { gerarParcelas, hojeSP, planejarEdicaoParcelas, primeirosVencimentosPorDia, vencimentosRecorrentesFaltantes } from "@/lib/calculos";
 import { formatBRL } from "@/lib/format";
 import type { TablesInsert, TablesUpdate } from "@/lib/supabase/database.types";
 
@@ -14,7 +14,7 @@ const REVALIDAR = ["/pagar", "/repasses", "/dashboard"];
 export async function criarContaPagar(dados: unknown) {
   return executar(async () => {
     const s = await exigirEscrita("pagar");
-    const { repeticao, parcelas, parcela_inicial, modo_valor, rateio, itens, ...c } = contaPagarNovaSchema.parse(dados);
+    const { repeticao, parcelas, parcela_inicial, modo_valor, rateio, itens, dias_mes, ...c } = contaPagarNovaSchema.parse(dados);
     const supabase = await createClient();
     const comum: Omit<TablesInsert<"contas_pagar">, "descricao" | "vencimento" | "valor"> = {
       empresa_id: c.empresa_id, fornecedor_id: c.fornecedor_id, categoria_id: c.categoria_id, tipo: c.tipo,
@@ -63,9 +63,13 @@ export async function criarContaPagar(dados: unknown) {
         .map((p) => ({ ...comum, descricao: p.descricao, vencimento: p.vencimento, valor: p.valor, parcela_num: p.parcelaNum, parcela_total: p.parcelaTotal, grupo_parcela_id: grupo }));
       if (boletos.length > 1) linhas = linhas.map((l, i) => ({ ...l, anexo_url: boletos[i] ?? null }));
     } else if (repeticao === "recorrente") {
-      const grupo = crypto.randomUUID();
-      const venc = [c.vencimento, ...vencimentosRecorrentesFaltantes({ vencimentoBase: c.vencimento, existentes: [c.vencimento], hoje: hojeSP() })];
-      linhas = venc.map((v) => ({ ...comum, descricao: c.descricao, vencimento: v, valor: c.valor, recorrente: true, grupo_parcela_id: grupo }));
+      // vários dias do mês: uma recorrência para cada dia (cada uma segue sozinha no job mensal), a partir do 1º vencimento
+      const inicios = dias_mes.length ? primeirosVencimentosPorDia(c.vencimento, dias_mes) : [c.vencimento];
+      linhas = inicios.flatMap((inicio) => {
+        const grupo = crypto.randomUUID();
+        const venc = [inicio, ...vencimentosRecorrentesFaltantes({ vencimentoBase: inicio, existentes: [inicio], hoje: hojeSP() })];
+        return venc.map((v) => ({ ...comum, descricao: c.descricao, vencimento: v, valor: c.valor, recorrente: true, grupo_parcela_id: grupo }));
+      });
     } else {
       linhas = [{ ...comum, descricao: c.descricao, vencimento: c.vencimento, valor: c.valor }];
     }

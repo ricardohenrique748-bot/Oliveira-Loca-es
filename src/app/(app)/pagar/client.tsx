@@ -90,6 +90,8 @@ function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opc
         opcoes: (v) => [{ value: "unica", label: "Única" }, { value: "parcelada", label: "Parcelada (n/N)" },
           ...(rateio(v as V) ? [] : [{ value: "recorrente", label: "Recorrente (mensal)" }])] },
       { nome: "parcelas", rotulo: "Nº de parcelas", tipo: "numero", col: 1, visivel: (v) => v.repeticao === "parcelada" },
+      { nome: "dias_mes", rotulo: "Dias do mês", tipo: "personalizado", col: 6, visivel: (v) => v.repeticao === "recorrente",
+        render: ({ value, onChange }) => <SeletorDiasMes dias={(value as number[] | undefined) ?? []} onChange={onChange} /> },
       { nome: "parcela_inicial", rotulo: "Começa na", tipo: "numero", col: 1, visivel: (v) => v.repeticao === "parcelada", ajuda: "ex.: 15 de 53" },
       { nome: "modo_valor", rotulo: "O valor é", tipo: "select", col: 2, visivel: (v) => v.repeticao === "parcelada", opcoes: [{ value: "parcela", label: "de cada parcela" }, { value: "total", label: "total (dividir)" }] },
       // anexos já no lançamento (boleto, nota fiscal…); parcelada com vários boletos: um para cada parcela, na ordem
@@ -264,7 +266,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
               valores={{ empresa_id: empresaPadrao ?? opcoes.empresas[0]?.value, fornecedor_id: null, descricao: "", categoria_id: null, tipo: "fixa", veiculo_id: null,
                 vencimento: hojeSP(), valor: undefined, forma_pagamento: "boleto", conta_bancaria_id: null, descontar_locador: false, valor_locador: null, anexo_url: null, observacoes: null,
                 rateio: false, itens: [{ ...ITEM_VAZIO }, { ...ITEM_VAZIO }],
-                repeticao: "unica", parcelas: null, parcela_inicial: 1, modo_valor: "parcela" }}
+                repeticao: "unica", parcelas: null, parcela_inicial: 1, modo_valor: "parcela", dias_mes: [] }}
               extra={(v) => <PreviaParcelas v={v} />}
               onSalvar={async (v) => { const r = await criarContaPagar(comEmpresaItens(comEmpresa(v, opcoes), opcoes)); return r.ok ? { ok: true, mensagem: `${r.dados.criadas} lançamento(s) criado(s)` } : r; }}
               onSucesso={() => { setNovo(false); router.refresh(); }} />
@@ -340,6 +342,27 @@ function EditorRateio({ itens, onChange, total, veiculos, parcelas, modo }: {
           Soma das placas {formatBRL(soma)} {bate ? "= valor do boleto" : `· boleto ${formatBRL(total)} (diferença ${formatBRL(total - soma)})`}
         </p>
       </div>
+    </div>
+  );
+}
+
+/** Recorrente em vários dias: marca os dias do mês em que a conta aparece. */
+function SeletorDiasMes({ dias, onChange }: { dias: number[]; onChange: (v: number[]) => void }) {
+  const alternar = (d: number) => onChange(dias.includes(d) ? dias.filter((x) => x !== d) : [...dias, d].sort((a, b) => a - b));
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-xs text-muted-foreground">
+        Marque os dias em que esta conta aparece <strong>todo mês</strong> (ex.: 5, 15 e 25 = 3 contas por mês). Nenhum marcado = só no dia do 1º vencimento.
+        Começa a partir do 1º vencimento.
+      </p>
+      <div className="grid grid-cols-7 gap-1 sm:grid-cols-[repeat(14,minmax(0,1fr))]">
+        {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+          <Button key={d} type="button" size="sm" variant={dias.includes(d) ? "default" : "outline"} className="h-8 px-0" aria-pressed={dias.includes(d)}
+            onClick={() => alternar(d)}>{d}</Button>
+        ))}
+      </div>
+      {dias.length > 0 && <p className="text-sm">Todo dia <strong>{dias.join(", ").replace(/, (\d+)$/, " e $1")}</strong> — {dias.length} {dias.length === 1 ? "conta" : "contas"} por mês.
+        <Button type="button" variant="link" size="sm" className="h-auto px-2" onClick={() => onChange([])}>Limpar</Button></p>}
     </div>
   );
 }

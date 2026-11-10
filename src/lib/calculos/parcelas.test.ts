@@ -3,6 +3,7 @@ import {
   descricaoBase,
   extrairParcela,
   gerarParcelas,
+  primeirosVencimentosPorDia,
   planejarEdicaoParcelas,
   statusConta,
   vencimentosRecorrentesFaltantes,
@@ -96,5 +97,14 @@ describe("status da conta a pagar", () => {
     expect(statusConta("2026-10-10", "2026-10-09", "2026-10-16")).toBe("pago");
     expect(statusConta("2026-10-15", null, "2026-10-16")).toBe("vencido");
     expect(statusConta("2026-10-16", null, "2026-10-16")).toBe("a_vencer");
+  });
+});
+
+describe("primeirosVencimentosPorDia", () => {
+  it("dia que já passou vai para o mês seguinte", () => {
+    expect(primeirosVencimentosPorDia("2026-11-10", [5, 20, 10])).toEqual(["2026-11-10", "2026-11-20", "2026-12-05"]);
+  });
+  it("mês sem o dia usa o último dia; repetidos e inválidos saem", () => {
+    expect(primeirosVencimentosPorDia("2026-11-10", [31, 31, 0, 40])).toEqual(["2026-11-30"]);
   });
 });

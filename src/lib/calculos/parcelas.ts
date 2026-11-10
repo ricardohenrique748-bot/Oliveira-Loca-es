@@ -139,3 +139,17 @@ export function statusConta(vencimento: ISODate, pagoEm: ISODate | null | undefi
   if (pagoEm) return "pago";
   return vencimento < hoje ? "vencido" : "a_vencer";
 }
+
+/**
+ * Recorrente em vários dias do mês: o 1º vencimento de cada dia, a partir de uma data.
+ * Dia que já passou no mês da data vai para o mês seguinte; mês sem o dia (31 em novembro) usa o último dia.
+ * Ex.: a partir de 10/11, dias [5, 20] → 05/12 e 20/11 (ordenados por data).
+ */
+export function primeirosVencimentosPorDia(apartir: ISODate, dias: number[]): ISODate[] {
+  const { ano, mes } = parseCompetencia(competenciaDe(apartir));
+  const proximo = parseCompetencia(addCompetencia(competenciaDe(apartir), 1));
+  return [...new Set(dias)].filter((d) => d >= 1 && d <= 31).map((d) => {
+    const neste = montar(ano, mes, Math.min(d, ultimoDiaDoMes(ano, mes)));
+    return neste >= apartir ? neste : montar(proximo.ano, proximo.mes, Math.min(d, ultimoDiaDoMes(proximo.ano, proximo.mes)));
+  }).sort();
+}

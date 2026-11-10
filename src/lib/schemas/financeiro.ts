@@ -50,6 +50,9 @@ export const contaPagarNovaSchema = z.object({
   parcelas: z.number().int().min(2, "Mínimo 2 parcelas").max(360).nullish(),
   parcela_inicial: z.number().int().min(1).nullish(),
   modo_valor: z.enum(["parcela", "total"]).default("parcela"),
+  /** recorrente em vários dias do mês (ex.: 5, 15, 25): uma conta em cada dia, todo mês; vazio = o dia do 1º vencimento.
+   *  Até o dia 28: todo mês tem (a recorrência repete o dia da primeira conta). */
+  dias_mes: z.array(z.number().int().min(1).max(28, "Escolha dias de 1 a 28")).max(28).default([]),
 }).superRefine((v, ctx) => {
   regrasVeiculo(v, ctx);
   if (v.repeticao === "parcelada" && !v.parcelas) ctx.addIssue({ code: "custom", path: ["parcelas"], message: "Informe o número de parcelas" });
