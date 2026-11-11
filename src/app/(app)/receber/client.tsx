@@ -168,6 +168,9 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
           { value: "com", label: "Com contrato" }, { value: "sem", label: "Sem contrato (avulsa)" },
         ]} />}
         <FiltroDataUrl param="mes_fat" rotulo="Mês faturado" tipo="month" />
+        {/* período de faturamento (data de emissão da NF): de uma data até outra */}
+        <FiltroDataUrl param="fat_de" rotulo="Faturado de" />
+        <FiltroDataUrl param="fat_ate" rotulo="Faturado até" />
         <div className="flex flex-col gap-1">
           <Label className="text-xs text-muted-foreground">Nº da fatura</Label>
           <BuscaUrl param="nf" placeholder="NF ou TD-013/26…" className="sm:w-44" />

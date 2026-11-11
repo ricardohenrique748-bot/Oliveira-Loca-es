@@ -51,6 +51,9 @@ export default function ReceberPage() {
       const prox = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, "0")}`;
       q = q.gte("data_emissao", `${mesFat}-01`).lt("data_emissao", `${prox}-01`);
     }
+    // período de faturamento: emissão de uma data até outra (as duas inclusas)
+    if (p.get("fat_de")) q = q.gte("data_emissao", p.get("fat_de")!);
+    if (p.get("fat_ate")) q = q.lte("data_emissao", p.get("fat_ate")!);
     // nº da fatura: NF, nº do contrato (ex.: TD-013/26, o que sai no cabeçalho do PDF) ou nº da OS da avulsa
     const nf = p.get("nf")?.trim().replace(/[^\w\-/]/g, "");
     if (nf) q = q.or(`numero_nf.ilike.%${nf}%,contrato_numero.ilike.%${nf}%,numero_os.ilike.%${nf}%`);
