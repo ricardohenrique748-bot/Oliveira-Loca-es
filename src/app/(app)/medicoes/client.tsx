@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import type { Opcao } from "@/components/ui/select";
 import { Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
-import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
+import { BarraFiltros, FiltroDataUrl, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
 import { SeletorMes } from "@/components/app/seletor-mes";
 import { baseCobranca, cobrancaAvulsa, rotuloValorCobranca, calcularHoraExtra, calcularValorMedicao, calcularVencimento, hojeSP, somar, type TipoCobrancaFatura } from "@/lib/calculos";
 import { formatBRL, formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
@@ -205,6 +205,9 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
             </Button>
           </div>
         </div>
+        {/* faturadas (emitidas) de uma data até outra: com as datas, a competência deixa de filtrar */}
+        <FiltroDataUrl param="fat_de" rotulo="Faturado de" />
+        <FiltroDataUrl param="fat_ate" rotulo="Faturado até" />
         <FiltroSelectUrl param="tipo" rotulo="Tipo" vazio="Todas" opcoes={[{ value: "contrato", label: "Com contrato" }, { value: "avulsa", label: "Avulsas" }]} />
         <FiltroSelectUrl param="status" rotulo="Status" opcoes={STATUS_OPCOES} />
         <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={clientes} />
