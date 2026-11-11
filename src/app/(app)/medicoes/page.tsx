@@ -32,15 +32,15 @@ export default function MedicoesPage() {
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     // "todas" = pendentes de qualquer mês; "historico" = tudo, de todos os meses e status (inclusive canceladas)
     const historico = comp === "historico";
-    // período de faturamento (emissão de uma data até outra): vale sobre todas as competências
-    const fatDe = p.get("fat_de"), fatAte = p.get("fat_ate");
-    const porEmissao = !!(fatDe || fatAte);
-    if (fatDe) q = q.gte("data_emissao", fatDe);
-    if (fatAte) q = q.lte("data_emissao", fatAte);
-    if (comp !== "todas" && !historico && !porEmissao) q = q.eq("competencia", `${comp}-01`);
+    // intervalo de competências: de "comp" até "comp_ate" (inclusive)
+    const compAte = p.get("comp_ate");
+    const intervalo = comp !== "todas" && !historico && !!compAte && /^\d{4}-\d{2}$/.test(compAte);
+    if (intervalo) {
+      const [a, b] = compAte! < comp ? [compAte!, comp] : [comp, compAte!];
+      q = q.gte("competencia", `${a}-01`).lte("competencia", `${b}-01`);
+    } else if (comp !== "todas" && !historico) q = q.eq("competencia", `${comp}-01`);
     const status = p.get("status");
     if (status) q = q.eq("status_exibicao", status);
-    else if (porEmissao) q = q.neq("status", "cancelado");
     else if (comp === "todas") q = q.in("status", ["a_faturar"]);
     else if (!historico) q = q.neq("status", "cancelado");
     if (p.get("cliente")) q = q.eq("cliente_id", p.get("cliente")!);

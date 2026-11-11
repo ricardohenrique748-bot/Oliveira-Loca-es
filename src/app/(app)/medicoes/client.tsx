@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import type { Opcao } from "@/components/ui/select";
 import { Cabecalho, Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
-import { BarraFiltros, FiltroDataUrl, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
+import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
 import { SeletorMes } from "@/components/app/seletor-mes";
 import { baseCobranca, cobrancaAvulsa, rotuloValorCobranca, calcularHoraExtra, calcularValorMedicao, calcularVencimento, hojeSP, somar, type TipoCobrancaFatura } from "@/lib/calculos";
 import { formatBRL, formatCompetencia, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
@@ -193,21 +193,22 @@ export function MedicoesCliente({ linhas, total, pagina, tamanho, competencia, c
 
       <BarraFiltros>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="comp" className="text-xs text-muted-foreground">Competência (mês de fim do período)</Label>
-          <div className="flex gap-1">
+          <Label htmlFor="comp" className="text-xs text-muted-foreground">Competência (mês de fim do período) — de / até</Label>
+          <div className="flex flex-wrap items-center gap-1">
             <SeletorMes id="comp" value={competencia === "todas" || competencia === "historico" ? "" : competencia}
-              onChange={(v) => url.set({ comp: v })} />
-            <Button variant={competencia === "todas" ? "default" : "outline"} size="sm" onClick={() => url.set({ comp: competencia === "todas" ? competenciaPadrao : "todas", pagina: null })}>
+              onChange={(v) => url.set({ comp: v, pagina: null })} />
+            {/* "até": com ele, mostra as competências do mês de cima até este (inclusive) */}
+            <span className="px-1 text-xs text-muted-foreground">até</span>
+            <SeletorMes id="comp_ate" limpavel value={competencia === "todas" || competencia === "historico" ? "" : (url.get("comp_ate") ?? "")}
+              onChange={(v) => url.set({ comp_ate: v || null, comp: competencia === "todas" || competencia === "historico" ? competenciaPadrao : competencia, pagina: null })} />
+            <Button variant={competencia === "todas" ? "default" : "outline"} size="sm" onClick={() => url.set({ comp: competencia === "todas" ? competenciaPadrao : "todas", comp_ate: null, pagina: null })}>
               Todas pendentes
             </Button>
-            <Button variant={competencia === "historico" ? "default" : "outline"} size="sm" onClick={() => url.set({ comp: competencia === "historico" ? competenciaPadrao : "historico", pagina: null })}>
+            <Button variant={competencia === "historico" ? "default" : "outline"} size="sm" onClick={() => url.set({ comp: competencia === "historico" ? competenciaPadrao : "historico", comp_ate: null, pagina: null })}>
               <History /> Histórico completo
             </Button>
           </div>
         </div>
-        {/* faturadas (emitidas) de uma data até outra: com as datas, a competência deixa de filtrar */}
-        <FiltroDataUrl param="fat_de" rotulo="Faturado de" />
-        <FiltroDataUrl param="fat_ate" rotulo="Faturado até" />
         <FiltroSelectUrl param="tipo" rotulo="Tipo" vazio="Todas" opcoes={[{ value: "contrato", label: "Com contrato" }, { value: "avulsa", label: "Avulsas" }]} />
         <FiltroSelectUrl param="status" rotulo="Status" opcoes={STATUS_OPCOES} />
         <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={clientes} />
