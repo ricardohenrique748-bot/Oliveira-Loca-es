@@ -32,6 +32,7 @@ export default function ConfiguracoesPage() {
           perfil: p?.perfil ?? "consulta",
           ativo: p?.ativo ?? false,
           soAvulsas: p?.so_faturas_avulsas ?? false,
+          ocultaPagar: p?.oculta_contas_pagar ?? false,
           empresas: (vinculos ?? []).filter((v) => v.user_id === u.id).map((v) => v.empresa_id),
           ultimoAcesso: u.last_sign_in_at ?? null,
         };
@@ -51,6 +52,7 @@ export default function ConfiguracoesPage() {
           perfil: p.perfil,
           ativo: p.ativo,
           soAvulsas: p.so_faturas_avulsas ?? false,
+          ocultaPagar: p.oculta_contas_pagar ?? false,
           empresas: (vinculos ?? []).filter((v) => v.user_id === p.user_id).map((v) => v.empresa_id),
           ultimoAcesso: null,
         })).sort((a, b) => a.nome.localeCompare(b.nome));

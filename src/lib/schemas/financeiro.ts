@@ -52,6 +52,8 @@ export const contaPagarNovaSchema = z.object({
   modo_valor: z.enum(["parcela", "total"]).default("parcela"),
   /** recorrente em vários dias do mês (ex.: 5, 15, 25): uma conta em cada dia, todo mês; vazio = o dia do 1º vencimento.
    *  Até o dia 28: todo mês tem (a recorrência repete o dia da primeira conta). */
+  /** parcelada com vários anexos: "todos" = todos os anexos em todas as parcelas; "um_por_parcela" = 1º anexo na 1ª parcela, 2º na 2ª… (carnê) */
+  anexos_modo: z.enum(["todos", "um_por_parcela"]).default("todos"),
   dias_mes: z.array(z.number().int().min(1).max(28, "Escolha dias de 1 a 28")).max(28).default([]),
 }).superRefine((v, ctx) => {
   regrasVeiculo(v, ctx);

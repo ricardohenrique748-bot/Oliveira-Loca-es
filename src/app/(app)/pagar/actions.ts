@@ -14,7 +14,7 @@ const REVALIDAR = ["/pagar", "/repasses", "/dashboard"];
 export async function criarContaPagar(dados: unknown) {
   return executar(async () => {
     const s = await exigirEscrita("pagar");
-    const { repeticao, parcelas, parcela_inicial, modo_valor, rateio, itens, dias_mes, ...c } = contaPagarNovaSchema.parse(dados);
+    const { repeticao, parcelas, parcela_inicial, modo_valor, rateio, itens, dias_mes, anexos_modo, ...c } = contaPagarNovaSchema.parse(dados);
     const supabase = await createClient();
     const comum: Omit<TablesInsert<"contas_pagar">, "descricao" | "vencimento" | "valor"> = {
       empresa_id: c.empresa_id, fornecedor_id: c.fornecedor_id, categoria_id: c.categoria_id, tipo: c.tipo,
@@ -25,8 +25,9 @@ export async function criarContaPagar(dados: unknown) {
     const locador = comum.descontar_locador && c.valor_locador ? c.valor_locador / c.valor : null;
     const comLocador = (l: TablesInsert<"contas_pagar">) => ({ ...l, valor_locador: locador ? Math.round(Number(l.valor) * locador * 100) / 100 : null });
     let linhas: TablesInsert<"contas_pagar">[];
-    // vários boletos anexados: um por parcela, na ordem (1º boleto → 1ª parcela gerada); um só (carnê) vai em todas
-    const boletos = (c.anexo_url ?? "").split("\n").map((r) => r.trim()).filter(Boolean);
+    // vários anexos: em todas as parcelas (padrão) ou, se escolhido, um por parcela, na ordem (1º boleto → 1ª parcela gerada)
+    const anexos = (c.anexo_url ?? "").split("\n").map((r) => r.trim()).filter(Boolean);
+    const boletos = anexos_modo === "um_por_parcela" ? anexos : [];
     if (rateio) {
       // boleto único com várias placas: uma conta por nota, cada uma na sua placa, mesmo vencimento e mesmo boleto.
       // Parcelado: cada placa vira o seu parcelamento n/N (grupo próprio), com os mesmos vencimentos.
@@ -105,16 +106,13 @@ export async function editarContaPagar(id: string, dados: unknown) {
       const ehParcelada = atual.parcela_total != null;
       // anexo só se propaga quando foi alterado, para não sobrescrever o boleto próprio de cada parcela
       const anexoMudou = (c.anexo_url ?? null) !== (atual.anexo_url ?? null);
-      // vários boletos na parcela (ainda não paga): um por parcela, na ordem, desta em diante (como na criação);
-      // assim dá para anexar todos na 1ª e espalhar depois
-      const boletos = (c.anexo_url ?? "").split("\n").map((r) => r.trim()).filter(Boolean);
-      const distribuir = ehParcelada && !atual.pago_em && boletos.length > 1;
+      // vários anexos ficam juntos: alterados, vão inteiros para esta parcela e as seguintes (não espalha um por parcela)
       const plano = planejarEdicaoParcelas(lista, alvo.parcelaNum, {
         valor: c.valor !== atual.valor ? c.valor : undefined,
         vencimento: c.vencimento !== atual.vencimento ? c.vencimento : undefined,
         descricao: c.descricao !== atual.descricao ? c.descricao : undefined,
       }, "seguintes");
-      for (const [k, p] of plano.entries()) {
+      for (const p of plano) {
         const alt: TablesUpdate<"contas_pagar"> = { ...comuns };
         // valor para o locador na mesma proporção do valor (parcelas com valores diferentes)
         const valorParcela = p.alteracoes.valor ?? lista.find((g) => g.id === p.id)?.valor ?? c.valor;
@@ -122,8 +120,7 @@ export async function editarContaPagar(id: string, dados: unknown) {
         if (p.alteracoes.valor !== undefined) alt.valor = p.alteracoes.valor;
         if (p.alteracoes.vencimento) alt.vencimento = p.alteracoes.vencimento;
         if (p.alteracoes.descricao) alt.descricao = ehParcelada ? p.alteracoes.descricao : c.descricao;
-        if (distribuir) { if (boletos[k]) alt.anexo_url = boletos[k]; }
-        else if (p.id === id || anexoMudou) alt.anexo_url = c.anexo_url;
+        if (p.id === id || anexoMudou) alt.anexo_url = c.anexo_url;
         checar(await supabase.from("contas_pagar").update(alt).eq("id", p.id));
       }
       return { alteradas: plano.length };

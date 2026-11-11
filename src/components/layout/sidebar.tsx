@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/o
 import { Button } from "@/components/ui/button";
 import { sair } from "@/app/(auth)/login/actions";
 import { MENU } from "./navegacao";
+import { moduloOculto, useAuth } from "@/lib/auth";
 import { INICIO } from "@/lib/plataforma";
 
 export function ativo(pathname: string, href: string) {
@@ -27,9 +28,10 @@ const normalizar = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toL
 function Navegacao({ perfil, aoNavegar }: { perfil: Perfil; aoNavegar?: () => void }) {
   const pathname = usePathname();
   const [busca, setBusca] = useState("");
+  const { sessao } = useAuth();
   const termo = normalizar(busca.trim());
   const grupos = MENU
-    .map((g) => ({ ...g, itens: g.itens.filter((it) => podeLer(perfil, it.modulo) && (!termo || normalizar(it.titulo).includes(termo))) }))
+    .map((g) => ({ ...g, itens: g.itens.filter((it) => podeLer(perfil, it.modulo) && !moduloOculto(sessao, it.modulo) && (!termo || normalizar(it.titulo).includes(termo))) }))
     .filter((g) => g.itens.length);
 
   return (

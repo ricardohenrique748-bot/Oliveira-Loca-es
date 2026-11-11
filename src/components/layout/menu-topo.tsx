@@ -4,15 +4,17 @@ import { DropdownNavigation, type NavItem } from "@/components/ui/dropdown-navig
 import { podeLer, type Perfil } from "@/lib/permissoes";
 import { ativo } from "./sidebar";
 import { MENU } from "./navegacao";
+import { moduloOculto, useAuth } from "@/lib/auth";
 
 /** Navegação principal no topo (desktop): cada grupo do MENU vira um item com submenu em colunas por seção. */
 export function MenuTopo({ perfil, className }: { perfil: Perfil; className?: string }) {
   const pathname = usePathname();
+  const { sessao } = useAuth();
   // "/configuracoes/importacao" também casa com "/configuracoes": vale o item mais específico
   const marcado = MENU.flatMap((g) => g.itens).filter((it) => ativo(pathname, it.href)).sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   const itens: NavItem[] = MENU.flatMap((grupo): NavItem[] => {
-    const visiveis = grupo.itens.filter((it) => podeLer(perfil, it.modulo));
+    const visiveis = grupo.itens.filter((it) => podeLer(perfil, it.modulo) && !moduloOculto(sessao, it.modulo));
     if (!visiveis.length) return [];
     if (!grupo.titulo) return visiveis.map((it) => ({ id: it.href, label: it.titulo, link: it.href, active: it.href === marcado }));
 

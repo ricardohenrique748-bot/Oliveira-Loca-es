@@ -15,6 +15,8 @@ export interface Sessao {
   perfil: Perfil;
   /** só vê faturas avulsas (sem contrato); o banco também bloqueia via RLS */
   soFaturasAvulsas: boolean;
+  /** contas a pagar escondidas deste usuário (menu, tela e RLS) */
+  ocultaContasPagar: boolean;
   empresas: Empresa[];
   /** empresa selecionada no topo (null = todas) */
   empresaId: string | null;
@@ -47,7 +49,8 @@ export async function getSessao(forceRefresh = false): Promise<Sessao | null> {
     email: user.email ?? "",
     nome: perfil.nome,
     perfil: perfil.perfil,
-    soFaturasAvulsas: !!perfil.so_faturas_avulsas && perfil.perfil !== "admin",
+    soFaturasAvulsas: !!perfil.so_faturas_avulsas,
+    ocultaContasPagar: !!perfil.oculta_contas_pagar,
     empresas: lista,
     empresaId: lista.some((e) => e.id === escolhida) ? escolhida : null,
   };
@@ -70,14 +73,19 @@ export class ErroPermissao extends Error {}
 export async function exigirEscrita(modulo: Modulo): Promise<Sessao> {
   const s = await getSessao();
   if (!s) throw new ErroPermissao("Sessão expirada. Entre novamente.");
-  if (!podeEscrever(s.perfil, modulo)) throw new ErroPermissao("Seu perfil não permite esta operação.");
+  if (!podeEscrever(s.perfil, modulo) || moduloOculto(s, modulo)) throw new ErroPermissao("Seu perfil não permite esta operação.");
   return s;
+}
+
+/** Módulo escondido deste usuário por marcação individual (além do perfil). */
+export function moduloOculto(s: Pick<Sessao, "ocultaContasPagar"> | null | undefined, modulo: Modulo): boolean {
+  return modulo === "pagar" && !!s?.ocultaContasPagar;
 }
 
 export async function exigirSessao(modulo?: Modulo): Promise<Sessao> {
   const s = await getSessao();
   if (!s) throw new ErroPermissao("Sessão expirada.");
-  if (modulo && !podeLer(s.perfil, modulo)) throw new ErroPermissao("Sem permissão.");
+  if (modulo && (!podeLer(s.perfil, modulo) || moduloOculto(s, modulo))) throw new ErroPermissao("Sem permissão.");
   return s;
 }
 

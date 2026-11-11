@@ -94,9 +94,12 @@ function camposConta<V extends ContaPagarNovaForm | ContaPagarEdicaoForm>(o: Opc
         render: ({ value, onChange }) => <SeletorDiasMes dias={(value as number[] | undefined) ?? []} onChange={onChange} /> },
       { nome: "parcela_inicial", rotulo: "Começa na", tipo: "numero", col: 1, visivel: (v) => v.repeticao === "parcelada", ajuda: "ex.: 15 de 53" },
       { nome: "modo_valor", rotulo: "O valor é", tipo: "select", col: 2, visivel: (v) => v.repeticao === "parcelada", opcoes: [{ value: "parcela", label: "de cada parcela" }, { value: "total", label: "total (dividir)" }] },
-      // anexos já no lançamento (boleto, nota fiscal…); parcelada com vários boletos: um para cada parcela, na ordem
+      // anexos já no lançamento (boleto, nota fiscal…); parcelada com vários: todos em cada parcela, ou um por parcela (carnê)
       { nome: "anexo_url", rotulo: "Anexos (boleto, nota fiscal…)", tipo: "personalizado", col: 6,
         render: ({ value, onChange }) => <CampoAnexo bucket="anexos" pasta="contas" valor={value ?? null} onChange={onChange} multiplo /> },
+      { nome: "anexos_modo", rotulo: "Anexos nas parcelas", tipo: "select", col: 4,
+        visivel: (v) => v.repeticao === "parcelada" && (v.anexo_url ?? "").split("\n").filter((x) => x.trim()).length > 1,
+        opcoes: [{ value: "todos", label: "Todos os anexos em todas as parcelas" }, { value: "um_por_parcela", label: "Um anexo para cada parcela (1º na 1ª, 2º na 2ª…)" }] },
     );
   }
   lista.push(
@@ -260,13 +263,13 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
 
       <Dialog open={novo} onOpenChange={setNovo}>
         <DialogContent tamanho="lg">
-          <DialogHeader><DialogTitle>Nova conta a pagar</DialogTitle><DialogDescription>Parcelada gera N lançamentos “n/N” mensais (anexando vários boletos, cada um vai para uma parcela, na ordem); recorrente gera os próximos 12 meses (o job mensal mantém sempre 12 à frente).</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Nova conta a pagar</DialogTitle><DialogDescription>Parcelada gera N lançamentos “n/N” mensais (com vários anexos, escolha se vão todos em cada parcela ou um para cada parcela); recorrente gera os próximos 12 meses (o job mensal mantém sempre 12 à frente).</DialogDescription></DialogHeader>
           {novo && (
             <Formulario<ContaPagarNovaForm> campos={camposConta<ContaPagarNovaForm>(opcoes, true)} schema={contaPagarNovaSchema as never} aoAlterar={sincronizarLocador}
               valores={{ empresa_id: empresaPadrao ?? opcoes.empresas[0]?.value, fornecedor_id: null, descricao: "", categoria_id: null, tipo: "fixa", veiculo_id: null,
                 vencimento: hojeSP(), valor: undefined, forma_pagamento: "boleto", conta_bancaria_id: null, descontar_locador: false, valor_locador: null, anexo_url: null, observacoes: null,
                 rateio: false, itens: [{ ...ITEM_VAZIO }, { ...ITEM_VAZIO }],
-                repeticao: "unica", parcelas: null, parcela_inicial: 1, modo_valor: "parcela", dias_mes: [] }}
+                repeticao: "unica", parcelas: null, parcela_inicial: 1, modo_valor: "parcela", dias_mes: [], anexos_modo: "todos" }}
               extra={(v) => <PreviaParcelas v={v} />}
               onSalvar={async (v) => { const r = await criarContaPagar(comEmpresaItens(comEmpresa(v, opcoes), opcoes)); return r.ok ? { ok: true, mensagem: `${r.dados.criadas} lançamento(s) criado(s)` } : r; }}
               onSucesso={() => { setNovo(false); router.refresh(); }} />

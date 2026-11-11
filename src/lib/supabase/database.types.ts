@@ -2235,6 +2235,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           nome: string
+          oculta_contas_pagar: boolean
           perfil: Database["public"]["Enums"]["perfil_usuario"]
           so_faturas_avulsas: boolean
           updated_at: string
@@ -2245,6 +2246,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           nome: string
+          oculta_contas_pagar?: boolean
           perfil?: Database["public"]["Enums"]["perfil_usuario"]
           so_faturas_avulsas?: boolean
           updated_at?: string
@@ -2255,6 +2257,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           nome?: string
+          oculta_contas_pagar?: boolean
           perfil?: Database["public"]["Enums"]["perfil_usuario"]
           so_faturas_avulsas?: boolean
           updated_at?: string
