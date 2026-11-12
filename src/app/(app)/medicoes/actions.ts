@@ -247,7 +247,12 @@ export async function salvarMedicoes(edicoes: unknown) {
       const campos: typeof dados & { placas?: PlacaFatura[] } = dados;
       const { data: atual } = await supabase.from("medicoes").select("status").eq("id", id).single();
       if (!atual) throw new Error("Fatura não encontrada");
-      if (atual.status === "cancelado" || atual.status === "recebido") throw new Error("Faturas recebidas ou canceladas não podem ser editadas");
+      if (atual.status === "cancelado" || atual.status === "recebido") {
+        // recebida/cancelada: só a observação continua editável (valores, datas e NF ficam travados)
+        if (!("observacoes" in campos)) throw new Error("Faturas recebidas ou canceladas não podem ser editadas (só a observação)");
+        checar(await supabase.from("medicoes").update({ observacoes: campos.observacoes ?? null }).eq("id", id));
+        continue;
+      }
       if (atual.status !== "a_faturar" && campos.dias !== undefined) delete campos.dias;
       // várias placas: os dias digitados ficam marcados (o banco não os recalcula) e a principal vira os dias da fatura
       if (placas_dias?.length && atual.status === "a_faturar") {
