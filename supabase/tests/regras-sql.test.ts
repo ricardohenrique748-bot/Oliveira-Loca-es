@@ -222,6 +222,7 @@ describe("repasses e abatimentos", () => {
   const V12 = "88888888-0000-0000-0000-000000000012"; // Robson, OS motor 14.800 descontar
   const V11 = "88888888-0000-0000-0000-000000000011"; // Robson, Silcar 4×1.250 + multa 293,47
 
+  // a OS (14.800) vence em 01/10: entra no 1º repasse aberto com data prevista depois disso (o de 21/08, previsto p/ 21/10)
   it("abatimento maior que o repasse: líquido 0 e saldo passa para o próximo", async () => {
     const r = await q<{ periodo_inicio: string; status: string; valor_bruto: string; valor_abatimentos: string; valor_liquido: string }>(
       `select m.periodo_inicio::text, r.status, r.valor_bruto::text, r.valor_abatimentos::text, r.valor_liquido::text
@@ -229,22 +230,22 @@ describe("repasses e abatimentos", () => {
         where r.veiculo_id = $1 order by m.periodo_inicio`, [V12]);
     expect(r).toEqual([
       { periodo_inicio: "2026-06-21", status: "pago", valor_bruto: "12500.00", valor_abatimentos: "0.00", valor_liquido: "12500.00" },
-      { periodo_inicio: "2026-07-21", status: "liberado", valor_bruto: "12500.00", valor_abatimentos: "12500.00", valor_liquido: "0.00" },
-      { periodo_inicio: "2026-08-21", status: "previsto", valor_bruto: "12500.00", valor_abatimentos: "2300.00", valor_liquido: "10200.00" },
+      { periodo_inicio: "2026-07-21", status: "liberado", valor_bruto: "12500.00", valor_abatimentos: "0.00", valor_liquido: "12500.00" },
+      { periodo_inicio: "2026-08-21", status: "previsto", valor_bruto: "12500.00", valor_abatimentos: "12500.00", valor_liquido: "0.00" },
     ]);
     const [ab] = await q<{ ordem_servico_id: string | null }>(
       `select a.ordem_servico_id from public.repasse_abatimentos a join public.repasses r on r.id = a.repasse_id where r.veiculo_id = $1 limit 1`, [V12]);
     expect(ab.ordem_servico_id).toBe("cccccccc-0000-0000-0000-000000000001");
   });
 
-  it("multas/pneus 'Descontar' já vêm abatidos no repasse em aberto mais antigo", async () => {
+  it("multas/pneus 'Descontar': cada parcela entra no repasse aberto cuja data prevista já passou do vencimento dela", async () => {
     const r = await q<{ periodo_inicio: string; valor_abatimentos: string; valor_liquido: string }>(
       `select m.periodo_inicio::text, r.valor_abatimentos::text, r.valor_liquido::text
          from public.repasses r join public.medicoes m on m.id = r.medicao_id
         where r.veiculo_id = $1 and r.status <> 'pago' order by m.periodo_inicio`, [V11]);
-    // 4×1.250 + 293,47 = 5.293,47 cabem no repasse de agosto (12.000)
-    expect(r[0]).toEqual({ periodo_inicio: "2026-08-01", valor_abatimentos: "5293.47", valor_liquido: "6706.53" });
-    expect(r[1].valor_abatimentos).toBe("0.00");
+    // agosto (previsto p/ 01/10): parcelas 1/4 (10/08) e 2/4 (10/09) + multa (28/09); setembro (31/10): parcela 3/4; a 4/4 (10/11) espera
+    expect(r[0]).toEqual({ periodo_inicio: "2026-08-01", valor_abatimentos: "2793.47", valor_liquido: "9206.53" });
+    expect(r[1].valor_abatimentos).toBe("1250.00");
   });
 
   it("não permite pagar adiantado sem confirmação; com confirmação grava adiantado + aprovado_por", async () => {
@@ -257,20 +258,20 @@ describe("repasses e abatimentos", () => {
     });
     const [p] = await q<{ status: string; adiantado: boolean; aprovado_por: string; valor_liquido: string }>(
       "select status, adiantado, aprovado_por, valor_liquido::text from public.repasses where id = $1", [rp.id]);
-    expect(p).toEqual({ status: "pago", adiantado: true, aprovado_por: U.financeiro, valor_liquido: "10200.00" });
-    // conta da OS (14.800) ainda não quitada: 12.500 estão no repasse de agosto, não pago
+    expect(p).toEqual({ status: "pago", adiantado: true, aprovado_por: U.financeiro, valor_liquido: "0.00" });
+    // conta da OS (14.800): 12.500 abatidos no repasse pago; os 2.300 restantes esperam um repasse que vença depois de 01/10
     const contaOS = () => q<{ repasse_id: string | null; valor_abatido: string }>(
       "select repasse_id, valor_abatido::text from public.contas_pagar_v where ordem_servico_id = 'cccccccc-0000-0000-0000-000000000001'");
-    expect((await contaOS())[0]).toEqual({ repasse_id: null, valor_abatido: "14800.00" });
+    expect((await contaOS())[0]).toEqual({ repasse_id: null, valor_abatido: "12500.00" });
 
-    // pagar agosto (medição recebida → não é adiantado) quita a conta
+    // pagar o de 21/07 (medição recebida → não é adiantado; previsto p/ 20/09, antes do vencimento da OS: não desconta)
     const [ago] = await q<{ id: string }>(
       `select r.id from public.repasses r join public.medicoes m on m.id = r.medicao_id
         where r.veiculo_id = $1 and m.periodo_inicio = '2026-07-21'`, [V12]);
     await comoUsuario(db, U.financeiro, () => db.query("select public.fn_pagar_repasse($1, '2026-10-16')", [ago.id]));
     const [pa] = await q<{ adiantado: boolean; valor_liquido: string }>("select adiantado, valor_liquido::text from public.repasses where id = $1", [ago.id]);
-    expect(pa).toEqual({ adiantado: false, valor_liquido: "0.00" });
-    expect((await contaOS())[0]).toEqual({ repasse_id: ago.id, valor_abatido: "14800.00" });
+    expect(pa).toEqual({ adiantado: false, valor_liquido: "12500.00" });
+    expect((await contaOS())[0]).toEqual({ repasse_id: null, valor_abatido: "12500.00" });
   });
 
   it("faturamento não pode pagar repasse", async () => {
@@ -625,6 +626,46 @@ describe("valor para o locador na conta a pagar", () => {
       "select valor_locador::text, valor_abatido::text from public.contas_pagar_v where id = $1", [c.id]);
     expect(v).toEqual({ valor_locador: null, valor_abatido: "50.00" });
     await expect(db.query("update public.contas_pagar set valor_locador = 0 where id = $1", [c.id])).rejects.toThrow();
+  });
+});
+
+describe("repasse: escolher os descontos do mês", () => {
+  it("padrão: só o que vence até a data do repasse; marcar/desmarcar manda na escolha", async () => {
+    const [rp] = await q<{ id: string; veiculo_id: string; empresa_id: string; limite: string }>(
+      `select r.id, r.veiculo_id, r.empresa_id, coalesce(r.data_prevista, m.periodo_fim)::text as limite
+         from public.repasses r join public.medicoes m on m.id = r.medicao_id
+        where r.status in ('previsto','liberado') and r.valor_bruto > 3000
+          and not exists (select 1 from public.repasses r2 join public.medicoes m2 on m2.id = r2.medicao_id where r2.veiculo_id = r.veiculo_id and r2.id <> r.id
+                            and r2.status in ('previsto','liberado') and m2.periodo_inicio > m.periodo_inicio)
+        order by r.created_at limit 1`);
+    expect(rp).toBeTruthy();
+    // seguro em 4 parcelas mensais: a 1ª vence no limite do repasse, as outras depois
+    const contas: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const [c] = await q<{ id: string }>(
+        `insert into public.contas_pagar (empresa_id, descricao, tipo, veiculo_id, vencimento, valor, descontar_locador)
+         values ($1, 'SEGURO', 'veiculo', $2, ($3::date + ($4 || ' month')::interval)::date, 500, true) returning id`,
+        [rp.empresa_id, rp.veiculo_id, rp.limite, String(i)]);
+      contas.push(c.id);
+    }
+    const noRepasse = async () => (await q<{ conta_pagar_id: string }>(
+      "select conta_pagar_id from public.repasse_abatimentos where repasse_id = $1 and conta_pagar_id = any($2::uuid[]) order by conta_pagar_id",
+      [rp.id, contas])).map((x) => x.conta_pagar_id);
+
+    // padrão: só a parcela que vence até a data do repasse
+    expect(await noRepasse()).toEqual([contas[0]]);
+
+    // marca a 2ª (adianta) e desmarca a 1ª (fica para depois)
+    await comoUsuario(db, U.financeiro, () => q("select public.fn_escolher_desconto_repasse($1, $2, true)", [rp.id, contas[1]]));
+    await comoUsuario(db, U.financeiro, () => q("select public.fn_escolher_desconto_repasse($1, $2, false)", [rp.id, contas[0]]));
+    expect(await noRepasse()).toEqual([contas[1]]);
+    const [r] = await q<{ a: string; l: string; b: string }>("select valor_abatimentos::text a, valor_liquido::text l, valor_bruto::text b from public.repasses where id = $1", [rp.id]);
+    expect(Number(r.l)).toBeCloseTo(Number(r.b) - Number(r.a), 2);
+
+    // consulta e faturamento não podem escolher
+    await expect(comoUsuario(db, U.consulta, () => q("select public.fn_escolher_desconto_repasse($1, $2, true)", [rp.id, contas[2]]))).rejects.toThrow();
+    await expect(comoUsuario(db, U.faturamento, () => q("select public.fn_escolher_desconto_repasse($1, $2, true)", [rp.id, contas[2]]))).rejects.toThrow();
+    await db.query("delete from public.contas_pagar where id = any($1::uuid[])", [contas]);
   });
 });
 

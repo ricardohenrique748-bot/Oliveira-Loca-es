@@ -37,6 +37,20 @@ export async function alterarValorRepasse(repasseId: string, valorMensal: number
   }, REVALIDAR, "Valor do repasse salvo");
 }
 
+/** Marca / desmarca uma despesa "descontar do locador" neste repasse (o que fica de fora espera o próximo). */
+export async function escolherDescontoRepasse(repasseId: string, contaId: string, incluir: boolean) {
+  return executar(async () => {
+    await exigirEscrita("repasses");
+    const p_repasse = z.string().uuid().parse(repasseId);
+    const p_conta = z.string().uuid().parse(contaId);
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_escolher_desconto_repasse", { p_repasse, p_conta, p_incluir: z.boolean().parse(incluir) });
+    if (error && /fn_escolher_desconto_repasse/.test(error.message)) throw new Error("O banco ainda não tem a escolha de descontos: rode o SQL 0075 no Supabase");
+    if (error) throw error;
+    return null;
+  }, REVALIDAR, incluir ? "Desconto incluído neste repasse" : "Desconto tirado deste repasse");
+}
+
 /** Pré-checagem: o repasse seria adiantado? (medição não recebida) */
 export async function verificarAdiantamento(repasseId: string) {
   try {

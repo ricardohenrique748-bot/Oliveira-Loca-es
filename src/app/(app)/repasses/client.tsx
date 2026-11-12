@@ -18,7 +18,7 @@ import { exportarPDF } from "@/lib/exportar";
 import { ROTULOS } from "@/lib/schemas/cadastros";
 import { cn } from "@/lib/utils";
 import { InputMoeda } from "@/components/app/campos";
-import { alterarValorRepasse, buscarRepassesPendentes, pagarRepasse } from "./actions";
+import { alterarValorRepasse, buscarRepassesPendentes, escolherDescontoRepasse, pagarRepasse } from "./actions";
 import { DialogoReciboDescontos, DialogoReciboRepasse } from "./recibo";
 
 export type Repasse = {
@@ -56,16 +56,30 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
   const [recibo, setRecibo] = React.useState<Repasse | null>(null);
   const [reciboDescontos, setReciboDescontos] = React.useState<{ placa: string | null; ds: DescontoPendente[] } | null>(null);
   const [abertos, setAbertos] = React.useState<Set<string>>(new Set());
+  // placas com repasse aberto na lista: as despesas pendentes delas aparecem dentro do repasse, desmarcadas
+  const placasAbertas = React.useMemo(() => new Set(repasses.filter((r) => r.status === "previsto" || r.status === "liberado").map((r) => r.veiculo_id)), [repasses]);
   // descontos sem repasse: uma linha por placa na própria tabela, "aguardando fatura"
   const aguardando = React.useMemo(() => {
     const m = new Map<string, DescontoPendente[]>();
-    for (const d of descontosPendentes) { const k = d.veiculo_id ?? d.placa ?? d.id; m.set(k, [...(m.get(k) ?? []), d]); }
+    for (const d of descontosPendentes) {
+      if (d.veiculo_id && placasAbertas.has(d.veiculo_id)) continue; const k = d.veiculo_id ?? d.placa ?? d.id; m.set(k, [...(m.get(k) ?? []), d]); }
     return [...m.entries()].map(([k, ds]) => ({ k, placa: ds[0].placa, empresa: ds[0].empresa_apelido, locador_id: ds[0].locador_id, ds, total: somar(ds.map((d) => d.saldo)) }))
       .sort((a, b) => (a.placa ?? "").localeCompare(b.placa ?? ""));
-  }, [descontosPendentes]);
+  }, [descontosPendentes, placasAbertas]);
 
   const locadorDe = (id: string, nome: string) => locadores.find((l) => l.id === id) ?? ({ id, nome } as Locador);
   const abatDe = (id: string) => abatimentos.filter((a) => a.repasse_id === id);
+  /** despesas da placa que ficaram fora deste repasse aberto (vencem depois ou foram desmarcadas) */
+  const foraDe = (r: Repasse) => (r.status === "previsto" || r.status === "liberado")
+    ? descontosPendentes.filter((d) => d.veiculo_id === r.veiculo_id && !abatimentos.some((a) => a.repasse_id === r.id && a.conta_pagar_id === d.id))
+    : [];
+  const [marcando, setMarcando] = React.useState<string | null>(null);
+  const escolher = async (r: Repasse, contaId: string, incluir: boolean) => {
+    setMarcando(`${r.id}:${contaId}`);
+    const res = await escolherDescontoRepasse(r.id, contaId, incluir);
+    setMarcando(null);
+    if (res.ok) { toast.success(res.mensagem); router.refresh(); } else toast.error(res.erro);
+  };
 
   const pendentes = repasses.filter((r) => r.status === "previsto" || r.status === "liberado");
   const liberados = repasses.filter((r) => r.status === "liberado");
@@ -137,6 +151,8 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
               <TableBody>
                 {repasses.map((r) => {
                   const abs = abatDe(r.id);
+                  const fora = foraDe(r);
+                  const editavel = podeEditar && (r.status === "previsto" || r.status === "liberado");
                   const aberto = abertos.has(r.id);
                   const alternar = () => setAbertos((x) => { const n = new Set(x); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; });
                   return (
@@ -159,11 +175,12 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                           {podeEditar && (r.status === "previsto" || r.status === "liberado") && (
                             <ValorMensalRepasse repasse={r} onSalvo={() => router.refresh()} />
                           )}
-                          {abs.length > 0 && (
+                          {(abs.length > 0 || fora.length > 0) && (
                             <button type="button" onClick={alternar} aria-expanded={aberto} className="flex w-full items-center justify-end gap-0.5 whitespace-nowrap text-xs text-status-critico hover:underline">
                               {aberto ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} −{formatBRL(r.valor_abatimentos)}
                             </button>
                           )}
+                          {fora.length > 0 && <p className="whitespace-nowrap text-[11px] text-muted-foreground">{fora.length} desconto(s) p/ depois</p>}
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={r.status} />
@@ -191,11 +208,29 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                       {aberto && abs.map((a) => (
                         <TableRow key={a.id} className="bg-muted/30 text-xs hover:bg-muted/30">
                           <TableCell colSpan={5} className="pl-8 text-muted-foreground">
+                            {editavel && a.conta_pagar_id && (
+                              <Checkbox className="mr-2 align-middle" checked disabled={!!marcando} aria-label={`Descontar ${a.descricao} neste repasse`}
+                                title="Desmarque para descontar só no próximo repasse" onCheckedChange={() => escolher(r, a.conta_pagar_id!, false)} />
+                            )}
                             (−) {a.descricao}{a.vencimento && ` · ${formatData(a.vencimento)}`}
                             {a.os_numero && <Link className="ml-3 underline" href={`/manutencao/ordens/${a.ordem_servico_id}`}>OS #{a.os_numero}</Link>}
                             {a.conta_pagar_id && <Link className="ml-3 underline" href={`/pagar?id=${a.conta_pagar_id}`}>Conta a pagar</Link>}
                           </TableCell>
                           <TableCell className="text-right"><Moeda valor={-a.valor} className="text-status-critico" /></TableCell>
+                          <TableCell colSpan={2} />
+                        </TableRow>
+                      ))}
+                      {aberto && fora.map((d) => (
+                        <TableRow key={`fora-${d.id}`} className="bg-muted/30 text-xs text-muted-foreground opacity-70 hover:bg-muted/30">
+                          <TableCell colSpan={5} className="pl-8">
+                            {editavel && (
+                              <Checkbox className="mr-2 align-middle" checked={false} disabled={!!marcando} aria-label={`Descontar ${d.descricao ?? "despesa"} neste repasse`}
+                                title="Marque para descontar neste repasse" onCheckedChange={() => escolher(r, d.id, true)} />
+                            )}
+                            {d.descricao ?? "Despesa"}{d.vencimento && ` · ${formatData(d.vencimento)}`} <span className="italic">· fica para depois</span>
+                            <Link className="ml-3 underline" href={`/pagar?id=${d.id}`}>Conta a pagar</Link>
+                          </TableCell>
+                          <TableCell className="text-right line-through"><Moeda valor={-d.saldo} /></TableCell>
                           <TableCell colSpan={2} />
                         </TableRow>
                       ))}

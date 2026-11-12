@@ -2758,6 +2758,14 @@ export type Database = {
         }
         Returns: string
       }
+      fn_escolher_desconto_repasse: {
+        Args: {
+          p_conta: string
+          p_incluir: boolean
+          p_repasse: string
+        }
+        Returns: undefined
+      }
       fn_alterar_valor_repasse: {
         Args: {
           p_repasse: string
