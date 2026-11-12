@@ -37,6 +37,7 @@ export function formatCompetencia(c: string | null | undefined, longo = false): 
 
 export function formatPeriodo(inicio: string | null | undefined, fim: string | null | undefined): string {
   if (!inicio || !fim) return "—";
+  if (inicio === fim) return formatData(inicio); // um dia só: "09/11/2026", sem "09/11 a 09/11/2026"
   return `${formatData(inicio).slice(0, 5)} a ${formatData(fim)}`;
 }
 

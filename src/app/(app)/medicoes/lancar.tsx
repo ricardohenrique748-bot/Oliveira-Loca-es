@@ -130,7 +130,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
   // avulsa: quantidade sugerida pelo período e unidade de cada item (até o usuário editar à mão)
   const sugerir = (i: ItemTela): ItemTela => {
     if (i.qtdManual) return i;
-    const q = quantidadePeriodo(i.unidade, i.inicio, i.fim);
+    const q = quantidadePeriodo(i.unidade, i.inicio, i.fim || i.inicio);
     return q == null || q === i.quantidade ? i : { ...i, quantidade: Math.min(99_999, q) };
   };
   const editarItem = (k: number, campos: Partial<ItemTela>) => setItens((lista) => lista.map((i, j) => (j === k ? sugerir({ ...i, ...campos }) : i)));
@@ -144,8 +144,8 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     for (const [k, i] of itens.entries()) {
       const n = itens.length > 1 ? ` do item ${k + 1}` : "";
       if (!i.descricao.trim()) return `Descreva o serviço${n}`;
-      if (!i.inicio || !i.fim) return `Informe o início e o fim${n}`;
-      if (i.fim < i.inicio) return `O fim${n} está antes do início`;
+      if (!i.inicio) return `Informe a data${n}`;
+      if (i.fim && i.fim < i.inicio) return `O fim${n} está antes do início`;
       if (i.quantidade <= 0) return `Informe a quantidade${n}`;
       if (i.valorUnitario <= 0) return `Informe o valor${n}`;
       if (i.km > 0 && i.valorKm <= 0) return `Informe o valor por km${n}`;
@@ -174,7 +174,7 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
     const r = await lancarFaturaAvulsa({
       empresa_id: empresa, cliente_id: cliente, numero_os: numeroOS.trim() || null,
       itens: itens.flatMap((i) => {
-        const base = { veiculo_id: i.veiculo, periodo_inicio: i.inicio, periodo_fim: i.fim };
+        const base = { veiculo_id: i.veiculo, periodo_inicio: i.inicio, periodo_fim: i.fim || i.inicio };
         // repasse só em placa sublocada; vai no item do serviço (o do km fica sem)
         const repasse = i.veiculo && sublocados?.includes(i.veiculo) && i.repasse ? i.repasse : null;
         const servico = { ...base, descricao: i.descricao, quantidade: i.quantidade, unidade: i.unidade, valor_unitario: i.valorUnitario, valor_repasse: repasse };
@@ -242,10 +242,10 @@ export function DialogoLancarMedicao({ aberto, onOpenChange, contratos, contrato
                     <div className="space-y-1">
                       <Label htmlFor={`avulsa-inicio-${k}`} className="text-xs">Início</Label>
                       <Input id={`avulsa-inicio-${k}`} type="date" value={it.inicio}
-                        onChange={(e) => editarItem(k, { inicio: e.target.value, ...(!it.fim || it.fim < e.target.value ? { fim: e.target.value } : {}) })} />
+                        onChange={(e) => editarItem(k, { inicio: e.target.value, ...(it.fim && it.fim < e.target.value ? { fim: e.target.value } : {}) })} />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor={`avulsa-fim-${k}`} className="text-xs">Fim</Label>
+                      <Label htmlFor={`avulsa-fim-${k}`} className="text-xs">Fim <span className="text-muted-foreground">(vazio = um dia só)</span></Label>
                       <Input id={`avulsa-fim-${k}`} type="date" value={it.fim} min={it.inicio} onChange={(e) => editarItem(k, { fim: e.target.value })} />
                     </div>
                   </div>
