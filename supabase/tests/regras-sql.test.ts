@@ -669,6 +669,25 @@ describe("repasse: escolher os descontos do mês", () => {
   });
 });
 
+describe("NFS-e: cancelamento", () => {
+  it("só admin/financeiro; registra a nota cancelada e libera nova emissão", async () => {
+    const CH = "3".repeat(50);
+    const [m] = await q<{ id: string }>(
+      `update public.medicoes set nfse_chave = $1, nfse_ambiente = 'homologacao', nfse_dps = 7, nfse_emitida_em = now(), numero_nf = '15'
+        where id = (select id from public.medicoes where status = 'faturado' and empresa_id = $2 limit 1) returning id`, [CH, OLIVEIRA]);
+    await expect(comoUsuario(db, U.faturamento, () => q("select * from public.fn_nfse_preparar_cancelamento($1)", [m.id]))).rejects.toThrow();
+    const [p] = await comoUsuario(db, U.financeiro, () => q<{ chave: string; ambiente: string; numero_nf: string }>("select * from public.fn_nfse_preparar_cancelamento($1)", [m.id]));
+    expect(p).toMatchObject({ chave: CH, ambiente: "homologacao", numero_nf: "15" });
+    // chave diferente da gravada: recusa
+    await expect(comoUsuario(db, U.financeiro, () => q("select public.fn_nfse_registrar_cancelamento($1, $2, 'x')", [m.id, "9".repeat(50)]))).rejects.toThrow(/mudou/);
+    await comoUsuario(db, U.financeiro, () => q("select public.fn_nfse_registrar_cancelamento($1, $2, '1 – Erro na emissão do valor')", [m.id, CH]));
+    const [d] = await q<Record<string, unknown>>("select nfse_chave, numero_nf, nfse_dps, nfse_cancelada_chave, nfse_cancelada_numero, nfse_cancelamento_motivo, nfse_cancelada_em is not null as em from public.medicoes where id = $1", [m.id]);
+    expect(d).toEqual({ nfse_chave: null, numero_nf: null, nfse_dps: null, nfse_cancelada_chave: CH, nfse_cancelada_numero: "15", nfse_cancelamento_motivo: "1 – Erro na emissão do valor", em: true });
+    // sem nota: não há o que cancelar
+    await expect(comoUsuario(db, U.financeiro, () => q("select * from public.fn_nfse_preparar_cancelamento($1)", [m.id]))).rejects.toThrow(/não tem NFS-e/);
+  });
+});
+
 describe("fatura avulsa deixa o veículo locado", () => {
   it("período em andamento: locado; futuro: não muda; excluída: volta a disponível; locado à mão não é mexido", async () => {
     const [cl] = await q<{ id: string }>("select id from public.clientes limit 1");

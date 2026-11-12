@@ -23,6 +23,7 @@ import { baixarFaturaPDF } from "@/lib/documentos/baixar";
 import { entregarArquivo } from "@/lib/plataforma";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import {
   cancelarMedicoes, dadosLembrete, excluirCanceladas, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarAnexosFatura, salvarMedicoes, voltarParaAFaturar,
   type EventoHistorico, type LinhaLembrete, type LinhaPrevia,
@@ -509,10 +510,42 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
   /** nota já emitida desta fatura (chave gravada pela emissão) */
   const [nota, setNota] = React.useState<{ chave: string; ambiente: string | null } | null>(null);
   const [baixando, setBaixando] = React.useState<"pdf" | "xml" | null>(null);
+  /** última nota cancelada desta fatura (SQL 0076; sem ele fica null) */
+  const [cancelada, setCancelada] = React.useState<{ numero: string | null; em: string; motivo: string | null } | null>(null);
   const carregarNota = React.useCallback(async (id: string) => {
-    const { data } = await createClient().from("medicoes").select("nfse_chave, nfse_ambiente").eq("id", id).maybeSingle();
+    const sb = createClient();
+    const { data } = await sb.from("medicoes").select("nfse_chave, nfse_ambiente").eq("id", id).maybeSingle();
     setNota(data?.nfse_chave ? { chave: data.nfse_chave, ambiente: data.nfse_ambiente } : null);
+    const { data: c, error } = await sb.from("medicoes").select("nfse_cancelada_numero, nfse_cancelada_em, nfse_cancelamento_motivo").eq("id", id).maybeSingle();
+    setCancelada(!error && c?.nfse_cancelada_em ? { numero: c.nfse_cancelada_numero, em: c.nfse_cancelada_em, motivo: c.nfse_cancelamento_motivo } : null);
   }, []);
+  // cancelar a NFS-e na Receita: só admin e financeiro (a função do servidor confere de novo)
+  const { sessao } = useAuth();
+  const podeCancelarNota = sessao?.perfil === "admin" || sessao?.perfil === "financeiro";
+  const [pedidoCanc, setPedidoCanc] = React.useState<{ codigo: string; motivo: string } | null>(null);
+  const [cancelandoNota, setCancelandoNota] = React.useState(false);
+  const cancelarNota = async () => {
+    if (!m || !nota || !pedidoCanc) return;
+    setCancelandoNota(true);
+    try {
+      const { data } = await createClient().auth.getSession();
+      const r = await fetch("/api/nfse/cancelar", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+        body: JSON.stringify({ medicaoId: m.id, codigo: Number(pedidoCanc.codigo), motivo: pedidoCanc.motivo }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; erro?: string; numero?: string | null; ambiente?: string; jaCancelada?: boolean; cancelada?: boolean };
+      if (j.ok) {
+        setPedidoCanc(null);
+        toast.success(`NFS-e ${j.numero ?? ""} cancelada na Receita${j.ambiente === "homologacao" ? " (homologação)" : ""}${j.jaCancelada ? " — ela já estava cancelada lá" : ""}. A fatura pode emitir uma nova nota.`, { duration: 15_000 });
+        void carregarNota(m.id);
+        onSalvo();
+      } else toast.error(`NFS-e não cancelada${j.ambiente ? ` (${j.ambiente})` : ""}: ${j.erro ?? `HTTP ${r.status}`}`, { duration: 30_000 });
+    } catch (e) {
+      toast.error(`Falha ao cancelar a NF: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setCancelandoNota(false);
+    }
+  };
   React.useEffect(() => { setNota(null); if (m) void carregarNota(m.id); }, [m, carregarNota]);
   /** anexos da fatura (PDF / fotos); undefined = o banco ainda não tem o campo (SQL 0072) */
   const [anexos, setAnexos] = React.useState<string | null | undefined>(undefined);
@@ -747,6 +780,12 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
               <Button variant="outline" disabled={!!baixando} title="XML da NFS-e" onClick={() => baixarNota("xml")}>
                 {baixando === "xml" ? <Loader2 className="animate-spin" /> : <FileDown />} XML
               </Button>
+              {podeCancelarNota && (
+                <Button variant="outline" className="border-status-critico text-status-critico" disabled={cancelandoNota}
+                  title="Cancela a NFS-e no Emissor Nacional (Receita)" onClick={() => setPedidoCanc({ codigo: "1", motivo: "" })}>
+                  <Ban /> Cancelar NF
+                </Button>
+              )}
             </>}
             {podeEditar && <Button variant="outline" onClick={() => setVerEnvios(true)}><History /> Ver último envio</Button>}
             <Button disabled={gerando} title={mudou ? "Salve os ajustes antes: o PDF usa os valores salvos" : undefined}
@@ -754,6 +793,43 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
               {gerando ? <Loader2 className="animate-spin" /> : <FileDown />} Gerar fatura (PDF)
             </Button>
           </DialogFooter>
+          {cancelada && !nota && (
+            <p className="px-1 text-xs text-muted-foreground">
+              NFS-e {cancelada.numero ?? ""} cancelada na Receita em {formatData(cancelada.em.slice(0, 10))}{cancelada.motivo && ` · motivo: ${cancelada.motivo}`}
+            </p>
+          )}
+          <Dialog open={!!pedidoCanc} onOpenChange={(v) => { if (!v && !cancelandoNota) setPedidoCanc(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Cancelar NFS-e{m.numero_nf ? ` ${m.numero_nf}` : ""}</DialogTitle>
+                <DialogDescription>
+                  O pedido vai para a Receita (Emissor Nacional) e não tem volta: a nota fica cancelada lá.
+                  {nota?.ambiente === "homologacao" ? " Esta nota é de homologação (teste)." : " Esta nota é de produção (vale de verdade)."}
+                  {" "}Depois, a fatura fica sem NF e pode emitir uma nova. Se o prazo do município já passou, a Receita recusa e mostra o motivo.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="canc-codigo">Motivo</Label>
+                  <SelectSimples id="canc-codigo" value={pedidoCanc?.codigo ?? "1"} onChange={(v) => setPedidoCanc((p) => p && { ...p, codigo: v ?? "1" })}
+                    opcoes={[{ value: "1", label: "Erro na emissão" }, { value: "2", label: "Serviço não prestado" }, { value: "9", label: "Outros" }]} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="canc-motivo">Justificativa (15 a 255 caracteres)</Label>
+                  <Textarea id="canc-motivo" rows={3} maxLength={255} autoFocus value={pedidoCanc?.motivo ?? ""}
+                    placeholder="Ex.: valor da nota emitido errado, será emitida outra"
+                    onChange={(e) => setPedidoCanc((p) => p && { ...p, motivo: e.target.value })} />
+                  <p className="text-xs text-muted-foreground">{(pedidoCanc?.motivo.trim().length ?? 0)}/255 · {m.cliente_fantasia} · <Moeda valor={m.valor_final} /></p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" disabled={cancelandoNota} onClick={() => setPedidoCanc(null)}>Voltar</Button>
+                <Button variant="destructive" disabled={cancelandoNota || (pedidoCanc?.motivo.replace(/s+/g, " ").trim().length ?? 0) < 15} onClick={() => void cancelarNota()}>
+                  {cancelandoNota ? <Loader2 className="animate-spin" /> : <Ban />} Cancelar a NF na Receita
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <DialogoTentativasNFSe medicaoId={m.id} rotulo={m.contrato_id ? String(m.contrato_numero ?? formatPlaca(m.placa)) : `avulsa · ${m.cliente_fantasia}`} aberto={verEnvios} onOpenChange={setVerEnvios} />
           <Dialog open={!!descNota} onOpenChange={(v) => { if (!v && !emitindo) setDescNota(null); }}>
             <DialogContent tamanho="lg">

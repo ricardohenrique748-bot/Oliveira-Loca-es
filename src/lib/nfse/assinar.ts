@@ -6,7 +6,6 @@ import forge from "node-forge";
 import { SignedXml } from "xml-crypto";
 
 const C14N = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315";
-const INF_DPS = "//*[local-name(.)='infDPS']";
 
 /** chave privada e certificado (PEM) de dentro do .pfx */
 export function lerCertificado(pfxBase64: string, senha: string): { chavePem: string; certPem: string } {
@@ -25,6 +24,12 @@ export function lerCertificado(pfxBase64: string, senha: string): { chavePem: st
 }
 
 export function assinarDPS(xml: string, pfxBase64: string, senha: string): string {
+  return assinarElemento(xml, "infDPS", pfxBase64, senha);
+}
+
+/** Mesma assinatura (enveloped, logo depois do elemento) para outro elemento com Id — ex.: infPedReg do pedido de evento */
+export function assinarElemento(xml: string, elemento: string, pfxBase64: string, senha: string): string {
+  const alvo = `//*[local-name(.)='${elemento}']`;
   const { chavePem, certPem } = lerCertificado(pfxBase64, senha);
   const sig = new SignedXml({
     privateKey: chavePem,
@@ -33,10 +38,10 @@ export function assinarDPS(xml: string, pfxBase64: string, senha: string): strin
     canonicalizationAlgorithm: C14N,
   });
   sig.addReference({
-    xpath: INF_DPS,
+    xpath: alvo,
     transforms: ["http://www.w3.org/2000/09/xmldsig#enveloped-signature", C14N],
     digestAlgorithm: "http://www.w3.org/2001/04/xmlenc#sha256",
   });
-  sig.computeSignature(xml, { location: { reference: INF_DPS, action: "after" } });
+  sig.computeSignature(xml, { location: { reference: alvo, action: "after" } });
   return sig.getSignedXml();
 }

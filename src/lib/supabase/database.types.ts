@@ -1199,6 +1199,10 @@ export type Database = {
           nfse_descricao: string | null
           nfse_dps: number | null
           nfse_emitida_em: string | null
+          nfse_cancelada_chave: string | null
+          nfse_cancelada_numero: string | null
+          nfse_cancelada_em: string | null
+          nfse_cancelamento_motivo: string | null
           nfse_erro: string | null
           numero_nf: string | null
           numero_os: string | null
@@ -1239,6 +1243,10 @@ export type Database = {
           nfse_descricao?: string | null
           nfse_dps?: number | null
           nfse_emitida_em?: string | null
+          nfse_cancelada_chave?: string | null
+          nfse_cancelada_numero?: string | null
+          nfse_cancelada_em?: string | null
+          nfse_cancelamento_motivo?: string | null
           nfse_erro?: string | null
           numero_nf?: string | null
           numero_os?: string | null
@@ -1279,6 +1287,10 @@ export type Database = {
           nfse_descricao?: string | null
           nfse_dps?: number | null
           nfse_emitida_em?: string | null
+          nfse_cancelada_chave?: string | null
+          nfse_cancelada_numero?: string | null
+          nfse_cancelada_em?: string | null
+          nfse_cancelamento_motivo?: string | null
           nfse_erro?: string | null
           numero_nf?: string | null
           numero_os?: string | null
@@ -1427,6 +1439,7 @@ export type Database = {
           id: string
           medicao_id: string
           numero_dps: number | null
+          tipo: string
           resposta_corpo: string | null
           xml_enviado: string
         }
@@ -1439,6 +1452,7 @@ export type Database = {
           id?: string
           medicao_id: string
           numero_dps?: number | null
+          tipo?: string
           resposta_corpo?: string | null
           xml_enviado: string
         }
@@ -1451,6 +1465,7 @@ export type Database = {
           id?: string
           medicao_id?: string
           numero_dps?: number | null
+          tipo?: string
           resposta_corpo?: string | null
           xml_enviado?: string
         }
@@ -2816,6 +2831,20 @@ export type Database = {
           p_dry_run?: boolean
         }
         Returns: { contrato_id: string; empresa_id: string; periodo_inicio: string; periodo_fim: string; dias: number; valor_mensal: number; valor_final: number; valor_repasse_bruto: number; medicao_id: string }[]
+      }
+      fn_nfse_preparar_cancelamento: {
+        Args: {
+          p_medicao: string
+        }
+        Returns: { chave: string; ambiente: string | null; cnpj: string | null; numero_nf: string | null }[]
+      }
+      fn_nfse_registrar_cancelamento: {
+        Args: {
+          p_chave: string
+          p_medicao: string
+          p_motivo: string
+        }
+        Returns: undefined
       }
       fn_nfse_reservar_dps: {
         Args: {

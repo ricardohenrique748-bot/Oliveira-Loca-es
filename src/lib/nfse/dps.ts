@@ -35,7 +35,7 @@ export function idDPS(codigoIbge: string, cnpj: string, serie: number, numero: n
 }
 
 /** horário de Brasília (UTC−3, sem horário de verão desde 2019) no formato do XSD */
-function dataHoraBrasilia(d: Date): string {
+export function dataHoraBrasilia(d: Date): string {
   const b = new Date(d.getTime() - 3 * 3600_000);
   return `${b.toISOString().slice(0, 19)}-03:00`;
 }
