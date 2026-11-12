@@ -819,7 +819,17 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
                   <Textarea id="canc-motivo" rows={3} maxLength={255} autoFocus value={pedidoCanc?.motivo ?? ""}
                     placeholder="Ex.: valor da nota emitido errado, será emitida outra"
                     onChange={(e) => setPedidoCanc((p) => p && { ...p, motivo: e.target.value })} />
-                  <p className="text-xs text-muted-foreground">{(pedidoCanc?.motivo.trim().length ?? 0)}/255 · {m.cliente_fantasia} · <Moeda valor={m.valor_final} /></p>
+                  {(() => {
+                    // a Receita exige no mínimo 15 caracteres: avisa quanto falta (senão o botão só fica apagado, sem explicação)
+                    const n = pedidoCanc?.motivo.replace(/\s+/g, " ").trim().length ?? 0;
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        {n < 15
+                          ? <span className="font-medium text-status-critico">Faltam {15 - n} caractere(s) — a Receita exige pelo menos 15</span>
+                          : `${n}/255`} · {m.cliente_fantasia} · <Moeda valor={m.valor_final} />
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
               <DialogFooter>
