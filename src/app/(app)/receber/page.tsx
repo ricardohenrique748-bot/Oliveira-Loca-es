@@ -81,22 +81,25 @@ export default function ReceberPage() {
         ? supabase.from("contatos").select("cliente_id, obra_id, nome, email, whatsapp").in("cliente_id", ids).eq("recebe_fatura", true)
         : Promise.resolve({ data: [] }),
       medicoes.length
-        ? supabase.from("boletos").select("id, medicao_id, nosso_numero, linha_digitavel, pix_copia_cola, valor, data_vencimento, status, data_pagamento, ambiente, multa_pct, juros, juros_tipo, protesto_dias, negativacao_dias")
+        ? supabase.from("boletos").select("*")
           .in("medicao_id", medicoes).in("status", ["emitido", "pago"]).order("created_at", { ascending: false })
         : Promise.resolve({ data: [] }),
     ]);
-    // o mais recente por medição (em aberto tem prioridade)
+    // o mais recente por medição (em aberto tem prioridade) e todos os em aberto (parcelas), por vencimento
     const boletoDe = new Map<string, Boleto>();
-    for (const b of (boletos ?? []) as Boleto[]) {
+    const abertosDe = new Map<string, Boleto[]>();
+    for (const b of (boletos ?? []) as unknown as Boleto[]) {
       const atual = boletoDe.get(b.medicao_id);
-      if (!atual || (atual.status !== "emitido" && b.status === "emitido")) boletoDe.set(b.medicao_id, b);
+      if (!atual || (atual.status !== "emitido" && b.status === "emitido") || (atual.status === "emitido" && b.status === "emitido" && b.data_vencimento < atual.data_vencimento)) boletoDe.set(b.medicao_id, b);
+      if (b.status === "emitido") abertosDe.set(b.medicao_id, [...(abertosDe.get(b.medicao_id) ?? []), b]);
     }
+    for (const l of abertosDe.values()) l.sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento));
 
     const resumo: Record<string, number> = { a_vencer: 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
     for (const a of aging ?? []) resumo[a.faixa!] = (resumo[a.faixa!] ?? 0) + Number(a.saldo);
 
     return {
-      linhas: ((linhas ?? []) as LinhaReceber[]).map((m) => ({ ...m, boleto: boletoDe.get(m.id) ?? null })),
+      linhas: ((linhas ?? []) as LinhaReceber[]).map((m) => ({ ...m, boleto: boletoDe.get(m.id) ?? null, boletos: abertosDe.get(m.id) ?? [] })),
       total: count ?? 0,
       pagina: p.pagina,
       tamanho: p.tamanho,

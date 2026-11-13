@@ -18,10 +18,10 @@ import { BarraFiltros, BuscaUrl, FiltroDataUrl, FiltroSelectUrl, useUrlParams } 
 import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { formatBRL, formatData, formatPct, formatPeriodo, formatPlaca, hojeSP, linkEmail, linkWhatsApp, preencherTemplate } from "@/lib/format";
-import { somar } from "@/lib/calculos";
+import { addMesesClamp, somar } from "@/lib/calculos";
 import { APOS_VENCIMENTO, DIAS_APOS_VENCIMENTO, JUROS_TIPOS, type JurosTipo } from "@/lib/schemas/cadastros";
 import {
-  atualizarBoletos, baixarEmLote, baixarPdfBoleto, buscarFaturasAbertas, cancelarBoleto, emitirBoleto, type EncargosBoleto, estornarRecebimento, listarRecebimentos, registrarRecebimento, type Boleto,
+  atualizarBoletos, baixarEmLote, baixarPdfBoleto, buscarFaturasAbertas, cancelarBoleto, emitirBoleto, emitirBoletosParcelados, type EncargosBoleto, estornarRecebimento, listarRecebimentos, registrarRecebimento, type Boleto,
 } from "./actions";
 
 export type LinhaReceber = {
@@ -30,6 +30,8 @@ export type LinhaReceber = {
   placa: string | null; periodo_inicio: string; periodo_fim: string; numero_nf: string | null; data_emissao: string | null; data_vencimento: string | null;
   valor_final: number; valor_recebido: number; saldo: number; status: string; status_exibicao: string; dias_atraso: number | null; data_ultimo_recebimento: string | null;
   boleto?: Boleto | null;
+  /** boletos em aberto (parcelas), por vencimento */
+  boletos?: Boleto[];
 };
 export type ContatoCobranca = { cliente_id: string; obra_id: string | null; nome: string; email: string | null; whatsapp: string | null };
 /** boleto: conta Sicredi com código do beneficiário (emite boleto pelo sistema) */
@@ -57,7 +59,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
   const [boletoDe, setBoletoDe] = React.useState<LinhaReceber | null>(null);
   const [atualizando, setAtualizando] = React.useState(false);
   const empresasBoleto = React.useMemo(() => new Set(contas.filter((c) => c.boleto).map((c) => c.empresa_id)), [contas]);
-  const boletosAbertos = linhas.filter((m) => m.boleto?.status === "emitido").length;
+  const boletosAbertos = somar(linhas.map((m) => m.boletos?.length ?? (m.boleto?.status === "emitido" ? 1 : 0)));
 
   const atualizar = async () => {
     setAtualizando(true);
@@ -74,13 +76,16 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
     contatos.filter((c) => c.cliente_id === m.cliente_id && (!c.obra_id || c.obra_id === m.obra_id)), [contatos]);
 
   const mensagem = React.useCallback((m: LinhaReceber, tpl: string, contato: string) => {
-    const b = m.boleto?.status === "emitido" ? m.boleto : null;
+    const abertos = m.boletos ?? (m.boleto?.status === "emitido" ? [m.boleto] : []);
+    const b = abertos[0] ?? null;
     const texto = preencherTemplate(tpl, {
       contato, nf: m.numero_nf ?? "", placa: (m.placa ? formatPlaca(m.placa) : "Avulsa"), periodo: formatPeriodo(m.periodo_inicio, m.periodo_fim),
-      valor: formatBRL(b ? b.valor : m.saldo), vencimento: formatData(b ? b.data_vencimento : m.data_vencimento),
+      valor: formatBRL(abertos.length === 1 ? abertos[0].valor : m.saldo), vencimento: formatData(b ? b.data_vencimento : m.data_vencimento),
       empresa: m.empresa_apelido === "TDTS" ? "TDTS & Oliveira Locações" : "Oliveira & Oliveira Locações",
     });
     if (!b) return texto;
+    // parcelas: uma seção por boleto (valor + vencimento + linha + PIX); um boleto só: como antes
+    if (abertos.length > 1) return `${texto}\n${abertos.map((x, i) => `\nBoleto ${i + 1}/${abertos.length} — ${formatBRL(x.valor)} · vence ${formatData(x.data_vencimento)}\nLinha digitável:\n${x.linha_digitavel}${x.pix_copia_cola ? `\nPIX copia e cola:\n${x.pix_copia_cola}` : ""}`).join("\n")}`;
     return `${texto}\n\nBoleto — linha digitável:\n${b.linha_digitavel}${b.pix_copia_cola ? `\n\nPIX copia e cola:\n${b.pix_copia_cola}` : ""}`;
   }, []);
 
@@ -126,7 +131,8 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
           {zap ? <Button asChild variant="ghost" size="icon-sm" aria-label="Enviar cobrança por WhatsApp" title={`WhatsApp ${comZap!.nome}`}><a href={zap} target="_blank" rel="noopener"><IconeWhatsApp /></a></Button>
             : <Button variant="ghost" size="icon-sm" disabled aria-label="Sem WhatsApp" title="Cliente sem contato de faturamento com WhatsApp"><IconeWhatsApp className="grayscale" /></Button>}
           {m.boleto?.status === "emitido"
-            ? <Button variant="ghost" size="icon-sm" aria-label="Ver boleto" title={`Boleto ${m.boleto.nosso_numero} · venc. ${formatData(m.boleto.data_vencimento)}`} onClick={() => setBoletoDe(m)}><Barcode className="text-primary-ink" /></Button>
+            ? <Button variant="ghost" size="icon-sm" aria-label="Ver boleto" onClick={() => setBoletoDe(m)}
+                title={(m.boletos?.length ?? 1) > 1 ? `${m.boletos!.length} boletos em aberto · 1º venc. ${formatData(m.boletos![0].data_vencimento)}` : `Boleto ${m.boleto.nosso_numero} · venc. ${formatData(m.boleto.data_vencimento)}`}><Barcode className="text-primary-ink" /></Button>
             : podeEditar && m.saldo > 0 && <Button variant="ghost" size="icon-sm" aria-label="Gerar boleto" onClick={() => setBoletoDe(m)}
               title={empresasBoleto.has(m.empresa_id) ? "Gerar boleto Sicredi" : "Gerar boleto — falta configurar a conta Sicredi"}><Barcode className={empresasBoleto.has(m.empresa_id) ? undefined : "opacity-50"} /></Button>}
           {podeEditar && m.status !== "recebido" && <Button size="xs" onClick={() => setBaixando(m)}><HandCoins /> Baixar</Button>}
@@ -383,24 +389,91 @@ function formatLinhaDigitavel(l: string) {
   return `${d.slice(0, 5)}.${d.slice(5, 10)} ${d.slice(10, 15)}.${d.slice(15, 21)} ${d.slice(21, 26)}.${d.slice(26, 32)} ${d[32]} ${d.slice(33)}`;
 }
 
-/** Sem boleto em aberto: formulário de emissão. Com boleto: linha digitável, PIX, PDF e cancelamento. */
+/** Divide o valor em n parcelas iguais (os centavos que sobram vão na última), uma por mês a partir do 1º vencimento. */
+function dividirParcelas(valor: number, n: number, primeiro: string): { valor: number; vencimento: string }[] {
+  const total = Math.round(valor * 100);
+  const base = Math.floor(total / n);
+  const dia = primeiro ? Number(primeiro.slice(8, 10)) : undefined;
+  return Array.from({ length: n }, (_, i) => ({
+    valor: (i === n - 1 ? total - base * (n - 1) : base) / 100,
+    vencimento: primeiro ? (i === 0 ? primeiro : addMesesClamp(primeiro, i, dia)) : "",
+  }));
+}
+
+/** Boleto em aberto: valor, vencimento, linha digitável, PIX e as ações dele. */
+function CartaoBoleto({ b, podeEditar, ocupado, onPdf, onConsultar, onCancelar }: {
+  b: Boleto; podeEditar: boolean; ocupado: string | null; onPdf: () => void; onConsultar: () => void; onCancelar: () => void;
+}) {
+  const itens = [
+    b.multa_pct && `Multa ${formatPct(b.multa_pct)}`,
+    b.juros && `Juros ${descreverJuros(b.juros, b.juros_tipo ?? "pct_mes")}`,
+    b.protesto_dias && `Protesto ${b.protesto_dias} dias após o vencimento`,
+    b.negativacao_dias && `Serasa ${b.negativacao_dias} dias após o vencimento`,
+  ].filter(Boolean);
+  return (
+    <div className="space-y-3 rounded-md border p-3">
+      {b.ambiente === "sandbox" && <Badge variant="alerta">Ambiente de testes — este boleto não vale para pagamento</Badge>}
+      <div className="rounded-md bg-muted p-3 text-sm">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <Moeda valor={b.valor} className="text-2xl font-bold" />
+          <span className="flex items-center gap-1">
+            {b.parcelas && b.parcelas > 1 && <Badge variant="neutro">Parcela {b.parcela}/{b.parcelas}</Badge>}
+            <Badge variant="info">Aguardando pagamento</Badge>
+          </span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-foreground/10 pt-3">
+          <div><p className="text-xs text-muted-foreground">Vencimento</p><span className="font-medium">{formatData(b.data_vencimento)}</span></div>
+          <div><p className="text-xs text-muted-foreground">Nosso número</p><span className="num font-medium">{b.nosso_numero}</span></div>
+        </div>
+        {itens.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{itens.join(" · ")}</p>}
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2"><Label>Linha digitável</Label><BotaoCopiar texto={b.linha_digitavel} /></div>
+        <code className="num block rounded-md border px-3 py-2.5 text-sm tracking-wide">{formatLinhaDigitavel(b.linha_digitavel)}</code>
+      </div>
+      {b.pix_copia_cola && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2"><Label>PIX copia e cola</Label><BotaoCopiar texto={b.pix_copia_cola} /></div>
+          <code className="line-clamp-2 break-all rounded-md border px-3 py-2.5 text-xs text-muted-foreground" title={b.pix_copia_cola}>{b.pix_copia_cola}</code>
+        </div>
+      )}
+      <div className="flex flex-wrap justify-end gap-2">
+        {podeEditar && <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive sm:mr-auto" onClick={onCancelar} disabled={!!ocupado}><Ban /> Cancelar boleto</Button>}
+        {podeEditar && <Button size="sm" variant="outline" onClick={onConsultar} disabled={!!ocupado}>{ocupado === `atualizar:${b.id}` ? <Loader2 className="animate-spin" /> : <RefreshCw />} Consultar pagamento</Button>}
+        <Button size="sm" onClick={onPdf} disabled={!!ocupado}>{ocupado === `pdf:${b.id}` ? <Loader2 className="animate-spin" /> : <FileDown />} Baixar PDF</Button>
+      </div>
+    </div>
+  );
+}
+
+/** Boletos em aberto da fatura (um ou vários — parcelas) e, enquanto faltar cobrar parte do saldo, o formulário de emissão. */
 function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }: {
   medicao: LinhaReceber | null; contas: Conta[]; podeEditar: boolean; onOpenChange: (v: boolean) => void; onFeito: () => void;
 }) {
   const [conta, setConta] = React.useState<string | null>(null);
   const [vencimento, setVencimento] = React.useState("");
   const [encargos, setEncargos] = React.useState<EncargosBoleto>(SEM_ENCARGOS);
-  const [ocupado, setOcupado] = React.useState<"emitir" | "pdf" | "atualizar" | null>(null);
-  const [cancelar, setCancelar] = React.useState(false);
+  const [qtd, setQtd] = React.useState(1);
+  const [parcelas, setParcelas] = React.useState<{ valor: number; vencimento: string }[]>([]);
+  const [ocupado, setOcupado] = React.useState<string | null>(null);
+  const [cancelar, setCancelar] = React.useState<Boleto | null>(null);
+  const [gerarMais, setGerarMais] = React.useState(false);
   const contasEmpresa = contas.filter((c) => m && c.empresa_id === m.empresa_id);
-  const b = m?.boleto?.status === "emitido" ? m.boleto : null;
+  const abertos = m ? (m.boletos ?? (m.boleto?.status === "emitido" ? [m.boleto] : [])) : [];
+  // o que falta cobrar: saldo da fatura menos os boletos já em aberto
+  const restante = m ? Math.max(0, Math.round((m.saldo - somar(abertos.map((b) => b.valor))) * 100) / 100) : 0;
+  const formulario = !!m && restante > 0 && (abertos.length === 0 || gerarMais);
 
   React.useEffect(() => {
     if (!m) return;
     escolherConta(contasEmpresa[0]?.value ?? null);
     setVencimento(m.data_vencimento && m.data_vencimento >= hojeSP() ? m.data_vencimento : "");
+    setQtd(1);
+    setGerarMais(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [m?.id]);
+  // mudar a quantidade, o 1º vencimento ou o valor a cobrar refaz a divisão
+  React.useEffect(() => { setParcelas(dividirParcelas(restante, qtd, vencimento)); }, [restante, qtd, vencimento]);
 
   /** trocar a conta traz a multa/juros/protesto padrão dela */
   const escolherConta = (id: string | null) => {
@@ -410,26 +483,32 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
   const enc = (v: Partial<EncargosBoleto>) => setEncargos((e) => ({ ...e, ...v }));
   const limitesDias = encargos.apos_vencimento ? DIAS_APOS_VENCIMENTO[encargos.apos_vencimento] : null;
   const diasInvalidos = !!limitesDias && (encargos.dias_apos_vencimento == null || encargos.dias_apos_vencimento < limitesDias[0] || encargos.dias_apos_vencimento > limitesDias[1]);
+  const editarParcela = (i: number, v: Partial<{ valor: number; vencimento: string }>) => setParcelas((ps) => ps.map((p, j) => (j === i ? { ...p, ...v } : p)));
+  const soma = Math.round(somar(parcelas.map((p) => p.valor)) * 100) / 100;
+  const diferenca = Math.round((restante - soma) * 100) / 100;
+  const parcelasInvalidas = parcelas.some((p) => !(p.valor > 0) || !p.vencimento || p.vencimento < hojeSP()) || diferenca !== 0;
+  const menorParcela = parcelas.length ? Math.min(...parcelas.map((p) => p.valor || 0)) : restante;
 
   const emitir = async () => {
     if (!m) return;
     setOcupado("emitir");
-    const r = await rodarAcao(emitirBoleto(m.id, conta, vencimento, encargos));
+    // boleto único do saldo inteiro: ação de sempre (funciona mesmo antes de publicar a função nova); parcelas ou restante: ação nova
+    const r = qtd === 1 && abertos.length === 0
+      ? await rodarAcao(emitirBoleto(m.id, conta, parcelas[0]?.vencimento ?? vencimento, encargos))
+      : await rodarAcao(emitirBoletosParcelados(m.id, conta, parcelas, encargos));
     setOcupado(null);
     if (r.ok) { onOpenChange(false); onFeito(); }
   };
 
-  const pdf = async () => {
-    if (!b) return;
-    setOcupado("pdf");
+  const pdf = async (b: Boleto) => {
+    setOcupado(`pdf:${b.id}`);
     const r = await baixarPdfBoleto(b);
     setOcupado(null);
     if (!r.ok) toast.error(r.erro);
   };
 
-  const consultar = async () => {
-    if (!b) return;
-    setOcupado("atualizar");
+  const consultar = async (b: Boleto) => {
+    setOcupado(`atualizar:${b.id}`);
     const r = await atualizarBoletos([b.id]);
     setOcupado(null);
     if (!r.ok) return void toast.error(r.erro);
@@ -443,45 +522,24 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
     <Dialog open={!!m} onOpenChange={onOpenChange}>
       <DialogContent tamanho="md">
         <DialogHeader>
-          <DialogTitle>{b ? "Boleto Sicredi" : "Gerar boleto Sicredi"}</DialogTitle>
+          <DialogTitle>{abertos.length > 1 ? `Boletos Sicredi (${abertos.length})` : abertos.length ? "Boleto Sicredi" : "Gerar boleto Sicredi"}</DialogTitle>
           <DialogDescription>{m && <>{(m.placa ? formatPlaca(m.placa) : "Avulsa")} · {m.cliente_fantasia} · NF {m.numero_nf ?? "—"}</>}</DialogDescription>
         </DialogHeader>
-        {m && b && (
-          <div className="space-y-4">
-            {b.ambiente === "sandbox" && <Badge variant="alerta">Ambiente de testes — este boleto não vale para pagamento</Badge>}
-            <div className="rounded-md bg-muted p-3 text-sm">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <Moeda valor={b.valor} className="text-2xl font-bold" />
-                <Badge variant="info">Aguardando pagamento</Badge>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-foreground/10 pt-3">
-                <div><p className="text-xs text-muted-foreground">Vencimento</p><span className="font-medium">{formatData(b.data_vencimento)}</span></div>
-                <div><p className="text-xs text-muted-foreground">Nosso número</p><span className="num font-medium">{b.nosso_numero}</span></div>
-              </div>
-              {(() => {
-                const itens = [
-                  b.multa_pct && `Multa ${formatPct(b.multa_pct)}`,
-                  b.juros && `Juros ${descreverJuros(b.juros, b.juros_tipo ?? "pct_mes")}`,
-                  b.protesto_dias && `Protesto ${b.protesto_dias} dias após o vencimento`,
-                  b.negativacao_dias && `Serasa ${b.negativacao_dias} dias após o vencimento`,
-                ].filter(Boolean);
-                return itens.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{itens.join(" · ")}</p>;
-              })()}
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2"><Label>Linha digitável</Label><BotaoCopiar texto={b.linha_digitavel} /></div>
-              <code className="num block rounded-md border px-3 py-2.5 text-sm tracking-wide">{formatLinhaDigitavel(b.linha_digitavel)}</code>
-            </div>
-            {b.pix_copia_cola && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2"><Label>PIX copia e cola</Label><BotaoCopiar texto={b.pix_copia_cola} /></div>
-                <code className="line-clamp-2 break-all rounded-md border px-3 py-2.5 text-xs text-muted-foreground" title={b.pix_copia_cola}>{b.pix_copia_cola}</code>
+        {m && abertos.length > 0 && !gerarMais && (
+          <div className="space-y-3">
+            {abertos.map((b) => (
+              <CartaoBoleto key={b.id} b={b} podeEditar={podeEditar} ocupado={ocupado} onPdf={() => void pdf(b)} onConsultar={() => void consultar(b)} onCancelar={() => setCancelar(b)} />
+            ))}
+            {restante > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed p-3 text-sm">
+                <span>Falta gerar boleto de <strong>{formatBRL(restante)}</strong> do saldo desta fatura.</span>
+                {podeEditar && contasEmpresa.length > 0 && <Button size="sm" variant="outline" onClick={() => setGerarMais(true)}><Plus /> Gerar boleto do restante</Button>}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">Os botões de e-mail e WhatsApp da fatura já incluem a linha digitável e o PIX.</p>
+            <p className="text-xs text-muted-foreground">Os botões de e-mail e WhatsApp da fatura já incluem a linha digitável e o PIX{abertos.length > 1 ? " de todos os boletos" : ""}.</p>
           </div>
         )}
-        {m && !b && (
+        {m && formulario && (
           contasEmpresa.length === 0 ? (
             <div className="space-y-2 text-sm">
               <p>Para gerar boleto, a conta Sicredi da <strong>{m.empresa_apelido}</strong> precisa estar configurada para cobrança.</p>
@@ -493,14 +551,36 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-md bg-muted p-3 text-sm"><p className="text-xs text-muted-foreground">Valor do boleto (saldo em aberto)</p><Moeda valor={m.saldo} className="text-lg font-bold" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label htmlFor="bol-venc">Vencimento</Label><Input id="bol-venc" type="date" min={hojeSP()} value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
+              <div className="rounded-md bg-muted p-3 text-sm">
+                <p className="text-xs text-muted-foreground">{abertos.length ? "Valor a cobrar (restante do saldo)" : "Valor a cobrar (saldo em aberto)"}</p>
+                <Moeda valor={restante} className="text-lg font-bold" />
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6rem] gap-3">
+                <div className="space-y-1.5"><Label htmlFor="bol-venc">{qtd > 1 ? "1º vencimento" : "Vencimento"}</Label><Input id="bol-venc" type="date" min={hojeSP()} value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
                   {m.data_vencimento && m.data_vencimento < hojeSP() && <p className="text-xs text-status-alerta">Fatura venceu em {formatData(m.data_vencimento)} — informe nova data</p>}</div>
                 <div className="space-y-1.5"><Label>Conta de cobrança</Label><SelectSimples value={conta} onChange={escolherConta} opcoes={contasEmpresa} /></div>
+                <div className="space-y-1.5"><Label htmlFor="bol-qtd">Parcelas</Label>
+                  <SelectSimples id="bol-qtd" value={String(qtd)} onChange={(v) => setQtd(Number(v ?? 1))}
+                    opcoes={Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: i === 0 ? "1 (à vista)" : `${i + 1}×` }))} /></div>
               </div>
+              {qtd > 1 && (
+                <div className="space-y-2 rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Uma parcela por mês — dá para mudar o valor e a data de cada uma</p>
+                  {parcelas.map((p, i) => (
+                    <div key={i} className="grid grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
+                      <span className="text-sm font-medium">{i + 1}/{qtd}</span>
+                      <InputMoeda aria-label={`Valor da parcela ${i + 1}`} value={p.valor} onChange={(v) => editarParcela(i, { valor: v ?? 0 })} />
+                      <Input aria-label={`Vencimento da parcela ${i + 1}`} type="date" min={hojeSP()} value={p.vencimento} onChange={(e) => editarParcela(i, { vencimento: e.target.value })} />
+                    </div>
+                  ))}
+                  <p className={diferenca !== 0 ? "text-xs font-medium text-status-critico" : "text-xs text-muted-foreground"}>
+                    Soma {formatBRL(soma)} de {formatBRL(restante)}
+                    {diferenca > 0 && ` — faltam ${formatBRL(diferenca)}`}{diferenca < 0 && ` — passou ${formatBRL(-diferenca)}`}
+                  </p>
+                </div>
+              )}
               <fieldset className="space-y-3 rounded-md border p-3">
-                <legend className="px-1 text-xs font-medium text-muted-foreground">Após o vencimento</legend>
+                <legend className="px-1 text-xs font-medium text-muted-foreground">Após o vencimento{qtd > 1 ? " (vale para cada parcela)" : ""}</legend>
                 <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
                   <div className="space-y-1.5"><Label htmlFor="bol-multa">Multa (%)</Label>
                     <InputNumero id="bol-multa" casas={2} placeholder="Sem multa" value={encargos.multa_pct} onChange={(v) => enc({ multa_pct: v })} /></div>
@@ -511,10 +591,10 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
                         onChange={(v) => enc({ juros_tipo: (v ?? "pct_dia") as JurosTipo })} />
                     </div></div>
                 </div>
-                {m && (encargos.multa_pct || encargos.juros) ? <p className="text-xs text-muted-foreground">
-                  Se atrasar: {[
-                    encargos.multa_pct && `multa de ${formatBRL(m.saldo * encargos.multa_pct / 100)} (uma vez)`,
-                    encargos.juros && `+ ${formatBRL(jurosPorDia(m.saldo, encargos.juros, encargos.juros_tipo))} por dia`,
+                {(encargos.multa_pct || encargos.juros) ? <p className="text-xs text-muted-foreground">
+                  Se atrasar{qtd > 1 ? ` (parcela de ${formatBRL(menorParcela)})` : ""}: {[
+                    encargos.multa_pct && `multa de ${formatBRL(menorParcela * encargos.multa_pct / 100)} (uma vez)`,
+                    encargos.juros && `+ ${formatBRL(jurosPorDia(menorParcela, encargos.juros, encargos.juros_tipo))} por dia`,
                   ].filter(Boolean).join(" ")}</p> : null}
                 <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
                   <div className="space-y-1.5"><Label>Se não pagar</Label>
@@ -527,26 +607,24 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
                   {encargos.apos_vencimento === "protesto" ? "Protesto" : "Negativação no Serasa"}: de {limitesDias[0]} a {limitesDias[1]} dias após o vencimento.
                   {encargos.apos_vencimento === "negativacao" && " Precisa do Serasa ativo no seu contrato de cobrança."}</p>}
               </fieldset>
-              <p className="text-xs text-muted-foreground">O boleto sai com QR Code PIX e é registrado no Sicredi em nome do cliente (CNPJ e endereço do cadastro).</p>
+              <p className="text-xs text-muted-foreground">{qtd > 1 ? `São gerados ${qtd} boletos separados, com QR Code PIX e registrados` : "O boleto sai com QR Code PIX e é registrado"} no Sicredi em nome do cliente (CNPJ e endereço do cadastro).</p>
             </div>
           )
         )}
         <DialogFooter className="flex-wrap gap-2">
-          {b ? <>
-            {podeEditar && <Button variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive sm:mr-auto" onClick={() => setCancelar(true)} disabled={!!ocupado}><Ban /> Cancelar boleto</Button>}
-            {podeEditar && <Button variant="outline" onClick={consultar} disabled={!!ocupado}>{ocupado === "atualizar" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Consultar pagamento</Button>}
-            <Button onClick={pdf} disabled={!!ocupado}>{ocupado === "pdf" ? <Loader2 className="animate-spin" /> : <FileDown />} Baixar PDF</Button>
-          </> : <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>}
-          {m && !b && podeEditar && contasEmpresa.length > 0 && (
-            <Button onClick={emitir} disabled={!!ocupado || !conta || !vencimento || diasInvalidos}>{ocupado === "emitir" ? <Loader2 className="animate-spin" /> : <Barcode />} Gerar boleto</Button>
+          <Button variant="outline" onClick={() => (gerarMais ? setGerarMais(false) : onOpenChange(false))}>{gerarMais ? "Voltar" : "Fechar"}</Button>
+          {m && formulario && podeEditar && contasEmpresa.length > 0 && (
+            <Button onClick={emitir} disabled={!!ocupado || !conta || !vencimento || diasInvalidos || parcelasInvalidas}>
+              {ocupado === "emitir" ? <Loader2 className="animate-spin" /> : <Barcode />} {qtd > 1 ? `Gerar ${qtd} boletos` : "Gerar boleto"}
+            </Button>
           )}
         </DialogFooter>
-        <Confirmar aberto={cancelar} onOpenChange={setCancelar} titulo="Cancelar boleto no Sicredi?" destrutivo rotulo="Cancelar boleto"
-          descricao="O boleto é baixado no banco e não poderá mais ser pago. A fatura continua em aberto e você pode gerar outro."
+        <Confirmar aberto={!!cancelar} onOpenChange={(v) => !v && setCancelar(null)} titulo="Cancelar boleto no Sicredi?" destrutivo rotulo="Cancelar boleto"
+          descricao={`O boleto${cancelar?.parcelas && cancelar.parcelas > 1 ? ` (parcela ${cancelar.parcela}/${cancelar.parcelas})` : ""} é baixado no banco e não poderá mais ser pago. A fatura continua em aberto e você pode gerar outro no lugar.`}
           onConfirmar={async () => {
-            if (!b) return;
-            const r = await rodarAcao(cancelarBoleto(b.id));
-            if (r.ok) { onOpenChange(false); onFeito(); }
+            if (!cancelar) return;
+            const r = await rodarAcao(cancelarBoleto(cancelar.id));
+            if (r.ok) { setCancelar(null); onOpenChange(false); onFeito(); }
           }} />
       </DialogContent>
     </Dialog>

@@ -73,6 +73,8 @@ export type Boleto = {
   id: string; medicao_id: string; nosso_numero: string; linha_digitavel: string; pix_copia_cola: string | null; valor: number;
   data_vencimento: string; status: "emitido" | "pago" | "baixado"; data_pagamento: string | null; ambiente: "sandbox" | "producao";
   multa_pct: number | null; juros: number | null; juros_tipo: JurosTipo | null; protesto_dias: number | null; negativacao_dias: number | null;
+  /** parcelas (SQL 0077): nº desta e total; vazio nos boletos antigos */
+  parcela?: number | null; parcelas?: number | null;
 };
 
 async function sicredi<T>(corpo: Record<string, unknown>): Promise<T> {
@@ -93,6 +95,20 @@ export type EncargosBoleto = { multa_pct: number | null; juros: number | null; j
 export async function emitirBoleto(medicaoId: string, contaId: string | null, vencimento: string, encargos: EncargosBoleto) {
   return executar(() => sicredi<Boleto>({ acao: "emitir", medicao_id: z.string().uuid().parse(medicaoId), conta_bancaria_id: contaId ?? undefined, vencimento, encargos }),
     REVALIDAR, "Boleto gerado");
+}
+
+/** 1 a 12 boletos de uma vez (parcelas); a soma tem que fechar com o que falta cobrar da fatura. */
+export async function emitirBoletosParcelados(medicaoId: string, contaId: string | null, parcelas: { valor: number; vencimento: string }[], encargos: EncargosBoleto) {
+  return executar(async () => {
+    const lista = z.array(z.object({ valor: z.number().positive(), vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe o vencimento de cada parcela") })).min(1).max(12).parse(parcelas);
+    try {
+      return await sicredi<{ boletos: Boleto[] }>({ acao: "emitir_parcelas", medicao_id: z.string().uuid().parse(medicaoId), conta_bancaria_id: contaId ?? undefined, parcelas: lista, encargos });
+    } catch (e) {
+      // função antiga no Supabase: não conhece a ação (e não gera nada)
+      if (e instanceof Error && /Ação inválida/.test(e.message)) throw new Error("A função de boletos do Supabase (sicredi-boleto) ainda não foi atualizada para parcelas. Publique a versão nova e tente de novo.");
+      throw e;
+    }
+  }, REVALIDAR, parcelas.length > 1 ? `${parcelas.length} boletos gerados` : "Boleto gerado");
 }
 
 export async function cancelarBoleto(boletoId: string) {

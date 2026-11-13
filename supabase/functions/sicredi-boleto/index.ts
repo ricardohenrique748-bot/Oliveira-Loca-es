@@ -2,6 +2,8 @@
  * Boletos Sicredi a partir das medições faturadas.
  * POST { acao: "emitir", medicao_id, conta_bancaria_id?, vencimento?, encargos? }
  *      encargos: { multa_pct, juros, juros_tipo: "pct_dia" | "pct_mes" | "valor_dia", apos_vencimento: "protesto" | "negativacao" | null, dias_apos_vencimento }
+ * POST { acao: "emitir_parcelas", medicao_id, conta_bancaria_id?, parcelas: [{ valor, vencimento }], encargos? }
+ *      1 a 12 boletos de uma vez; a soma tem que ser igual ao que falta cobrar (saldo − boletos já em aberto) → { boletos }
  * POST { acao: "pdf", boleto_id }                → { pdf_base64 }
  * POST { acao: "atualizar", boleto_ids? }        → consulta os boletos em aberto; pagos viram recebimento
  * POST { acao: "baixar", boleto_id }             → cancela (baixa) o boleto no banco
@@ -45,6 +47,7 @@ Deno.serve(async (req) => {
     const ctx = { usuario, admin, userId: user.id };
     switch (corpo.acao) {
       case "emitir": return json(await emitir(ctx, corpo));
+      case "emitir_parcelas": return json(await emitirParcelas(ctx, corpo));
       case "pdf": return json(await pdf(ctx, corpo.boleto_id));
       case "atualizar": return json(await atualizar(ctx, corpo.boleto_ids));
       case "baixar": return json(await baixar(ctx, corpo.boleto_id));
@@ -79,7 +82,7 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
   if (!vencimento || !/^\d{4}-\d{2}-\d{2}$/.test(vencimento)) throw new ErroUso("Informe o vencimento do boleto.");
   if (vencimento < hojeSP()) throw new ErroUso("O vencimento já passou. Informe uma nova data de vencimento.");
 
-  const { data: aberto } = await admin.from("boletos").select("id").eq("medicao_id", m.id).eq("status", "emitido").maybeSingle();
+  const { data: aberto } = await admin.from("boletos").select("id").eq("medicao_id", m.id).eq("status", "emitido").limit(1).maybeSingle();
   if (aberto) throw new ErroUso("Esta medição já tem um boleto em aberto. Cancele-o antes de gerar outro.");
 
   const conta = await contaCobranca(usuario, m.empresa_id, corpo.conta_bancaria_id);
@@ -105,6 +108,81 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
     throw error;
   }
   return boleto;
+}
+
+// ---------- emitir em parcelas ----------
+const centavos = (v: number) => Math.round(v * 100);
+
+async function emitirParcelas({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: string; conta_bancaria_id?: string; parcelas?: { valor?: unknown; vencimento?: unknown }[]; encargos?: EncargosCorpo }) {
+  const { data: m } = await usuario.from("medicoes_v")
+    .select("id, empresa_id, cliente_id, status, saldo, numero_nf, placa, descricao, periodo_inicio, periodo_fim")
+    .eq("id", corpo.medicao_id ?? "").maybeSingle();
+  if (!m) throw new ErroUso("Medição não encontrada.", 404);
+  if (!["faturado", "recebido_parcial"].includes(m.status)) throw new ErroUso("Só é possível gerar boleto de medição faturada e em aberto.");
+
+  const lista = Array.isArray(corpo.parcelas) ? corpo.parcelas : [];
+  if (lista.length < 1 || lista.length > 12) throw new ErroUso("Informe de 1 a 12 parcelas.");
+  const hoje = hojeSP();
+  const parcelas = lista.map((p, i) => {
+    const valor = Number(p.valor);
+    const vencimento = String(p.vencimento ?? "");
+    if (!(valor > 0) || !Number.isFinite(valor)) throw new ErroUso(`Parcela ${i + 1}: informe um valor maior que zero.`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(vencimento)) throw new ErroUso(`Parcela ${i + 1}: informe o vencimento.`);
+    if (vencimento < hoje) throw new ErroUso(`Parcela ${i + 1}: o vencimento já passou.`);
+    return { valor: centavos(valor) / 100, vencimento };
+  }).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+
+  // o que falta cobrar: saldo da fatura menos os boletos que já estão em aberto
+  const { data: abertos } = await admin.from("boletos").select("valor").eq("medicao_id", m.id).eq("status", "emitido");
+  const restante = centavos(Number(m.saldo)) - (abertos ?? []).reduce((s, b) => s + centavos(Number(b.valor)), 0);
+  if (restante <= 0) throw new ErroUso("Os boletos em aberto já cobrem todo o saldo desta fatura.");
+  const soma = parcelas.reduce((s, p) => s + centavos(p.valor), 0);
+  if (soma !== restante) {
+    throw new ErroUso(`A soma das parcelas (${(soma / 100).toFixed(2).replace(".", ",")}) precisa ser igual ao que falta cobrar (${(restante / 100).toFixed(2).replace(".", ",")}).`);
+  }
+
+  const conta = await contaCobranca(usuario, m.empresa_id, corpo.conta_bancaria_id);
+  const pagador = await pagadorDoCliente(usuario, admin, m.cliente_id);
+  // juros em R$/dia são conferidos contra a menor parcela
+  const encargos = validarEncargos(corpo.encargos, Math.min(...parcelas.map((p) => p.valor)));
+  const base = digitos(m.numero_nf) || m.id.replace(/-/g, "").slice(0, 10);
+  const grupo = crypto.randomUUID();
+  const n = parcelas.length;
+  const criados: { id: string | null; nossoNumero: string }[] = [];
+  const gravados: unknown[] = [];
+
+  try {
+    for (const [i, p] of parcelas.entries()) {
+      // parcela única: mesmo "seu número" de antes; em parcelas, os 2 últimos dígitos são a parcela
+      const seuNumero = n === 1 ? base.slice(-10) : `${base.slice(-8)}${String(i + 1).padStart(2, "0")}`;
+      const b = await criarBoleto(conta.beneficiario, {
+        pagador, seuNumero, vencimento: p.vencimento, valor: p.valor, encargos,
+        mensagens: [
+          `${m.placa ? `Locação ${m.placa}` : m.descricao ?? "Serviço"} · ${br(m.periodo_inicio)} a ${br(m.periodo_fim)}`,
+          [m.numero_nf ? `NF ${m.numero_nf}` : "", n > 1 ? `Parcela ${i + 1}/${n}` : ""].filter(Boolean).join(" · "),
+        ].filter(Boolean),
+      });
+      criados.push({ id: null, nossoNumero: b.nossoNumero });
+      const { data: boleto, error } = await admin.from("boletos").insert({
+        medicao_id: m.id, empresa_id: m.empresa_id, conta_bancaria_id: conta.id, ambiente: ambiente(), seu_numero: seuNumero,
+        nosso_numero: b.nossoNumero, linha_digitavel: b.linhaDigitavel, codigo_barras: b.codigoBarras, pix_copia_cola: b.qrCode, txid: b.txid,
+        valor: p.valor, data_vencimento: p.vencimento, created_by: userId,
+        multa_pct: encargos.multaPct, juros: encargos.juros, juros_tipo: encargos.juros ? encargos.jurosTipo : null, protesto_dias: encargos.protestoDias, negativacao_dias: encargos.negativacaoDias,
+        parcela: i + 1, parcelas: n, grupo_id: grupo,
+      }).select().single();
+      if (error) throw error;
+      criados[criados.length - 1].id = (boleto as { id: string }).id;
+      gravados.push(boleto);
+    }
+  } catch (e) {
+    // tudo ou nada: o que já foi registrado no banco é baixado, para não sobrar boleto pela metade
+    for (const c of criados) {
+      await baixarBoleto(conta.beneficiario, c.nossoNumero).catch(() => {});
+      if (c.id) await admin.from("boletos").update({ status: "baixado" }).eq("id", c.id);
+    }
+    throw e;
+  }
+  return { boletos: gravados };
 }
 
 /** Mesmas regras do cadastro da conta (limites do Manual API Cobrança 4.0). */
