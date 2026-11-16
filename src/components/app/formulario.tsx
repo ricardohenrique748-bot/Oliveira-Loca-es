@@ -261,7 +261,7 @@ export function Formulario<V extends FieldValues>({ campos, schema, valores, onS
   const grade = (cs: Campo<V>[]) => (
     <div className="grid grid-cols-6 gap-3">
       {cs.map((c) => (
-        <CampoControlado key={String(c.nome)} campo={c} control={form.control} valores={atuais} form={form} erro={erros[String(c.nome)]?.message} />
+        <CampoControlado key={`${String(c.nome)}:${c.tipo ?? ""}`}campo={c} control={form.control} valores={atuais} form={form} erro={erros[String(c.nome)]?.message} />
       ))}
     </div>
   );

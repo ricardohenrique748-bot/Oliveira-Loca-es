@@ -10,7 +10,8 @@ export const STATUS_VEICULO: Opcao[] = [
 /** A empresa do veículo não é escolhida aqui: vem do contrato (ao salvar um contrato ativo, a placa passa para a empresa dele). */
 export function camposVeiculo(_empresas: Opcao[], locadores: Opcao[]): Campo<VeiculoForm>[] {
   return [
-    { nome: "placa", rotulo: "Placa", tipo: "placa", obrigatorio: true, col: 2, ajuda: "Mercosul ou antiga" },
+    { nome: "placa", rotulo: "Placa", tipo: "placa", obrigatorio: true, col: 2, ajuda: "Mercosul ou antiga", visivel: (v) => v.tipo !== "implemento" },
+    { nome: "placa", rotulo: "Placa / identificação", tipo: "texto", col: 2, placeholder: "Ex.: GAIOLA 01", ajuda: "Opcional — vazio gera IMP001, IMP002…", visivel: (v) => v.tipo === "implemento" },
     { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: opcoesDe(ROTULOS.tipoVeiculo), col: 2 },
     { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_VEICULO, col: 2 },
     { nome: "marca", rotulo: "Marca", col: 2 },

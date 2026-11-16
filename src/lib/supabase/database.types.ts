@@ -2912,7 +2912,7 @@ export type Database = {
       tipo_documento: "licenciamento" | "seguro" | "tacografo" | "inspecao_icamento" | "antt" | "outro" | "laudo_viabilidade" | "plano_manutencao" | "checklist_fotografico" | "os_preventiva" | "laudo_dieletrico" | "apreciacao_riscos_hrn" | "laudo_escada" | "laudo_guarda_corpo" | "checklist_detalhado" | "laudo_opacidade" | "plano_inspecao"
       tipo_item_os: "peca" | "servico"
       tipo_os: "preventiva" | "corretiva" | "pneu" | "inspecao"
-      tipo_veiculo: "caminhao" | "guindaste" | "trator" | "munck" | "carro" | "outro"
+      tipo_veiculo: "caminhao" | "guindaste" | "trator" | "munck" | "carro" | "implemento" | "outro"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2948,7 +2948,7 @@ export const Constants = {
       tipo_documento: ["licenciamento", "seguro", "tacografo", "inspecao_icamento", "antt", "outro", "laudo_viabilidade", "plano_manutencao", "checklist_fotografico", "os_preventiva", "laudo_dieletrico", "apreciacao_riscos_hrn", "laudo_escada", "laudo_guarda_corpo", "checklist_detalhado", "laudo_opacidade", "plano_inspecao"],
       tipo_item_os: ["peca", "servico"],
       tipo_os: ["preventiva", "corretiva", "pneu", "inspecao"],
-      tipo_veiculo: ["caminhao", "guindaste", "trator", "munck", "carro", "outro"],
+      tipo_veiculo: ["caminhao", "guindaste", "trator", "munck", "carro", "implemento", "outro"],
     },
   },
 } as const

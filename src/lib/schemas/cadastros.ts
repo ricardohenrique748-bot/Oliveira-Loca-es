@@ -190,10 +190,11 @@ export const categoriaSchema = z.object({
 export type CategoriaForm = z.infer<typeof categoriaSchema>;
 
 export const veiculoSchema = z.object({
-  placa,
+  /** implemento: identificação livre e opcional (vazia = o banco gera IMP001…); demais tipos: placa válida */
+  placa: z.string().nullish(),
   renavam: z.preprocess((v) => (typeof v === "string" ? v.replace(/\D/g, "") || null : v ?? null),
     z.string().regex(/^\d{9,11}$/, "RENAVAM deve ter 9 a 11 dígitos").nullable()),
-  tipo: z.enum(["caminhao", "guindaste", "trator", "munck", "carro", "outro"]),
+  tipo: z.enum(["caminhao", "guindaste", "trator", "munck", "carro", "implemento", "outro"]),
   marca: textoOpc,
   modelo: textoOpc,
   ano: z.number().int().min(1950, "Ano inválido").max(2100, "Ano inválido").nullish().transform((v) => v ?? null),
@@ -209,11 +210,21 @@ export const veiculoSchema = z.object({
   observacoes: textoOpc,
 }).superRefine((v, ctx) => {
   if (v.proprietario === "locador" && !v.locador_id) ctx.addIssue({ code: "custom", message: "Selecione o locador", path: ["locador_id"] });
-}).transform((v) => ({ ...v, locador_id: v.proprietario === "locador" ? v.locador_id : null }));
+  if (v.tipo === "implemento") {
+    if ((v.placa ?? "").trim().length > 20) ctx.addIssue({ code: "custom", message: "Até 20 caracteres", path: ["placa"] });
+  } else {
+    const r = placa.safeParse(v.placa ?? undefined);
+    if (!r.success) ctx.addIssue({ code: "custom", message: r.error.issues[0].message, path: ["placa"] });
+  }
+}).transform((v) => ({
+  ...v,
+  placa: v.tipo === "implemento" ? (v.placa ?? "").trim().replace(/\s+/g, " ").toUpperCase() || null : placa.parse(v.placa),
+  locador_id: v.proprietario === "locador" ? v.locador_id : null,
+}));
 export type VeiculoForm = z.input<typeof veiculoSchema>;
 
 export const ROTULOS = {
-  tipoVeiculo: { caminhao: "Caminhão", guindaste: "Guindaste", trator: "Trator", munck: "Munck", carro: "Carro", outro: "Outro" },
+  tipoVeiculo: { caminhao: "Caminhão", guindaste: "Guindaste", trator: "Trator", munck: "Munck", carro: "Carro", implemento: "Implemento", outro: "Outro" },
   proprietario: { proprio: "Frota própria", locador: "Sublocado (locador)" },
   tipoChavePix: { cpf: "CPF", cnpj: "CNPJ", email: "E-mail", telefone: "Telefone", aleatoria: "Aleatória" },
   tipoDespesa: { fixa: "Fixa", variavel: "Variável", veiculo: "Veículo" },
