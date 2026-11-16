@@ -67,15 +67,18 @@ export async function salvarUsuario(userId: string | null, dados: unknown) {
       p_ativo: u.ativo,
       p_empresas: u.empresas,
     }));
-    checar(await supabase.from("usuarios_perfil")
-      .update({ so_faturas_avulsas: u.soAvulsas, oculta_contas_pagar: u.ocultaPagar })
-      .eq("user_id", (id as string | null) ?? userId!));
-    // separado: antes da migration 0080 a coluna não existe; com um setor só, o cadastro não deve travar
-    const setores = await supabase.from("usuarios_perfil").update({ perfis_extras: extras }).eq("user_id", (id as string | null) ?? userId!);
-    if (setores.error) {
-      const semColuna = /perfis_extras/.test(setores.error.message);
-      if (!semColuna || extras.length) throw new Error(semColuna ? "Para marcar mais de um setor, aplique a migration 0080 no Supabase." : setores.error.message);
-    }
+    // uma coluna por vez: se uma migration ainda não foi aplicada no Supabase, só trava quando o valor importa
+    const alvo = (id as string | null) ?? userId!;
+    const gravar = async (coluna: string, valor: unknown, importa: boolean, migration: string) => {
+      const r = await supabase.from("usuarios_perfil").update({ [coluna]: valor } as never).eq("user_id", alvo);
+      if (!r.error) return;
+      const semColuna = r.error.message.includes(coluna);
+      if (!semColuna) throw new Error(r.error.message);
+      if (importa) throw new Error(`O banco ainda não tem a coluna ${coluna}: rode a migration ${migration} no Supabase (SQL Editor).`);
+    };
+    await gravar("so_faturas_avulsas", u.soAvulsas, u.soAvulsas, "0073");
+    await gravar("oculta_contas_pagar", u.ocultaPagar, u.ocultaPagar, "0074");
+    await gravar("perfis_extras", extras, extras.length > 0, "0080");
     return { id };
   }, ["/configuracoes"], userId ? "Usuário atualizado" : "Usuário criado. Passe a senha inicial ao usuário.");
 }
