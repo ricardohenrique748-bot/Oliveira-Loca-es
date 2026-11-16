@@ -90,6 +90,11 @@ describe("recorrência", () => {
     const faltam = vencimentosRecorrentesFaltantes({ vencimentoBase: "2026-10-31", existentes, hoje: "2026-11-01" });
     expect(faltam).toEqual(["2027-10-31"]);
   });
+
+  it("dia 31 começando em mês curto segue no 31 (e no último dia dos meses curtos)", () => {
+    const v = vencimentosRecorrentesFaltantes({ vencimentoBase: "2026-11-30", existentes: ["2026-11-30"], hoje: "2026-11-16", dia: 31 });
+    expect(v.slice(0, 4)).toEqual(["2026-12-31", "2027-01-31", "2027-02-28", "2027-03-31"]);
+  });
 });
 
 describe("status da conta a pagar", () => {

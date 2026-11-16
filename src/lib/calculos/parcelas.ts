@@ -116,9 +116,11 @@ export function vencimentosRecorrentesFaltantes(p: {
   existentes: ISODate[];
   hoje: ISODate;
   meses?: number;
+  /** dia do mês desejado (29–31 em meses curtos cai no último dia); padrão: o dia do vencimento-base */
+  dia?: number;
 }): ISODate[] {
   const meses = p.meses ?? 12;
-  const dia = parseISO(p.vencimentoBase).getUTCDate();
+  const dia = p.dia ?? parseISO(p.vencimentoBase).getUTCDate();
   const compBase = competenciaDe(p.vencimentoBase);
   const compHoje = competenciaDe(p.hoje);
   const inicio = compBase > compHoje ? compBase : compHoje;

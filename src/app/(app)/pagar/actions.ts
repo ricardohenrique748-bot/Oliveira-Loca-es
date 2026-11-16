@@ -65,10 +65,13 @@ export async function criarContaPagar(dados: unknown) {
       if (boletos.length > 1) linhas = linhas.map((l, i) => ({ ...l, anexo_url: boletos[i] ?? null }));
     } else if (repeticao === "recorrente") {
       // vários dias do mês: uma recorrência para cada dia (cada uma segue sozinha no job mensal), a partir do 1º vencimento
-      const inicios = dias_mes.length ? primeirosVencimentosPorDia(c.vencimento, dias_mes) : [c.vencimento];
-      linhas = inicios.flatMap((inicio) => {
+      // cada dia guarda o dia pedido: 31 começando em novembro cai em 30/11, mas segue 31/12, 31/01…
+      const recorrencias = dias_mes.length
+        ? [...new Set(dias_mes)].map((dia) => ({ dia, inicio: primeirosVencimentosPorDia(c.vencimento, [dia])[0] }))
+        : [{ dia: Number(c.vencimento.slice(8, 10)), inicio: c.vencimento }];
+      linhas = recorrencias.flatMap(({ dia, inicio }) => {
         const grupo = crypto.randomUUID();
-        const venc = [inicio, ...vencimentosRecorrentesFaltantes({ vencimentoBase: inicio, existentes: [inicio], hoje: hojeSP() })];
+        const venc = [inicio, ...vencimentosRecorrentesFaltantes({ vencimentoBase: inicio, existentes: [inicio], hoje: hojeSP(), dia })];
         return venc.map((v) => ({ ...comum, descricao: c.descricao, vencimento: v, valor: c.valor, recorrente: true, grupo_parcela_id: grupo }));
       });
     } else {

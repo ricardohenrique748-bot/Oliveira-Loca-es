@@ -356,10 +356,10 @@ function SeletorDiasMes({ dias, onChange }: { dias: number[]; onChange: (v: numb
     <div className="space-y-2 rounded-md border p-3">
       <p className="text-xs text-muted-foreground">
         Marque os dias em que esta conta aparece <strong>todo mês</strong> (ex.: 5, 15 e 25 = 3 contas por mês). Nenhum marcado = só no dia do 1º vencimento.
-        Começa a partir do 1º vencimento.
+        Começa a partir do 1º vencimento. Dias 29, 30 e 31: nos meses mais curtos, a conta cai no último dia do mês.
       </p>
       <div className="grid grid-cols-7 gap-1 sm:grid-cols-[repeat(14,minmax(0,1fr))]">
-        {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
           <Button key={d} type="button" size="sm" variant={dias.includes(d) ? "default" : "outline"} className="h-8 px-0" aria-pressed={dias.includes(d)}
             onClick={() => alternar(d)}>{d}</Button>
         ))}
