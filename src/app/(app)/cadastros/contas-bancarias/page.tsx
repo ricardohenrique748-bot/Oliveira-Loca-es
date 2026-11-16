@@ -14,7 +14,8 @@ export default function ContasBancariasPage() {
     const supabase = createClient();
     let q = supabase
       .from("contas_bancarias")
-      .select("id, empresa_id, banco, agencia, conta, posto, codigo_beneficiario, boleto_carteira, pix_chave, apelido, ativo, boleto_multa_pct, boleto_juros, boleto_juros_tipo, boleto_apos_vencimento, boleto_dias_apos_vencimento, empresas(apelido)")
+      // "*": continua funcionando antes da migration 0078 (colunas do Itaú) estar aplicada
+      .select("*, empresas(apelido)")
       .order("apelido");
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     const { data: linhas } = await q;

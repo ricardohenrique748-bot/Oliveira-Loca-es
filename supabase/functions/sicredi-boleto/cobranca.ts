@@ -10,11 +10,11 @@ import type { Ambiente, BoletoCriado, DadosBoleto, SituacaoBoleto } from "./tipo
 export const BANCOS_COBRANCA = ["Sicredi", "Itaú"] as const;
 export type BancoCobranca = (typeof BANCOS_COBRANCA)[number];
 
-/** colunas de contas_bancarias que a cobrança usa */
-export const COLUNAS_CONTA = "id, banco, agencia, conta, posto, codigo_beneficiario, boleto_carteira, pix_chave, apelido";
+/** colunas de contas_bancarias ("*": funciona antes da migration 0078, sem boleto_carteira/pix_chave) */
+export const COLUNAS_CONTA = "*";
 export type ContaRow = {
   id: string; banco: string; agencia: string | null; conta: string | null; posto: string | null;
-  codigo_beneficiario: string | null; boleto_carteira: string | null; pix_chave: string | null; apelido: string;
+  codigo_beneficiario: string | null; boleto_carteira?: string | null; pix_chave?: string | null; apelido: string;
 };
 
 export interface Cobranca {

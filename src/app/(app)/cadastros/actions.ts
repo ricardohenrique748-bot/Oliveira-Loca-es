@@ -13,8 +13,11 @@ export async function excluirEmpresa(id: string) {
   return excluirRegistro({ tabela: "empresas", modulo: "configuracoes", id, revalidar: [`${R}/empresas`] });
 }
 
+/** campos do Itaú só vão quando a conta é Itaú: salvar conta Sicredi/Bradesco funciona mesmo antes da migration 0078 */
+const contaBancariaSemItau = contaBancariaSchema.transform(({ boleto_carteira, pix_chave, ...resto }) =>
+  resto.banco === "Itaú" ? { ...resto, boleto_carteira, pix_chave } : resto);
 export async function salvarContaBancaria(id: string | null, dados: unknown) {
-  return salvarRegistro({ tabela: "contas_bancarias", modulo: "contasBancarias", id, dados, schema: contaBancariaSchema, revalidar: [`${R}/contas-bancarias`] });
+  return salvarRegistro({ tabela: "contas_bancarias", modulo: "contasBancarias", id, dados, schema: contaBancariaSemItau, revalidar: [`${R}/contas-bancarias`] });
 }
 export async function excluirContaBancaria(id: string) {
   return excluirRegistro({ tabela: "contas_bancarias", modulo: "contasBancarias", id, revalidar: [`${R}/contas-bancarias`] });

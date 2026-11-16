@@ -12,7 +12,7 @@
  * Permissões: lê com o JWT do usuário (RLS decide o que ele enxerga) e grava com service_role.
  */
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
-import { BANCOS_COBRANCA, type Cobranca, cobrancaDaConta, COLUNAS_CONTA, type ContaRow, emiteBoleto, ErroConta } from "./cobranca.ts";
+import { type Cobranca, cobrancaDaConta, COLUNAS_CONTA, type ContaRow, emiteBoleto, ErroConta } from "./cobranca.ts";
 import { type Encargos, ErroBanco, type Pagador } from "./tipos.ts";
 
 const CORS = {
@@ -102,7 +102,7 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
   const { data: boleto, error } = await admin.from("boletos").insert({
     medicao_id: m.id, empresa_id: m.empresa_id, conta_bancaria_id: conta.id, ambiente: conta.cobranca.ambiente, seu_numero: seuNumero,
     nosso_numero: b.nossoNumero, linha_digitavel: b.linhaDigitavel, codigo_barras: b.codigoBarras, pix_copia_cola: b.qrCode, txid: b.txid,
-    valor, data_vencimento: vencimento, created_by: userId, carteira: conta.cobranca.carteira,
+    valor, data_vencimento: vencimento, created_by: userId, ...(conta.cobranca.carteira ? { carteira: conta.cobranca.carteira } : {}),
     multa_pct: encargos.multaPct, juros: encargos.juros, juros_tipo: encargos.juros ? encargos.jurosTipo : null, protesto_dias: encargos.protestoDias, negativacao_dias: encargos.negativacaoDias,
   }).select().single();
   if (error) {
@@ -169,7 +169,7 @@ async function emitirParcelas({ usuario, admin, userId }: Ctx, corpo: { medicao_
       const { data: boleto, error } = await admin.from("boletos").insert({
         medicao_id: m.id, empresa_id: m.empresa_id, conta_bancaria_id: conta.id, ambiente: conta.cobranca.ambiente, seu_numero: seuNumero,
         nosso_numero: b.nossoNumero, linha_digitavel: b.linhaDigitavel, codigo_barras: b.codigoBarras, pix_copia_cola: b.qrCode, txid: b.txid,
-        valor: p.valor, data_vencimento: p.vencimento, created_by: userId, carteira: conta.cobranca.carteira,
+        valor: p.valor, data_vencimento: p.vencimento, created_by: userId, ...(conta.cobranca.carteira ? { carteira: conta.cobranca.carteira } : {}),
         multa_pct: encargos.multaPct, juros: encargos.juros, juros_tipo: encargos.juros ? encargos.jurosTipo : null, protesto_dias: encargos.protestoDias, negativacao_dias: encargos.negativacaoDias,
         parcela: i + 1, parcelas: n, grupo_id: grupo,
       }).select().single();
@@ -219,7 +219,7 @@ function validarEncargos(e: EncargosCorpo = {}, valorBoleto: number): Encargos {
 /** Conta de cobrança da empresa (Sicredi com código do beneficiário ou Itaú com carteira) e o banco que ela usa. */
 async function contaCobranca(usuario: SupabaseClient, admin: SupabaseClient, empresaId: string, contaId?: string) {
   let q = usuario.from("contas_bancarias").select(COLUNAS_CONTA)
-    .eq("empresa_id", empresaId).in("banco", [...BANCOS_COBRANCA]).eq("ativo", true);
+    .eq("empresa_id", empresaId).eq("ativo", true); // banco filtrado abaixo: "Itaú" só existe no enum depois da migration 0078
   if (contaId) q = q.eq("id", contaId);
   const { data } = await q.order("apelido");
   const conta = ((data ?? []) as ContaRow[]).find(emiteBoleto);
@@ -258,11 +258,11 @@ async function pagadorDoCliente(usuario: SupabaseClient, admin: SupabaseClient, 
 // ---------- pdf / atualizar / baixar ----------
 async function boletoComConta(usuario: SupabaseClient, admin: SupabaseClient, id: string) {
   const { data } = await usuario.from("boletos")
-    .select(`id, medicao_id, empresa_id, nosso_numero, seu_numero, linha_digitavel, codigo_barras, pix_copia_cola, status, valor, data_vencimento, created_at, ambiente, carteira,
-      multa_pct, juros, juros_tipo, protesto_dias, negativacao_dias, contas_bancarias(${COLUNAS_CONTA})`)
+    // "*": a coluna carteira só existe depois da migration 0078
+    .select(`*, contas_bancarias(${COLUNAS_CONTA})`)
     .eq("id", id ?? "").maybeSingle();
   if (!data) throw new ErroUso("Boleto não encontrado.", 404);
-  const cobranca: Cobranca = cobrancaDaConta(admin, data.contas_bancarias as unknown as ContaRow, data.carteira);
+  const cobranca: Cobranca = cobrancaDaConta(admin, data.contas_bancarias as unknown as ContaRow, data.carteira ?? null);
   return { ...data, cobranca };
 }
 type BoletoConta = Awaited<ReturnType<typeof boletoComConta>>;

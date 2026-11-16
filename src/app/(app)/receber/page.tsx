@@ -73,7 +73,8 @@ export default function ReceberPage() {
       q.order(ordem, { ascending: !p.desc, nullsFirst: false }).range(p.de, p.ate),
       qa,
       supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("ativo", true).order("nome_fantasia"),
-      supabase.from("contas_bancarias").select("id, apelido, empresa_id, banco, codigo_beneficiario, boleto_carteira, pix_chave, boleto_multa_pct, boleto_juros, boleto_juros_tipo, boleto_apos_vencimento, boleto_dias_apos_vencimento").eq("ativo", true).order("apelido"),
+      // "*": continua funcionando antes da migration 0078 (colunas do Itaú) estar aplicada
+      supabase.from("contas_bancarias").select("*").eq("ativo", true).order("apelido"),
     ]);
     const ids = [...new Set((linhas ?? []).map((m) => m.cliente_id!))];
     const medicoes = (linhas ?? []).map((m) => m.id!);
