@@ -9,15 +9,15 @@ import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, Check
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/overlays";
-import { SelectSimples, type Opcao } from "@/components/ui/select";
+import type { Opcao } from "@/components/ui/select";
 import { Cabecalho, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { DataTable } from "@/components/app/data-table";
 import { InputNumero } from "@/components/app/campos";
-import { PERFIS, type Perfil } from "@/lib/permissoes";
+import { PERFIS, temPerfil, type Perfil } from "@/lib/permissoes";
 import { formatDataHora } from "@/lib/format";
 import { rodarJobs, salvarParametros, salvarUsuario } from "./actions";
 
-export type Usuario = { id: string; email: string; nome: string; perfil: Perfil; ativo: boolean; soAvulsas: boolean; ocultaPagar: boolean; cuidaFrota: boolean; empresas: string[]; ultimoAcesso: string | null };
+export type Usuario = { id: string; email: string; nome: string; perfil: Perfil; ativo: boolean; soAvulsas: boolean; ocultaPagar: boolean; perfisExtras: Perfil[]; empresas: string[]; ultimoAcesso: string | null };
 type Parametros = {
   base_dias_mes: number; alerta_dias_fatura: number; alerta_dias_os_aberta: number; alerta_dias_pagar: number; preventiva_pct_alerta: number;
   template_cobranca_email: string; template_cobranca_whatsapp: string;
@@ -34,8 +34,10 @@ export function ConfiguracoesCliente({ parametros, usuarios, erroUsuarios, empre
   const colunas: ColumnDef<Usuario, unknown>[] = [
     { accessorKey: "nome", header: "Nome", meta: { tituloMobile: true } },
     { accessorKey: "email", header: "E-mail" },
-    { accessorKey: "perfil", header: "Perfil", cell: ({ getValue }) => <Badge variant="secondary">{PERFIS.find((x) => x.valor === getValue())?.rotulo}</Badge> },
-    { id: "empresas", header: "Empresas", cell: ({ row: { original: u } }) => u.perfil === "admin" ? "Todas" : u.empresas.map((e) => empresas.find((x) => x.value === e)?.label).join(", ") || <span className="text-status-critico">Nenhuma</span> },
+    { accessorKey: "perfil", header: "Setores", cell: ({ row: { original: u } }) => (
+      <div className="flex flex-wrap gap-1">{[u.perfil, ...u.perfisExtras].map((p) => <Badge key={p} variant="secondary">{PERFIS.find((x) => x.valor === p)?.rotulo}</Badge>)}</div>
+    ) },
+    { id: "empresas", header: "Empresas", cell: ({ row: { original: u } }) => temPerfil(u, "admin") ? "Todas" : u.empresas.map((e) => empresas.find((x) => x.value === e)?.label).join(", ") || <span className="text-status-critico">Nenhuma</span> },
     { accessorKey: "ultimoAcesso", header: "Último acesso", cell: ({ getValue }) => formatDataHora(getValue() as string | null) },
     { accessorKey: "ativo", header: "Situação", cell: ({ getValue }) => <StatusBadge status={getValue() ? "ativo" : "encerrado"} /> },
   ];
@@ -133,17 +135,17 @@ function gerarSenha() {
 
 function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario: Usuario | "novo" | null; empresas: Opcao[]; onOpenChange: (v: boolean) => void; onFeito: () => void }) {
   const u = usuario === "novo" ? null : usuario;
-  const [f, setF] = React.useState({ nome: "", email: "", senha: "", perfil: "consulta" as Perfil, ativo: true, soAvulsas: false, ocultaPagar: false, cuidaFrota: false, empresas: [] as string[] });
+  const [f, setF] = React.useState({ nome: "", email: "", senha: "", perfis: ["consulta"] as Perfil[], ativo: true, soAvulsas: false, ocultaPagar: false, empresas: [] as string[] });
   const [salvando, setSalvando] = React.useState(false);
   React.useEffect(() => {
     setF(u 
-      ? { nome: u.nome, email: u.email, senha: "", perfil: u.perfil, ativo: u.ativo, soAvulsas: u.soAvulsas, ocultaPagar: u.ocultaPagar, cuidaFrota: u.cuidaFrota, empresas: u.empresas }
-      : { nome: "", email: "", senha: gerarSenha(), perfil: "consulta", ativo: true, soAvulsas: false, ocultaPagar: false, cuidaFrota: false, empresas: empresas.map((e) => e.value) });
+      ? { nome: u.nome, email: u.email, senha: "", perfis: [u.perfil, ...u.perfisExtras], ativo: u.ativo, soAvulsas: u.soAvulsas, ocultaPagar: u.ocultaPagar, empresas: u.empresas }
+      : { nome: "", email: "", senha: gerarSenha(), perfis: ["consulta"], ativo: true, soAvulsas: false, ocultaPagar: false, empresas: empresas.map((e) => e.value) });
   }, [usuario, u, empresas]);
   return (
     <Dialog open={!!usuario} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>{u ? "Editar usuário" : "Novo usuário"}</DialogTitle><DialogDescription>Perfil define os módulos; empresas limitam os dados visíveis (admin vê todas).</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{u ? "Editar usuário" : "Novo usuário"}</DialogTitle><DialogDescription>Os setores definem o que o usuário pode ver e mexer (pode marcar mais de um); empresas limitam os dados visíveis (admin vê todas).</DialogDescription></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5"><Label htmlFor="u-nome">Nome</Label><Input id="u-nome" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} /></div>
           <div className="space-y-1.5"><Label htmlFor="u-email">E-mail</Label><Input id="u-email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
@@ -155,7 +157,22 @@ function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario:
             </div>
             <p className="text-[11px] text-muted-foreground">Mínimo 8 caracteres, com letras e números.{!u && " Anote e passe ao usuário."}</p>
           </div>
-          <div className="space-y-1.5"><Label>Perfil</Label><SelectSimples value={f.perfil} onChange={(v) => setF({ ...f, perfil: (v as Perfil) ?? "consulta" })} opcoes={PERFIS.map((x) => ({ value: x.valor, label: x.rotulo }))} /></div>
+          <fieldset className="space-y-2 sm:col-span-2">
+            <legend className="text-sm font-medium">Setores</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {PERFIS.map((x) => {
+                const admin = f.perfis.includes("admin");
+                return (
+                  <label key={x.valor} className={admin && x.valor !== "admin" ? "flex items-start gap-2 text-sm opacity-50" : "flex items-start gap-2 text-sm"}>
+                    <Checkbox className="mt-0.5" checked={f.perfis.includes(x.valor) || (admin && x.valor !== "admin")} disabled={admin && x.valor !== "admin"}
+                      onCheckedChange={(v) => setF({ ...f, perfis: v ? [...f.perfis, x.valor] : f.perfis.filter((p) => p !== x.valor) })} />
+                    <span>{x.rotulo}<span className="block text-xs text-muted-foreground">{x.descricao}</span></span>
+                  </label>
+                );
+              })}
+            </div>
+            {f.perfis.length === 0 && <p className="text-xs text-destructive">Marque pelo menos um setor.</p>}
+          </fieldset>
           <fieldset className="space-y-2 sm:col-span-2">
             <legend className="text-sm font-medium">Empresas</legend>
             {empresas.map((e) => (
@@ -168,27 +185,18 @@ function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario:
             <legend className="text-sm font-medium">Restrições deste usuário</legend>
             <label className="flex items-start gap-2 text-sm">
               <Checkbox className="mt-0.5" checked={f.soAvulsas} onCheckedChange={(v) => setF({ ...f, soAvulsas: !!v })} />
-              <span>Ver só faturas avulsas<span className="block text-xs text-muted-foreground">Esconde as faturas com contrato em todas as telas (Contas a receber, Faturamento, Dashboard, Relatórios).</span></span>
+              <span>Ver só faturas avulsas<span className="block text-xs text-muted-foreground">Esconde as faturas com contrato em todas as telas (Contas a receber, Faturamento, Dashboard, Relatórios) e a tela de Contratos.</span></span>
             </label>
             <label className="flex items-start gap-2 text-sm">
               <Checkbox className="mt-0.5" checked={f.ocultaPagar} onCheckedChange={(v) => setF({ ...f, ocultaPagar: !!v })} />
               <span>Ocultar contas a pagar<span className="block text-xs text-muted-foreground">Tira Contas a pagar do menu e esconde as despesas no Dashboard e nos Relatórios.</span></span>
             </label>
           </fieldset>
-          {f.perfil !== "admin" && f.perfil !== "manutencao" && (
-            <fieldset className="space-y-2 sm:col-span-2">
-              <legend className="text-sm font-medium">Acessos extras</legend>
-              <label className="flex items-start gap-2 text-sm">
-                <Checkbox className="mt-0.5" checked={f.cuidaFrota} onCheckedChange={(v) => setF({ ...f, cuidaFrota: !!v })} />
-                <span>Também cuida da frota<span className="block text-xs text-muted-foreground">Além do perfil, pode cadastrar e editar veículos, fornecedores, documentos, OS, planos, pneus, leituras e multas (o mesmo que o perfil Manutenção edita). Não libera nada financeiro.</span></span>
-              </label>
-            </fieldset>
-          )}
           <label className="flex items-center gap-2 text-sm sm:col-span-2"><Checkbox checked={f.ativo} onCheckedChange={(v) => setF({ ...f, ativo: !!v })} /> Usuário ativo</label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button disabled={salvando} onClick={async () => {
+          <Button disabled={salvando || f.perfis.length === 0} onClick={async () => {
             setSalvando(true);
             const r = await rodarAcao(salvarUsuario(u?.id ?? null, { ...f, senha: f.senha || null }));
             setSalvando(false);

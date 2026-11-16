@@ -17,8 +17,8 @@ export interface Sessao {
   soFaturasAvulsas: boolean;
   /** contas a pagar escondidas deste usuário (menu, tela e RLS) */
   ocultaContasPagar: boolean;
-  /** "Também cuida da frota": edita veículos, fornecedores e manutenção além do próprio perfil (tela e RLS) */
-  cuidaFrota: boolean;
+  /** outros setores além do principal (migration 0080); as permissões somam */
+  perfisExtras: Perfil[];
   empresas: Empresa[];
   /** empresa selecionada no topo (null = todas) */
   empresaId: string | null;
@@ -53,7 +53,7 @@ export async function getSessao(forceRefresh = false): Promise<Sessao | null> {
     perfil: perfil.perfil,
     soFaturasAvulsas: !!perfil.so_faturas_avulsas,
     ocultaContasPagar: !!perfil.oculta_contas_pagar,
-    cuidaFrota: !!(perfil as { cuida_frota?: boolean }).cuida_frota,
+    perfisExtras: (perfil as { perfis_extras?: Perfil[] | null }).perfis_extras ?? [],
     empresas: lista,
     empresaId: lista.some((e) => e.id === escolhida) ? escolhida : null,
   };

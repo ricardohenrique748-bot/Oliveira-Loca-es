@@ -24,6 +24,7 @@ import { entregarArquivo } from "@/lib/plataforma";
 import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { temPerfil } from "@/lib/permissoes";
 import {
   cancelarMedicoes, dadosLembrete, excluirCanceladas, faturarMedicoes, gerarMedicoes, historicoMedicao, previaMedicoes, salvarAnexosFatura, salvarMedicoes, voltarParaAFaturar,
   type EventoHistorico, type LinhaLembrete, type LinhaPrevia,
@@ -521,7 +522,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
   }, []);
   // cancelar a NFS-e na Receita: só admin e financeiro (a função do servidor confere de novo)
   const { sessao } = useAuth();
-  const podeCancelarNota = sessao?.perfil === "admin" || sessao?.perfil === "financeiro";
+  const podeCancelarNota = temPerfil(sessao, "admin", "financeiro");
   const [pedidoCanc, setPedidoCanc] = React.useState<{ codigo: string; motivo: string } | null>(null);
   const [cancelandoNota, setCancelandoNota] = React.useState(false);
   const cancelarNota = async () => {

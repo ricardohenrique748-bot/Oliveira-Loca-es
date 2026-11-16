@@ -42,8 +42,10 @@ Deno.serve(async (req) => {
 
     const { data: { user } } = await usuario.auth.getUser(auth.replace(/^Bearer /i, ""));
     if (!user) throw new ErroUso("Sessão expirada. Entre novamente.", 401);
-    const { data: perfil } = await usuario.from("usuarios_perfil").select("perfil").eq("user_id", user.id).eq("ativo", true).maybeSingle();
-    if (!perfil || !ESCRITA.includes(perfil.perfil)) throw new ErroUso("Seu perfil não pode emitir ou alterar boletos.", 403);
+    // "*": perfis_extras (vários setores, migration 0080) só existe depois da migration
+    const { data: perfil } = await usuario.from("usuarios_perfil").select("*").eq("user_id", user.id).eq("ativo", true).maybeSingle();
+    const setores: string[] = perfil ? [perfil.perfil, ...(perfil.perfis_extras ?? [])] : [];
+    if (!setores.some((p) => ESCRITA.includes(p))) throw new ErroUso("Seu perfil não pode emitir ou alterar boletos.", 403);
 
     const corpo = await req.json().catch(() => ({}));
     const ctx = { usuario, admin, userId: user.id };

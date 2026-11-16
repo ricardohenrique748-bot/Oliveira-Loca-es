@@ -33,31 +33,48 @@ export const MODULOS = {
 
 export type Modulo = keyof typeof MODULOS;
 
-/** Quem está pedindo: só o perfil, ou a sessão (perfil + marcações por usuário). */
-export type Quem = Perfil | { perfil: Perfil; cuidaFrota?: boolean } | null | undefined;
+/** Quem está pedindo: só um perfil, ou a sessão (setor principal + setores extras + marcações por usuário). */
+export type Quem = Perfil | { perfil: Perfil; perfisExtras?: readonly Perfil[]; soFaturasAvulsas?: boolean } | null | undefined;
 
-/** Liberados pela marcação "Também cuida da frota" (o que o perfil Manutenção edita); espelha a migration 0080. */
-export const MODULOS_FROTA: readonly Modulo[] = ["veiculos", "fornecedores", "manutencao"];
+/** Todos os setores (perfis) de quem está pedindo; espelha app.perfis_atuais() da migration 0080. */
+export function perfisDe(q: Quem): Perfil[] {
+  if (!q) return [];
+  return typeof q === "string" ? [q] : [q.perfil, ...(q.perfisExtras ?? [])];
+}
 
-const perfilDe = (q: Quem) => (typeof q === "string" ? q : q?.perfil);
-const pelaFrota = (q: Quem, modulo: Modulo) => typeof q === "object" && !!q?.cuidaFrota && MODULOS_FROTA.includes(modulo);
+/** tem algum destes setores? */
+export function temPerfil(q: Quem, ...perfis: Perfil[]): boolean {
+  return perfisDe(q).some((p) => perfis.includes(p));
+}
+
+/** "Ver só faturas avulsas" também tira a tela de Contratos (admin sempre vê, como no RLS da 0073) */
+const semContratos = (q: Quem, modulo: Modulo) => modulo === "contratos" && typeof q === "object" && !!q?.soFaturasAvulsas && !temPerfil(q, "admin");
 
 export function podeLer(quem: Quem, modulo: Modulo): boolean {
-  const perfil = perfilDe(quem);
-  return (!!perfil && (MODULOS[modulo].ler as readonly Perfil[]).includes(perfil)) || pelaFrota(quem, modulo);
+  if (semContratos(quem, modulo)) return false;
+  return temPerfil(quem, ...(MODULOS[modulo].ler as readonly Perfil[]));
 }
 
 export function podeEscrever(quem: Quem, modulo: Modulo): boolean {
-  const perfil = perfilDe(quem);
-  return (!!perfil && (MODULOS[modulo].escrever as readonly Perfil[]).includes(perfil)) || pelaFrota(quem, modulo);
+  if (semContratos(quem, modulo)) return false;
+  return temPerfil(quem, ...(MODULOS[modulo].escrever as readonly Perfil[]));
 }
 
 /** LGPD: CPF/CNPJ e PIX de locadores só para admin e financeiro. */
-export function veDadosSensiveis(perfil: Perfil | null | undefined): boolean {
-  return perfil === "admin" || perfil === "financeiro";
+export function veDadosSensiveis(quem: Quem): boolean {
+  return temPerfil(quem, "admin", "financeiro");
 }
 
-/** Perfis que veem valores de receita (manutenção não vê). */
-export function veReceita(perfil: Perfil | null | undefined): boolean {
-  return !!perfil && perfil !== "manutencao";
+/** Vê valores de receita: qualquer setor que não seja só Manutenção. */
+export function veReceita(quem: Quem): boolean {
+  return perfisDe(quem).some((p) => p !== "manutencao");
+}
+
+/** Setor principal gravado em usuarios_perfil.perfil quando há vários marcados (o de mais acesso). */
+export const ORDEM_PERFIS: readonly Perfil[] = ["admin", "financeiro", "faturamento", "manutencao", "comercial", "consulta"];
+export function separarPerfis(perfis: readonly Perfil[]): { perfil: Perfil; extras: Perfil[] } {
+  const marcados = ORDEM_PERFIS.filter((p) => perfis.includes(p));
+  if (marcados.includes("admin")) return { perfil: "admin", extras: [] };
+  const [perfil = "consulta", ...extras] = marcados;
+  return { perfil, extras };
 }

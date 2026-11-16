@@ -2,7 +2,7 @@ import React from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import { useAuth, exigirSessao } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
-import { podeEscrever, podeLer } from "@/lib/permissoes";
+import { podeEscrever, podeLer, temPerfil } from "@/lib/permissoes";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { DetalheOS } from "./client";
@@ -30,7 +30,7 @@ export default function OrdemDetalhePage() {
       supabase.from("planos_manutencao").select("id, servico").eq("veiculo_id", os.veiculo_id).eq("ativo", true),
       supabase.from("categorias_despesa").select("id, nome").eq("tipo", "veiculo").eq("ativo", true).order("nome"),
       supabase.from("contas_bancarias").select("id, apelido").eq("empresa_id", os.empresa_id).eq("ativo", true),
-      podeLer(s, "pagar") || s.perfil === "manutencao"
+      podeLer(s, "pagar") || temPerfil(s, "manutencao")
         ? supabase.from("contas_pagar").select("id, descricao, vencimento, valor, pago_em, descontar_locador").eq("ordem_servico_id", id).maybeSingle()
         : Promise.resolve({ data: null }),
     ]);

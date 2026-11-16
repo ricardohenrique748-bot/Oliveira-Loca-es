@@ -2260,11 +2260,11 @@ export type Database = {
         Row: {
           ativo: boolean
           created_at: string
-          cuida_frota: boolean
           created_by: string | null
           nome: string
           oculta_contas_pagar: boolean
           perfil: Database["public"]["Enums"]["perfil_usuario"]
+          perfis_extras: Database["public"]["Enums"]["perfil_usuario"][]
           so_faturas_avulsas: boolean
           updated_at: string
           user_id: string
@@ -2272,11 +2272,11 @@ export type Database = {
         Insert: {
           ativo?: boolean
           created_at?: string
-          cuida_frota?: boolean
           created_by?: string | null
           nome: string
           oculta_contas_pagar?: boolean
           perfil?: Database["public"]["Enums"]["perfil_usuario"]
+          perfis_extras?: Database["public"]["Enums"]["perfil_usuario"][]
           so_faturas_avulsas?: boolean
           updated_at?: string
           user_id: string
@@ -2284,11 +2284,11 @@ export type Database = {
         Update: {
           ativo?: boolean
           created_at?: string
-          cuida_frota?: boolean
           created_by?: string | null
           nome?: string
           oculta_contas_pagar?: boolean
           perfil?: Database["public"]["Enums"]["perfil_usuario"]
+          perfis_extras?: Database["public"]["Enums"]["perfil_usuario"][]
           so_faturas_avulsas?: boolean
           updated_at?: string
           user_id?: string

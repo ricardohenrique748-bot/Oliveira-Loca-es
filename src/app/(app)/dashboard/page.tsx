@@ -31,7 +31,7 @@ export default function DashboardPage() {
     const supabase = createClient();
     const hoje = hojeSP();
     const mes = mesParam && /^\d{4}-\d{2}$/.test(mesParam) ? mesParam : competenciaDe(hoje);
-    const receita = veReceita(s.perfil);
+    const receita = veReceita(s);
     const placa = placaParam?.toUpperCase().replace(/[^A-Z0-9]/g, "") || null;
 
     const [d, { data: clientes }] = await Promise.all([

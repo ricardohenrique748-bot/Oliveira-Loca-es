@@ -3,6 +3,7 @@ import { z } from "zod";
 import { exigirEscrita } from "@/lib/auth";
 import { checar, executar } from "@/lib/acoes";
 import { createClient } from "@/lib/supabase/server";
+import { separarPerfis } from "@/lib/permissoes";
 import type { Json } from "@/lib/supabase/database.types";
 
 const parametrosSchema = z.object({
@@ -41,11 +42,11 @@ const usuarioSchema = z.object({
   email: z.string().trim().email("E-mail inválido"),
   senha: z.string().trim().min(8, "Senha com no mínimo 8 caracteres")
     .regex(/[A-Za-z]/, "A senha precisa ter letras").regex(/\d/, "A senha precisa ter números").nullish(),
-  perfil,
+  /** setores marcados (um ou mais); o de mais acesso vira o principal */
+  perfis: z.array(perfil).min(1, "Marque pelo menos um setor"),
   ativo: z.boolean().default(true),
   soAvulsas: z.boolean().default(false),
   ocultaPagar: z.boolean().default(false),
-  cuidaFrota: z.boolean().default(false),
   empresas: z.array(z.string().uuid()).default([]),
 });
 
@@ -55,24 +56,25 @@ export async function salvarUsuario(userId: string | null, dados: unknown) {
     const u = usuarioSchema.parse(dados);
     if (!userId && !u.senha) throw new Error("Informe a senha inicial do usuário");
 
+    const { perfil: principal, extras } = separarPerfis(u.perfis);
     const supabase = await createClient();
     const id = checar(await supabase.rpc("fn_admin_salvar_usuario" as any, {
       p_user_id: userId,
       p_email: u.email,
       p_senha: u.senha || null,
       p_nome: u.nome,
-      p_perfil: u.perfil,
+      p_perfil: principal,
       p_ativo: u.ativo,
       p_empresas: u.empresas,
     }));
     checar(await supabase.from("usuarios_perfil")
       .update({ so_faturas_avulsas: u.soAvulsas, oculta_contas_pagar: u.ocultaPagar })
       .eq("user_id", (id as string | null) ?? userId!));
-    // separado: antes da migration 0080 a coluna não existe e desmarcado não deve travar o cadastro
-    const frota = await supabase.from("usuarios_perfil").update({ cuida_frota: u.cuidaFrota } as never).eq("user_id", (id as string | null) ?? userId!);
-    if (frota.error) {
-      const semColuna = /cuida_frota/.test(frota.error.message);
-      if (!semColuna || u.cuidaFrota) throw new Error(semColuna ? "Para usar \"Também cuida da frota\", aplique a migration 0080 no Supabase." : frota.error.message);
+    // separado: antes da migration 0080 a coluna não existe; com um setor só, o cadastro não deve travar
+    const setores = await supabase.from("usuarios_perfil").update({ perfis_extras: extras }).eq("user_id", (id as string | null) ?? userId!);
+    if (setores.error) {
+      const semColuna = /perfis_extras/.test(setores.error.message);
+      if (!semColuna || extras.length) throw new Error(semColuna ? "Para marcar mais de um setor, aplique a migration 0080 no Supabase." : setores.error.message);
     }
     return { id };
   }, ["/configuracoes"], userId ? "Usuário atualizado" : "Usuário criado. Passe a senha inicial ao usuário.");
