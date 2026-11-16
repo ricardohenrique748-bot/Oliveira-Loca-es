@@ -145,10 +145,10 @@ export function contato(v: unknown): { email: string | null; whatsapp: string | 
 }
 
 /** "Cartão Inter", "Boleto Bradesco", "Débito automático Sicredi", "PIX" → forma + banco */
-export function formaBanco(v: unknown): { forma: "boleto" | "debito_automatico" | "cartao" | "pix" | "transferencia"; banco: "Bradesco" | "Sicredi" | "Inter" | null } {
+export function formaBanco(v: unknown): { forma: "boleto" | "debito_automatico" | "cartao" | "pix" | "transferencia"; banco: "Bradesco" | "Sicredi" | "Itaú" | "Inter" | null } {
   const k = chave(v);
   const forma = /cart/.test(k) ? "cartao" : /deb|automat/.test(k) ? "debito_automatico" : /pix/.test(k) ? "pix" : /transf|ted|doc/.test(k) ? "transferencia" : "boleto";
-  const banco = /bradesco/.test(k) ? "Bradesco" : /sicredi/.test(k) ? "Sicredi" : /inter\b/.test(k) ? "Inter" : null;
+  const banco = /bradesco/.test(k) ? "Bradesco" : /sicredi/.test(k) ? "Sicredi" : /\bita[uú]\b/.test(k) ? "Itaú" : /inter\b/.test(k) ? "Inter" : null;
   return { forma, banco };
 }
 

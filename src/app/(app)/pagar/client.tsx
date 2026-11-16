@@ -21,7 +21,7 @@ import { CampoAnexo, LinkAnexo } from "@/components/app/anexo";
 import { addCompetencia, addDias, gerarParcelas, hojeSP, somar } from "@/lib/calculos";
 import { formatBRL, formatCompetencia, formatData, formatPlaca } from "@/lib/format";
 import { contaPagarEdicaoSchema, contaPagarNovaSchema, FORMAS, type ContaPagarEdicaoForm, type ContaPagarNovaForm, type ItemRateio } from "@/lib/schemas/financeiro";
-import { opcoesDe } from "@/lib/schemas/cadastros";
+import { BANCOS, opcoesDe } from "@/lib/schemas/cadastros";
 import { cn } from "@/lib/utils";
 import { salvarCategoria } from "../cadastros/actions";
 import { baixarContas, criarContaPagar, editarContaPagar, encerrarRecorrencia, estornarContas, excluirContas } from "./actions";
@@ -215,7 +215,7 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
         <FiltroSelectUrl param="tipo" rotulo="Tipo" opcoes={[{ value: "fixa", label: "Fixas" }, { value: "variavel", label: "Variáveis" }, { value: "veiculo", label: "Veículo" }]} />
         <FiltroSelectUrl param="categoria_id" rotulo="Categoria" vazio="Todas" opcoes={opcoes.categorias} />
         <FiltroSelectUrl param="veiculo_id" rotulo="Placa" vazio="Todas" opcoes={opcoes.veiculos} />
-        <FiltroSelectUrl param="banco" rotulo="Banco" opcoes={["Bradesco", "Sicredi", "Inter", "Outro"].map((b) => ({ value: b, label: b }))} />
+        <FiltroSelectUrl param="banco" rotulo="Banco" opcoes={BANCOS.map((b) => ({ value: b, label: b }))} />
         <FiltroSelectUrl param="forma_pagamento" rotulo="Forma" vazio="Todas" opcoes={opcoesDe(FORMAS)} />
         <FiltroSelectUrl param="descontar" rotulo="Locador" opcoes={[{ value: "1", label: "Descontar do locador" }]} />
         <BuscaUrl placeholder="Descrição, fornecedor…" />

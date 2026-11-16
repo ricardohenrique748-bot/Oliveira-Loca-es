@@ -59,7 +59,7 @@ export const empresaSchema = z.object({
 });
 export type EmpresaForm = z.infer<typeof empresaSchema>;
 
-// ---------- encargos do boleto (padrão na conta Sicredi) ----------
+// ---------- encargos do boleto (padrão na conta de cobrança: Sicredi ou Itaú) ----------
 const pctOpc = z.number().gt(0, "Deve ser maior que zero").lt(100, "Deve ser menor que 100%").nullish().transform((v) => v ?? null);
 export const APOS_VENCIMENTO = [
   { value: "protesto", label: "Protestar em cartório" },
@@ -89,17 +89,38 @@ function validarEncargosBoleto(v: { boleto_juros: number | null; boleto_juros_ti
   if (d == null || d < min || d > max) ctx.addIssue({ code: "custom", path: ["boleto_dias_apos_vencimento"], message: `Entre ${min} e ${max} dias` });
 }
 
+export const BANCOS = ["Bradesco", "Sicredi", "Itaú", "Inter", "Outro"] as const;
+/** bancos que emitem boleto pelo sistema (Edge Function sicredi-boleto) */
+export const BANCOS_BOLETO = ["Sicredi", "Itaú"] as const;
+/** Sicredi: código do beneficiário preenchido. Itaú: carteira de cobrança preenchida. */
+export const emiteBoleto = (c: { banco: string; codigo_beneficiario?: string | null; boleto_carteira?: string | null }) =>
+  (c.banco === "Sicredi" && !!c.codigo_beneficiario) || (c.banco === "Itaú" && !!c.boleto_carteira);
+
 export const contaBancariaSchema = z.object({
   empresa_id: uuidObr("a empresa"),
-  banco: z.enum(["Bradesco", "Sicredi", "Inter", "Outro"], { errorMap: () => ({ message: "Selecione o banco" }) }),
+  banco: z.enum(BANCOS, { errorMap: () => ({ message: "Selecione o banco" }) }),
   agencia: textoOpc,
   conta: textoOpc,
   posto: textoOpc,
   codigo_beneficiario: textoOpc,
+  /** Itaú: carteira do contrato de cobrança (ex.: 109) */
+  boleto_carteira: textoOpc,
+  /** Itaú: chave PIX da conta — com ela o boleto sai com QR Code PIX */
+  pix_chave: textoOpc,
   apelido: textoObr("Apelido"),
   ativo: z.boolean().default(true),
   ...encargosBoletoCampos,
-}).superRefine(validarEncargosBoleto);
+}).superRefine((v, ctx) => {
+  validarEncargosBoleto(v, ctx);
+  // Itaú: o beneficiário é agência (4) + conta com dígito (até 8)
+  if (v.banco === "Itaú" && v.boleto_carteira) {
+    const so = (s: string | null) => (s ?? "").replace(/\D/g, "");
+    if (!so(v.agencia) || so(v.agencia).length > 4) ctx.addIssue({ code: "custom", path: ["agencia"], message: "Agência com 4 dígitos" });
+    if (so(v.conta).length < 2 || so(v.conta).length > 8) ctx.addIssue({ code: "custom", path: ["conta"], message: "Conta com o dígito (ex.: 12345-6)" });
+    if (!/^\d{1,3}$/.test(so(v.boleto_carteira))) ctx.addIssue({ code: "custom", path: ["boleto_carteira"], message: "Carteira com até 3 dígitos (ex.: 109)" });
+    if (v.boleto_apos_vencimento === "negativacao") ctx.addIssue({ code: "custom", path: ["boleto_apos_vencimento"], message: "No Itaú, só protesto automático" });
+  }
+});
 export type ContaBancariaForm = z.infer<typeof contaBancariaSchema>;
 
 export const clienteSchema = z.object({

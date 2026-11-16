@@ -100,6 +100,7 @@ export type Database = {
       boletos: {
         Row: {
           ambiente: string
+          carteira: string | null
           codigo_barras: string | null
           conta_bancaria_id: string
           created_at: string
@@ -127,6 +128,7 @@ export type Database = {
         }
         Insert: {
           ambiente: string
+          carteira?: string | null
           codigo_barras?: string | null
           conta_bancaria_id: string
           created_at?: string
@@ -154,6 +156,7 @@ export type Database = {
         }
         Update: {
           ambiente?: string
+          carteira?: string | null
           codigo_barras?: string | null
           conta_bancaria_id?: string
           created_at?: string
@@ -354,7 +357,10 @@ export type Database = {
           apelido: string
           ativo: boolean
           banco: Database["public"]["Enums"]["banco"]
+          boleto_carteira: string | null
+          boleto_ultimo_nosso_numero: number
           codigo_beneficiario: string | null
+          pix_chave: string | null
           boleto_apos_vencimento: "protesto" | "negativacao" | null
           boleto_dias_apos_vencimento: number | null
           boleto_juros: number | null
@@ -373,7 +379,10 @@ export type Database = {
           apelido: string
           ativo?: boolean
           banco: Database["public"]["Enums"]["banco"]
+          boleto_carteira?: string | null
+          boleto_ultimo_nosso_numero?: number
           codigo_beneficiario?: string | null
+          pix_chave?: string | null
           boleto_apos_vencimento?: "protesto" | "negativacao" | null
           boleto_dias_apos_vencimento?: number | null
           boleto_juros?: number | null
@@ -392,7 +401,10 @@ export type Database = {
           apelido?: string
           ativo?: boolean
           banco?: Database["public"]["Enums"]["banco"]
+          boleto_carteira?: string | null
+          boleto_ultimo_nosso_numero?: number
           codigo_beneficiario?: string | null
+          pix_chave?: string | null
           boleto_apos_vencimento?: "protesto" | "negativacao" | null
           boleto_dias_apos_vencimento?: number | null
           boleto_juros?: number | null
@@ -2884,7 +2896,7 @@ export type Database = {
     }
     Enums: {
       acao_auditoria: "INSERT" | "UPDATE" | "DELETE"
-      banco: "Bradesco" | "Sicredi" | "Inter" | "Outro"
+      banco: "Bradesco" | "Sicredi" | "Itaú" | "Inter" | "Outro"
       forma_pagamento: "boleto" | "debito_automatico" | "cartao" | "pix" | "transferencia"
       origem_leitura: "manual" | "os" | "importacao"
       perfil_usuario: "admin" | "financeiro" | "faturamento" | "manutencao" | "consulta" | "comercial"
@@ -2920,7 +2932,7 @@ export const Constants = {
   public: {
     Enums: {
       acao_auditoria: ["INSERT", "UPDATE", "DELETE"],
-      banco: ["Bradesco", "Sicredi", "Inter", "Outro"],
+      banco: ["Bradesco", "Sicredi", "Itaú", "Inter", "Outro"],
       forma_pagamento: ["boleto", "debito_automatico", "cartao", "pix", "transferencia"],
       origem_leitura: ["manual", "os", "importacao"],
       perfil_usuario: ["admin", "financeiro", "faturamento", "manutencao", "consulta", "comercial"],

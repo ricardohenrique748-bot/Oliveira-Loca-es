@@ -1,17 +1,19 @@
 /**
- * Boletos Sicredi a partir das medições faturadas.
+ * Boletos (Sicredi e Itaú) a partir das medições faturadas. O banco vem da conta de cobrança escolhida
+ * (cobranca.ts); o nome da função ficou sicredi-boleto para não quebrar o que já está publicado.
  * POST { acao: "emitir", medicao_id, conta_bancaria_id?, vencimento?, encargos? }
  *      encargos: { multa_pct, juros, juros_tipo: "pct_dia" | "pct_mes" | "valor_dia", apos_vencimento: "protesto" | "negativacao" | null, dias_apos_vencimento }
  * POST { acao: "emitir_parcelas", medicao_id, conta_bancaria_id?, parcelas: [{ valor, vencimento }], encargos? }
  *      1 a 12 boletos de uma vez; a soma tem que ser igual ao que falta cobrar (saldo − boletos já em aberto) → { boletos }
- * POST { acao: "pdf", boleto_id }                → { pdf_base64 }
+ * POST { acao: "pdf", boleto_id }                → { pdf_base64 } (Sicredi) | { dados } (Itaú: a API não tem PDF, o app desenha)
  * POST { acao: "atualizar", boleto_ids? }        → consulta os boletos em aberto; pagos viram recebimento
  * POST { acao: "baixar", boleto_id }             → cancela (baixa) o boleto no banco
  *
  * Permissões: lê com o JWT do usuário (RLS decide o que ele enxerga) e grava com service_role.
  */
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
-import { ambiente, baixarBoleto, type Beneficiario, consultarBoleto, criarBoleto, type Encargos, ErroSicredi, type Pagador, pdfBoleto } from "./sicredi.ts";
+import { BANCOS_COBRANCA, type Cobranca, cobrancaDaConta, COLUNAS_CONTA, type ContaRow, emiteBoleto, ErroConta } from "./cobranca.ts";
+import { type Encargos, ErroBanco, type Pagador } from "./tipos.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -55,8 +57,9 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     if (e instanceof ErroUso) return json({ erro: e.message }, e.status);
-    if (e instanceof ErroSicredi) {
-      console.error("[sicredi]", e.status, JSON.stringify(e.corpo));
+    if (e instanceof ErroConta) return json({ erro: e.message }, 400);
+    if (e instanceof ErroBanco) {
+      console.error("[banco]", e.status, JSON.stringify(e.corpo));
       return json({ erro: e.message }, 502);
     }
     console.error("[sicredi-boleto]", e);
@@ -85,26 +88,26 @@ async function emitir({ usuario, admin, userId }: Ctx, corpo: { medicao_id?: str
   const { data: aberto } = await admin.from("boletos").select("id").eq("medicao_id", m.id).eq("status", "emitido").limit(1).maybeSingle();
   if (aberto) throw new ErroUso("Esta medição já tem um boleto em aberto. Cancele-o antes de gerar outro.");
 
-  const conta = await contaCobranca(usuario, m.empresa_id, corpo.conta_bancaria_id);
+  const conta = await contaCobranca(usuario, admin, m.empresa_id, corpo.conta_bancaria_id);
   const pagador = await pagadorDoCliente(usuario, admin, m.cliente_id);
   const encargos = validarEncargos(corpo.encargos, valor);
 
   const seuNumero = (digitos(m.numero_nf) || m.id.replace(/-/g, "").slice(0, 10)).slice(-10);
-  const b = await criarBoleto(conta.beneficiario, {
+  const b = await conta.cobranca.criar({
     pagador, seuNumero, vencimento, valor,
     encargos,
     mensagens: [`${m.placa ? `Locação ${m.placa}` : m.descricao ?? "Serviço"} · ${br(m.periodo_inicio)} a ${br(m.periodo_fim)}`, m.numero_nf ? `NF ${m.numero_nf}` : ""].filter(Boolean),
   });
 
   const { data: boleto, error } = await admin.from("boletos").insert({
-    medicao_id: m.id, empresa_id: m.empresa_id, conta_bancaria_id: conta.id, ambiente: ambiente(), seu_numero: seuNumero,
+    medicao_id: m.id, empresa_id: m.empresa_id, conta_bancaria_id: conta.id, ambiente: conta.cobranca.ambiente, seu_numero: seuNumero,
     nosso_numero: b.nossoNumero, linha_digitavel: b.linhaDigitavel, codigo_barras: b.codigoBarras, pix_copia_cola: b.qrCode, txid: b.txid,
-    valor, data_vencimento: vencimento, created_by: userId,
+    valor, data_vencimento: vencimento, created_by: userId, carteira: conta.cobranca.carteira,
     multa_pct: encargos.multaPct, juros: encargos.juros, juros_tipo: encargos.juros ? encargos.jurosTipo : null, protesto_dias: encargos.protestoDias, negativacao_dias: encargos.negativacaoDias,
   }).select().single();
   if (error) {
     // o boleto já existe no banco: não deixar órfão
-    await baixarBoleto(conta.beneficiario, b.nossoNumero).catch(() => {});
+    await conta.cobranca.baixar(b.nossoNumero).catch(() => {});
     throw error;
   }
   return boleto;
@@ -141,7 +144,7 @@ async function emitirParcelas({ usuario, admin, userId }: Ctx, corpo: { medicao_
     throw new ErroUso(`A soma das parcelas (${(soma / 100).toFixed(2).replace(".", ",")}) precisa ser igual ao que falta cobrar (${(restante / 100).toFixed(2).replace(".", ",")}).`);
   }
 
-  const conta = await contaCobranca(usuario, m.empresa_id, corpo.conta_bancaria_id);
+  const conta = await contaCobranca(usuario, admin, m.empresa_id, corpo.conta_bancaria_id);
   const pagador = await pagadorDoCliente(usuario, admin, m.cliente_id);
   // juros em R$/dia são conferidos contra a menor parcela
   const encargos = validarEncargos(corpo.encargos, Math.min(...parcelas.map((p) => p.valor)));
@@ -155,7 +158,7 @@ async function emitirParcelas({ usuario, admin, userId }: Ctx, corpo: { medicao_
     for (const [i, p] of parcelas.entries()) {
       // parcela única: mesmo "seu número" de antes; em parcelas, os 2 últimos dígitos são a parcela
       const seuNumero = n === 1 ? base.slice(-10) : `${base.slice(-8)}${String(i + 1).padStart(2, "0")}`;
-      const b = await criarBoleto(conta.beneficiario, {
+      const b = await conta.cobranca.criar({
         pagador, seuNumero, vencimento: p.vencimento, valor: p.valor, encargos,
         mensagens: [
           `${m.placa ? `Locação ${m.placa}` : m.descricao ?? "Serviço"} · ${br(m.periodo_inicio)} a ${br(m.periodo_fim)}`,
@@ -164,9 +167,9 @@ async function emitirParcelas({ usuario, admin, userId }: Ctx, corpo: { medicao_
       });
       criados.push({ id: null, nossoNumero: b.nossoNumero });
       const { data: boleto, error } = await admin.from("boletos").insert({
-        medicao_id: m.id, empresa_id: m.empresa_id, conta_bancaria_id: conta.id, ambiente: ambiente(), seu_numero: seuNumero,
+        medicao_id: m.id, empresa_id: m.empresa_id, conta_bancaria_id: conta.id, ambiente: conta.cobranca.ambiente, seu_numero: seuNumero,
         nosso_numero: b.nossoNumero, linha_digitavel: b.linhaDigitavel, codigo_barras: b.codigoBarras, pix_copia_cola: b.qrCode, txid: b.txid,
-        valor: p.valor, data_vencimento: p.vencimento, created_by: userId,
+        valor: p.valor, data_vencimento: p.vencimento, created_by: userId, carteira: conta.cobranca.carteira,
         multa_pct: encargos.multaPct, juros: encargos.juros, juros_tipo: encargos.juros ? encargos.jurosTipo : null, protesto_dias: encargos.protestoDias, negativacao_dias: encargos.negativacaoDias,
         parcela: i + 1, parcelas: n, grupo_id: grupo,
       }).select().single();
@@ -177,7 +180,7 @@ async function emitirParcelas({ usuario, admin, userId }: Ctx, corpo: { medicao_
   } catch (e) {
     // tudo ou nada: o que já foi registrado no banco é baixado, para não sobrar boleto pela metade
     for (const c of criados) {
-      await baixarBoleto(conta.beneficiario, c.nossoNumero).catch(() => {});
+      await conta.cobranca.baixar(c.nossoNumero).catch(() => {});
       if (c.id) await admin.from("boletos").update({ status: "baixado" }).eq("id", c.id);
     }
     throw e;
@@ -213,16 +216,15 @@ function validarEncargos(e: EncargosCorpo = {}, valorBoleto: number): Encargos {
   return r;
 }
 
-async function contaCobranca(usuario: SupabaseClient, empresaId: string, contaId?: string) {
-  let q = usuario.from("contas_bancarias").select("id, banco, agencia, posto, codigo_beneficiario, apelido")
-    .eq("empresa_id", empresaId).eq("banco", "Sicredi").eq("ativo", true).not("codigo_beneficiario", "is", null);
+/** Conta de cobrança da empresa (Sicredi com código do beneficiário ou Itaú com carteira) e o banco que ela usa. */
+async function contaCobranca(usuario: SupabaseClient, admin: SupabaseClient, empresaId: string, contaId?: string) {
+  let q = usuario.from("contas_bancarias").select(COLUNAS_CONTA)
+    .eq("empresa_id", empresaId).in("banco", [...BANCOS_COBRANCA]).eq("ativo", true);
   if (contaId) q = q.eq("id", contaId);
-  const { data } = await q.order("apelido").limit(1).maybeSingle();
-  if (!data) throw new ErroUso("Nenhuma conta Sicredi com código do beneficiário cadastrada para esta empresa (Cadastros → Contas bancárias).");
-  const cooperativa = digitos(data.agencia).padStart(4, "0");
-  const posto = digitos(data.posto).padStart(2, "0");
-  if (cooperativa.length !== 4 || !digitos(data.posto)) throw new ErroUso(`Conta ${data.apelido}: preencha a agência (cooperativa) e o posto.`);
-  return { id: data.id as string, beneficiario: { cooperativa, posto, codigo: digitos(data.codigo_beneficiario) } satisfies Beneficiario };
+  const { data } = await q.order("apelido");
+  const conta = ((data ?? []) as ContaRow[]).find(emiteBoleto);
+  if (!conta) throw new ErroUso("Nenhuma conta de cobrança configurada para esta empresa: Sicredi com código do beneficiário ou Itaú com carteira (Cadastros → Contas bancárias).");
+  return { id: conta.id, cobranca: cobrancaDaConta(admin, conta) };
 }
 
 /** Endereço do cliente; se faltar, busca na Receita pelo CNPJ e grava no cadastro. */
@@ -254,34 +256,81 @@ async function pagadorDoCliente(usuario: SupabaseClient, admin: SupabaseClient, 
 }
 
 // ---------- pdf / atualizar / baixar ----------
-async function boletoComConta(usuario: SupabaseClient, id: string) {
+async function boletoComConta(usuario: SupabaseClient, admin: SupabaseClient, id: string) {
   const { data } = await usuario.from("boletos")
-    .select("id, medicao_id, nosso_numero, linha_digitavel, status, valor, ambiente, contas_bancarias(agencia, posto, codigo_beneficiario)")
+    .select(`id, medicao_id, empresa_id, nosso_numero, seu_numero, linha_digitavel, codigo_barras, pix_copia_cola, status, valor, data_vencimento, created_at, ambiente, carteira,
+      multa_pct, juros, juros_tipo, protesto_dias, negativacao_dias, contas_bancarias(${COLUNAS_CONTA})`)
     .eq("id", id ?? "").maybeSingle();
   if (!data) throw new ErroUso("Boleto não encontrado.", 404);
-  if (data.ambiente !== ambiente()) throw new ErroUso(`Boleto emitido em ${data.ambiente}; a integração está em ${ambiente()}.`);
-  const cb = data.contas_bancarias as unknown as { agencia: string; posto: string; codigo_beneficiario: string };
-  const beneficiario: Beneficiario = { cooperativa: digitos(cb.agencia).padStart(4, "0"), posto: digitos(cb.posto).padStart(2, "0"), codigo: digitos(cb.codigo_beneficiario) };
-  return { ...data, beneficiario };
+  const cobranca: Cobranca = cobrancaDaConta(admin, data.contas_bancarias as unknown as ContaRow, data.carteira);
+  return { ...data, cobranca };
 }
+type BoletoConta = Awaited<ReturnType<typeof boletoComConta>>;
 
-async function pdf({ usuario }: Ctx, id: string) {
-  const b = await boletoComConta(usuario, id);
-  const bytes = await pdfBoleto(b.beneficiario, b.linha_digitavel);
+const conferirAmbiente = (b: BoletoConta) => {
+  if (b.ambiente !== b.cobranca.ambiente) throw new ErroUso(`Boleto ${b.cobranca.banco} emitido em ${b.ambiente}; a integração está em ${b.cobranca.ambiente}.`);
+};
+
+async function pdf({ usuario, admin }: Ctx, id: string) {
+  const b = await boletoComConta(usuario, admin, id);
+  conferirAmbiente(b);
+  const bytes = await b.cobranca.pdf(b.linha_digitavel);
+  if (!bytes) return { dados: await dadosParaDesenhar(usuario, b) };
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return { pdf_base64: btoa(bin) };
 }
 
+/** Banco sem PDF na API (Itaú): tudo o que o app precisa para desenhar o boleto. */
+async function dadosParaDesenhar(usuario: SupabaseClient, b: BoletoConta) {
+  const conta = b.contas_bancarias as unknown as ContaRow;
+  const [{ data: m }, { data: e }] = await Promise.all([
+    usuario.from("medicoes_v").select("cliente_id, numero_nf, placa, descricao, periodo_inicio, periodo_fim").eq("id", b.medicao_id).single(),
+    usuario.from("empresas").select("razao_social, cnpj, endereco, cidade, uf").eq("id", b.empresa_id).single(),
+  ]);
+  const { data: c } = m ? await usuario.from("clientes").select("razao_social, cnpj, endereco, cidade, uf, cep").eq("id", m.cliente_id).single() : { data: null };
+  const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const juros = b.juros == null ? null : b.juros_tipo === "valor_dia" ? `${moeda(Number(b.juros))} por dia` : `${String(b.juros).replace(".", ",")}% ${b.juros_tipo === "pct_mes" ? "ao mês" : "ao dia"}`;
+  const venc = br(b.data_vencimento);
+  const contaFmt = digitos(conta.conta);
+  return {
+    banco: b.cobranca.banco,
+    ambiente: b.ambiente,
+    beneficiario: { nome: e?.razao_social ?? "", documento: digitos(e?.cnpj), endereco: [e?.endereco, [e?.cidade, e?.uf].filter(Boolean).join("/")].filter(Boolean).join(" - ") },
+    agencia_conta: `${digitos(conta.agencia).padStart(4, "0")}/${contaFmt.slice(0, -1)}-${contaFmt.slice(-1)}`,
+    carteira: b.carteira ?? b.cobranca.carteira,
+    pagador: { nome: c?.razao_social ?? "", documento: digitos(c?.cnpj), endereco: [c?.endereco, [c?.cidade, c?.uf].filter(Boolean).join("/"), c?.cep ? `CEP ${digitos(c.cep).replace(/^(\d{5})(\d{3})$/, "$1-$2")}` : ""].filter(Boolean).join(" - ") },
+    nosso_numero: b.nosso_numero,
+    seu_numero: b.seu_numero,
+    valor: Number(b.valor),
+    vencimento: b.data_vencimento,
+    emissao: String(b.created_at).slice(0, 10),
+    linha_digitavel: b.linha_digitavel,
+    codigo_barras: b.codigo_barras,
+    pix_copia_cola: b.pix_copia_cola,
+    instrucoes: [
+      b.multa_pct && `Após ${venc}, multa de ${String(b.multa_pct).replace(".", ",")}%.`,
+      juros && `Após ${venc}, juros de ${juros}.`,
+      b.protesto_dias && `Sujeito a protesto ${b.protesto_dias} dias após o vencimento.`,
+      m && `${m.placa ? `Locação ${m.placa}` : m.descricao ?? "Serviço"} · ${br(m.periodo_inicio)} a ${br(m.periodo_fim)}${m.numero_nf ? ` · NF ${m.numero_nf}` : ""}`,
+    ].filter(Boolean) as string[],
+  };
+}
+
 async function atualizar(ctx: Ctx, ids?: string[]) {
-  let q = ctx.usuario.from("boletos").select("id").eq("status", "emitido").eq("ambiente", ambiente());
+  let q = ctx.usuario.from("boletos").select("id").eq("status", "emitido");
   if (Array.isArray(ids) && ids.length) q = q.in("id", ids);
   const { data } = await q.limit(200);
   const resultado = { consultados: 0, pagos: 0, baixados: 0, erros: [] as string[] };
   for (const { id } of data ?? []) {
     try {
-      const b = await boletoComConta(ctx.usuario, id);
-      const s = await consultarBoleto(b.beneficiario, b.nosso_numero);
+      const b = await boletoComConta(ctx.usuario, ctx.admin, id);
+      // cada banco tem o seu ambiente: boletos de teste não são consultados em produção (e vice-versa)
+      if (b.ambiente !== b.cobranca.ambiente) {
+        if (ids?.length) conferirAmbiente(b);
+        continue;
+      }
+      const s = await b.cobranca.consultar(b.nosso_numero);
       resultado.consultados++;
       if (s.liquidado) { await registrarPagamento(ctx, b, s.dataPagamento ?? hojeSP(), s.valorPago ?? Number(b.valor)); resultado.pagos++; }
       else if (s.baixado) { await ctx.admin.from("boletos").update({ status: "baixado" }).eq("id", id); resultado.baixados++; }
@@ -293,7 +342,7 @@ async function atualizar(ctx: Ctx, ids?: string[]) {
 }
 
 /** Boleto pago: lança o recebimento (limitado ao saldo) e marca o boleto. */
-async function registrarPagamento({ admin, userId }: Ctx, b: { id: string; medicao_id: string; nosso_numero: string }, data: string, valorPago: number) {
+async function registrarPagamento({ admin, userId }: Ctx, b: { id: string; medicao_id: string; nosso_numero: string; cobranca: Cobranca }, data: string, valorPago: number) {
   const { data: m } = await admin.from("medicoes_v").select("saldo").eq("id", b.medicao_id).single();
   const valor = Math.min(valorPago, Number(m?.saldo ?? 0));
   let recebimentoId: string | null = null;
@@ -301,7 +350,7 @@ async function registrarPagamento({ admin, userId }: Ctx, b: { id: string; medic
     const { data: conta } = await admin.from("boletos").select("conta_bancaria_id").eq("id", b.id).single();
     const { data: r, error } = await admin.from("recebimentos").insert({
       medicao_id: b.medicao_id, data, valor, conta_bancaria_id: conta?.conta_bancaria_id ?? null,
-      observacoes: `Boleto Sicredi ${b.nosso_numero} (baixa automática)${valorPago > valor + 0.005 ? ` · pago ${valorPago.toFixed(2).replace(".", ",")} com multa/juros` : ""}`, created_by: userId,
+      observacoes: `Boleto ${b.cobranca.banco} ${b.nosso_numero} (baixa automática)${valorPago > valor + 0.005 ? ` · pago ${valorPago.toFixed(2).replace(".", ",")} com multa/juros` : ""}`, created_by: userId,
     }).select("id").single();
     if (error) throw error;
     recebimentoId = r.id;
@@ -310,9 +359,10 @@ async function registrarPagamento({ admin, userId }: Ctx, b: { id: string; medic
 }
 
 async function baixar({ usuario, admin }: Ctx, id: string) {
-  const b = await boletoComConta(usuario, id);
+  const b = await boletoComConta(usuario, admin, id);
+  conferirAmbiente(b);
   if (b.status !== "emitido") throw new ErroUso("Só boletos em aberto podem ser cancelados.");
-  await baixarBoleto(b.beneficiario, b.nosso_numero);
+  await b.cobranca.baixar(b.nosso_numero);
   await admin.from("boletos").update({ status: "baixado" }).eq("id", b.id);
   return { ok: true };
 }

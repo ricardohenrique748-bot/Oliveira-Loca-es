@@ -9,7 +9,8 @@
  *                          Com mais de um beneficiário, use SICREDI_CODIGO_ACESSO_<codigo_beneficiario>.
  */
 
-export type Ambiente = "sandbox" | "producao";
+import { type Ambiente, type BoletoCriado, type DadosBoleto, ErroBanco, lerJson, mensagemDe, numero, paraIso, type SituacaoBoleto } from "./tipos.ts";
+export type { Ambiente, BoletoCriado, Encargos, Pagador, SituacaoBoleto } from "./tipos.ts";
 
 export interface Beneficiario {
   cooperativa: string; // 4 dígitos (agência)
@@ -17,47 +18,7 @@ export interface Beneficiario {
   codigo: string; // código do beneficiário (5 dígitos)
 }
 
-export interface Pagador {
-  documento: string; // só dígitos
-  nome: string;
-  endereco: string;
-  cidade: string;
-  uf: string;
-  cep: string; // só dígitos
-  email?: string | null;
-  telefone?: string | null;
-}
-
-/** Cobrados após o vencimento. Sem dataInicioJuros/Multa: com elas o Sicredi tira o QR Code PIX. */
-export interface Encargos {
-  multaPct: number | null;
-  juros: number | null; // por dia de atraso, conforme jurosTipo
-  jurosTipo: "pct_dia" | "pct_mes" | "valor_dia";
-  protestoDias: number | null; // 3–99, exclusivo com negativação
-  negativacaoDias: number | null; // 46–99, exige Serasa no cadastro do beneficiário
-}
-
-export interface BoletoCriado {
-  nossoNumero: string;
-  linhaDigitavel: string;
-  codigoBarras: string | null;
-  qrCode: string | null;
-  txid: string | null;
-}
-
-export interface SituacaoBoleto {
-  situacao: string;
-  liquidado: boolean;
-  baixado: boolean;
-  dataPagamento: string | null; // yyyy-mm-dd
-  valorPago: number | null;
-}
-
-export class ErroSicredi extends Error {
-  constructor(message: string, readonly status: number, readonly corpo?: unknown) {
-    super(message);
-  }
-}
+export class ErroSicredi extends ErroBanco {}
 
 export const ambiente = (): Ambiente => (Deno.env.get("SICREDI_AMBIENTE") === "producao" ? "producao" : "sandbox");
 const base = () => (ambiente() === "producao" ? "https://api-parceiro.sicredi.com.br" : "https://api-parceiro.sicredi.com.br/sb");
@@ -119,9 +80,7 @@ async function chamar(b: Beneficiario, caminho: string, init: RequestInit & { ac
 }
 
 // ---------- operações ----------
-export async function criarBoleto(b: Beneficiario, dados: {
-  pagador: Pagador; seuNumero: string; vencimento: string; valor: number; mensagens?: string[]; encargos?: Encargos;
-}): Promise<BoletoCriado> {
+export async function criarBoleto(b: Beneficiario, dados: DadosBoleto): Promise<BoletoCriado> {
   const p = dados.pagador;
   const e = dados.encargos;
   // manual 4.0: telefone até 11 dígitos (DDD + número, sem +55); email até 40
@@ -185,33 +144,4 @@ export async function consultarBoleto(b: Beneficiario, nossoNumero: string): Pro
 
 export async function baixarBoleto(b: Beneficiario, nossoNumero: string): Promise<void> {
   await chamar(b, `/cobranca/boleto/v1/boletos/${encodeURIComponent(nossoNumero)}/baixa`, { method: "PATCH", body: "{}" });
-}
-
-// ---------- utilitários ----------
-async function lerJson(r: Response) {
-  const t = await r.text();
-  try { return t ? JSON.parse(t) : {}; } catch { return { message: t.slice(0, 300) }; }
-}
-
-function mensagemDe(d: unknown): string | null {
-  if (!d || typeof d !== "object") return null;
-  const o = d as Record<string, unknown>;
-  if (typeof o.message === "string") return o.message;
-  if (typeof o.error_description === "string") return o.error_description;
-  if (typeof o.error === "string") return o.error;
-  if (Array.isArray(o.errors)) return o.errors.map((e) => (e as Record<string, unknown>)?.message ?? JSON.stringify(e)).join("; ");
-  return null;
-}
-
-/** aceita yyyy-mm-dd, yyyy-mm-ddTHH:mm e dd/mm/yyyy */
-function paraIso(v: unknown): string | null {
-  if (typeof v !== "string" || !v) return null;
-  const br = v.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
-  return /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null;
-}
-
-function numero(v: unknown): number | null {
-  const n = typeof v === "string" ? Number(v.replace(",", ".")) : typeof v === "number" ? v : NaN;
-  return Number.isFinite(n) && n > 0 ? n : null;
 }

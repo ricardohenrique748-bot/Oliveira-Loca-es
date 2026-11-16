@@ -34,8 +34,8 @@ export type LinhaReceber = {
   boletos?: Boleto[];
 };
 export type ContatoCobranca = { cliente_id: string; obra_id: string | null; nome: string; email: string | null; whatsapp: string | null };
-/** boleto: conta Sicredi com código do beneficiário (emite boleto pelo sistema) */
-type Conta = Opcao & { empresa_id: string; boleto?: boolean; encargos?: EncargosBoleto };
+/** boleto: conta de cobrança configurada (Sicredi com código do beneficiário ou Itaú com carteira); pix: o boleto sai com QR Code PIX */
+type Conta = Opcao & { empresa_id: string; boleto?: boolean; banco?: string; pix?: boolean; encargos?: EncargosBoleto };
 
 const SEM_ENCARGOS: EncargosBoleto = { multa_pct: null, juros: null, juros_tipo: "pct_dia", apos_vencimento: null, dias_apos_vencimento: null };
 
@@ -134,7 +134,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
             ? <Button variant="ghost" size="icon-sm" aria-label="Ver boleto" onClick={() => setBoletoDe(m)}
                 title={(m.boletos?.length ?? 1) > 1 ? `${m.boletos!.length} boletos em aberto · 1º venc. ${formatData(m.boletos![0].data_vencimento)}` : `Boleto ${m.boleto.nosso_numero} · venc. ${formatData(m.boleto.data_vencimento)}`}><Barcode className="text-primary-ink" /></Button>
             : podeEditar && m.saldo > 0 && <Button variant="ghost" size="icon-sm" aria-label="Gerar boleto" onClick={() => setBoletoDe(m)}
-              title={empresasBoleto.has(m.empresa_id) ? "Gerar boleto Sicredi" : "Gerar boleto — falta configurar a conta Sicredi"}><Barcode className={empresasBoleto.has(m.empresa_id) ? undefined : "opacity-50"} /></Button>}
+              title={empresasBoleto.has(m.empresa_id) ? "Gerar boleto" : "Gerar boleto — falta configurar a conta de cobrança (Sicredi ou Itaú)"}><Barcode className={empresasBoleto.has(m.empresa_id) ? undefined : "opacity-50"} /></Button>}
           {podeEditar && m.status !== "recebido" && <Button size="xs" onClick={() => setBaixando(m)}><HandCoins /> Baixar</Button>}
           {m.status === "recebido" && <Button size="xs" variant="outline" onClick={() => setBaixando(m)}>Ver</Button>}
         </div>
@@ -149,7 +149,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
     <div className="space-y-4">
       <Cabecalho titulo="Contas a receber" descricao="Medições faturadas. Baixa total ou parcial; o status da medição e a liberação do repasse são atualizados automaticamente."
         acoes={podeEditar && <>
-          {empresasBoleto.size > 0 && <Button variant="outline" disabled={atualizando} onClick={atualizar} title="Consulta no Sicredi os boletos em aberto e lança os pagos">
+          {empresasBoleto.size > 0 && <Button variant="outline" disabled={atualizando} onClick={atualizar} title="Consulta no banco (Sicredi / Itaú) os boletos em aberto e lança os pagos">
             {atualizando ? <Loader2 className="animate-spin" /> : <RefreshCw />} Atualizar boletos{boletosAbertos ? ` (${boletosAbertos})` : ""}
           </Button>}
           <Button onClick={() => setLancando(true)}><Plus /> Lançar recebimento</Button>
@@ -463,6 +463,9 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
   // o que falta cobrar: saldo da fatura menos os boletos já em aberto
   const restante = m ? Math.max(0, Math.round((m.saldo - somar(abertos.map((b) => b.valor))) * 100) / 100) : 0;
   const formulario = !!m && restante > 0 && (abertos.length === 0 || gerarMais);
+  const contaSel = contasEmpresa.find((c) => c.value === conta);
+  /** banco do boleto em aberto ou da conta escolhida para emitir */
+  const banco = contas.find((c) => c.value === abertos[0]?.conta_bancaria_id)?.banco ?? contaSel?.banco ?? contasEmpresa[0]?.banco ?? "";
 
   React.useEffect(() => {
     if (!m) return;
@@ -478,7 +481,10 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
   /** trocar a conta traz a multa/juros/protesto padrão dela */
   const escolherConta = (id: string | null) => {
     setConta(id);
-    setEncargos(contas.find((c) => c.value === id)?.encargos ?? SEM_ENCARGOS);
+    const c = contas.find((x) => x.value === id);
+    const e = c?.encargos ?? SEM_ENCARGOS;
+    // Itaú: só protesto automático
+    setEncargos(c?.banco === "Itaú" && e.apos_vencimento === "negativacao" ? { ...e, apos_vencimento: null, dias_apos_vencimento: null } : e);
   };
   const enc = (v: Partial<EncargosBoleto>) => setEncargos((e) => ({ ...e, ...v }));
   const limitesDias = encargos.apos_vencimento ? DIAS_APOS_VENCIMENTO[encargos.apos_vencimento] : null;
@@ -522,7 +528,7 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
     <Dialog open={!!m} onOpenChange={onOpenChange}>
       <DialogContent tamanho="md">
         <DialogHeader>
-          <DialogTitle>{abertos.length > 1 ? `Boletos Sicredi (${abertos.length})` : abertos.length ? "Boleto Sicredi" : "Gerar boleto Sicredi"}</DialogTitle>
+          <DialogTitle>{abertos.length > 1 ? `Boletos ${banco} (${abertos.length})` : abertos.length ? `Boleto ${banco}` : `Gerar boleto ${banco}`}</DialogTitle>
           <DialogDescription>{m && <>{(m.placa ? formatPlaca(m.placa) : "Avulsa")} · {m.cliente_fantasia} · NF {m.numero_nf ?? "—"}</>}</DialogDescription>
         </DialogHeader>
         {m && abertos.length > 0 && !gerarMais && (
@@ -542,10 +548,11 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
         {m && formulario && (
           contasEmpresa.length === 0 ? (
             <div className="space-y-2 text-sm">
-              <p>Para gerar boleto, a conta Sicredi da <strong>{m.empresa_apelido}</strong> precisa estar configurada para cobrança.</p>
+              <p>Para gerar boleto, uma conta Sicredi ou Itaú da <strong>{m.empresa_apelido}</strong> precisa estar configurada para cobrança.</p>
               <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
-                <li>Em <Link href="/cadastros/contas-bancarias" className="text-foreground underline">Cadastros → Contas bancárias</Link>, edite a conta Sicredi desta empresa.</li>
-                <li>Preencha a <strong>agência (cooperativa)</strong>, o <strong>posto</strong> e o <strong>código do beneficiário</strong>, que vêm do contrato de cobrança com o Sicredi.</li>
+                <li>Em <Link href="/cadastros/contas-bancarias" className="text-foreground underline">Cadastros → Contas bancárias</Link>, edite a conta Sicredi ou Itaú desta empresa.</li>
+                <li><strong>Sicredi:</strong> preencha a <strong>agência (cooperativa)</strong>, o <strong>posto</strong> e o <strong>código do beneficiário</strong>, que vêm do contrato de cobrança.</li>
+                <li><strong>Itaú:</strong> preencha a <strong>agência</strong>, a <strong>conta com dígito</strong> e a <strong>carteira</strong> (ex.: 109); a chave PIX é opcional (boleto com QR Code).</li>
                 <li>Volte aqui e clique de novo no ícone do boleto.</li>
               </ol>
             </div>
@@ -598,7 +605,7 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
                   ].filter(Boolean).join(" ")}</p> : null}
                 <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
                   <div className="space-y-1.5"><Label>Se não pagar</Label>
-                    <SelectSimples aria-label="Se não pagar" value={encargos.apos_vencimento} vazio="Não protestar nem negativar" opcoes={[...APOS_VENCIMENTO]}
+                    <SelectSimples aria-label="Se não pagar" value={encargos.apos_vencimento} vazio="Não protestar nem negativar" opcoes={contaSel?.banco === "Itaú" ? APOS_VENCIMENTO.filter((o) => o.value === "protesto") : [...APOS_VENCIMENTO]}
                       onChange={(v) => enc({ apos_vencimento: v as EncargosBoleto["apos_vencimento"], dias_apos_vencimento: v ? encargos.dias_apos_vencimento ?? DIAS_APOS_VENCIMENTO[v as "protesto" | "negativacao"][0] : null })} /></div>
                   {limitesDias && <div className="space-y-1.5"><Label htmlFor="bol-dias">Após (dias)</Label>
                     <InputNumero id="bol-dias" value={encargos.dias_apos_vencimento} onChange={(v) => enc({ dias_apos_vencimento: v })} aria-invalid={diasInvalidos} /></div>}
@@ -607,7 +614,7 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
                   {encargos.apos_vencimento === "protesto" ? "Protesto" : "Negativação no Serasa"}: de {limitesDias[0]} a {limitesDias[1]} dias após o vencimento.
                   {encargos.apos_vencimento === "negativacao" && " Precisa do Serasa ativo no seu contrato de cobrança."}</p>}
               </fieldset>
-              <p className="text-xs text-muted-foreground">{qtd > 1 ? `São gerados ${qtd} boletos separados, com QR Code PIX e registrados` : "O boleto sai com QR Code PIX e é registrado"} no Sicredi em nome do cliente (CNPJ e endereço do cadastro).</p>
+              <p className="text-xs text-muted-foreground">{qtd > 1 ? `São gerados ${qtd} boletos separados${contaSel?.pix ? ", com QR Code PIX" : ""} e registrados` : `O boleto sai${contaSel?.pix ? " com QR Code PIX" : ""} e é registrado`} no {banco} em nome do cliente (CNPJ e endereço do cadastro).</p>
             </div>
           )
         )}
@@ -619,7 +626,7 @@ function DialogoBoleto({ medicao: m, contas, podeEditar, onOpenChange, onFeito }
             </Button>
           )}
         </DialogFooter>
-        <Confirmar aberto={!!cancelar} onOpenChange={(v) => !v && setCancelar(null)} titulo="Cancelar boleto no Sicredi?" destrutivo rotulo="Cancelar boleto"
+        <Confirmar aberto={!!cancelar} onOpenChange={(v) => !v && setCancelar(null)} titulo={`Cancelar boleto no ${banco}?`} destrutivo rotulo="Cancelar boleto"
           descricao={`O boleto${cancelar?.parcelas && cancelar.parcelas > 1 ? ` (parcela ${cancelar.parcela}/${cancelar.parcelas})` : ""} é baixado no banco e não poderá mais ser pago. A fatura continua em aberto e você pode gerar outro no lugar.`}
           onConfirmar={async () => {
             if (!cancelar) return;

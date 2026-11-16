@@ -10,6 +10,7 @@ import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { ReceberCliente, type LinhaReceber, type ContatoCobranca } from "./client";
 import type { Boleto } from "./actions";
+import { emiteBoleto } from "@/lib/schemas/cadastros";
 
 export default function ReceberPage() {
   const { sessao } = useAuth();
@@ -72,7 +73,7 @@ export default function ReceberPage() {
       q.order(ordem, { ascending: !p.desc, nullsFirst: false }).range(p.de, p.ate),
       qa,
       supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("ativo", true).order("nome_fantasia"),
-      supabase.from("contas_bancarias").select("id, apelido, empresa_id, banco, codigo_beneficiario, boleto_multa_pct, boleto_juros, boleto_juros_tipo, boleto_apos_vencimento, boleto_dias_apos_vencimento").eq("ativo", true).order("apelido"),
+      supabase.from("contas_bancarias").select("id, apelido, empresa_id, banco, codigo_beneficiario, boleto_carteira, pix_chave, boleto_multa_pct, boleto_juros, boleto_juros_tipo, boleto_apos_vencimento, boleto_dias_apos_vencimento").eq("ativo", true).order("apelido"),
     ]);
     const ids = [...new Set((linhas ?? []).map((m) => m.cliente_id!))];
     const medicoes = (linhas ?? []).map((m) => m.id!);
@@ -105,7 +106,7 @@ export default function ReceberPage() {
       tamanho: p.tamanho,
       aging: resumo,
       clientes: (clientes ?? []).map((c) => ({ value: c.id, label: c.nome_fantasia ?? c.razao_social })),
-      contas: (contas ?? []).map((c) => ({ value: c.id, label: c.apelido, empresa_id: c.empresa_id, boleto: c.banco === "Sicredi" && !!c.codigo_beneficiario,
+      contas: (contas ?? []).map((c) => ({ value: c.id, label: c.apelido, empresa_id: c.empresa_id, boleto: emiteBoleto(c), banco: c.banco, pix: c.banco === "Sicredi" || !!c.pix_chave,
         encargos: { multa_pct: c.boleto_multa_pct, juros: c.boleto_juros, juros_tipo: c.boleto_juros_tipo, apos_vencimento: c.boleto_apos_vencimento, dias_apos_vencimento: c.boleto_dias_apos_vencimento } })),
       contatos: (contatos ?? []) as ContatoCobranca[],
       templates: { email: cfg.template_cobranca_email, whatsapp: cfg.template_cobranca_whatsapp },
