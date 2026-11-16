@@ -27,7 +27,7 @@ export default function LocadoresPage() {
       total: count ?? 0,
       pagina: p.pagina,
       tamanho: p.tamanho,
-      podeEditar: podeEscrever(s.perfil, "locadores"),
+      podeEditar: podeEscrever(s, "locadores"),
     };
   }, [searchParams, sessao?.empresaId]);
 

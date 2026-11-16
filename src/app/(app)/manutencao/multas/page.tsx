@@ -39,7 +39,7 @@ export default function MultasPage() {
       veiculos: (veiculos ?? []).map((v) => ({ value: v.id, label: v.placa })),
       veiculoInicial: p.get("veiculo"),
       abrirNovo: p.get("novo") === "1",
-      podeEditar: podeEscrever(s.perfil, "manutencao"),
+      podeEditar: podeEscrever(s, "manutencao"),
     };
   }, [searchParams, sessao?.empresaId]);
 

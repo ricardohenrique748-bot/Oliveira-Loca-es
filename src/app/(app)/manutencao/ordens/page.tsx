@@ -41,7 +41,7 @@ export default function OrdensPage() {
       veiculos: (veiculos ?? []).map((v) => ({ value: v.id, label: `${v.placa}${v.modelo ? ` · ${v.modelo}` : ""}`, locador: v.proprietario === "locador", km: v.km_atual, horas: v.horimetro_atual })),
       fornecedores: (fornecedores ?? []).map((f) => ({ value: f.id, label: f.nome })),
       planos: (planos ?? []).map((pl) => ({ value: pl.plano_id!, label: `${pl.servico} (${pl.status})`, veiculo_id: pl.veiculo_id! })),
-      podeEditar: podeEscrever(s.perfil, "manutencao"),
+      podeEditar: podeEscrever(s, "manutencao"),
       abrirNovo: p.get("novo") === "1",
       veiculoInicial: p.get("veiculo"),
       planoInicial: p.get("plano"),

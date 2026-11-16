@@ -46,7 +46,7 @@ export default function VeiculosPage() {
       empresas: s.empresas.map((e) => ({ value: e.id, label: e.apelido })),
       empresaPadrao: s.empresaId,
       locadores: (locadores ?? []).map((l) => ({ value: l.id!, label: l.nome! })),
-      podeEditar: podeEscrever(s.perfil, "veiculos"),
+      podeEditar: podeEscrever(s, "veiculos"),
       novo: p.get("novo") === "1",
     };
   }, [searchParams, sessao?.empresaId]);

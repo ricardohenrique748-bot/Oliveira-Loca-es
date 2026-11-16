@@ -24,7 +24,7 @@ export default function ContasBancariasPage() {
       linhas: (linhas ?? []).map((c) => ({ ...c, empresa: c.empresas?.apelido ?? "" })),
       empresas: s.empresas.map((e) => ({ value: e.id, label: e.apelido })),
       empresaPadrao: s.empresaId,
-      podeEditar: podeEscrever(s.perfil, "contasBancarias"),
+      podeEditar: podeEscrever(s, "contasBancarias"),
     };
   }, [sessao?.empresaId]);
 

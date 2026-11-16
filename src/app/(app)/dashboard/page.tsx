@@ -60,8 +60,8 @@ export default function DashboardPage() {
   }, [mesParam, clienteParam, placaParam, sessao?.empresaId]);
 
   // perfil sem dashboard (ex.: comercial) cai na primeira tela que pode ver
-  if (sessao && !podeLer(sessao.perfil, "dashboard")) {
-    const inicio = MENU.flatMap((g) => g.itens).find((it) => podeLer(sessao.perfil, it.modulo));
+  if (sessao && !podeLer(sessao, "dashboard")) {
+    const inicio = MENU.flatMap((g) => g.itens).find((it) => podeLer(sessao, it.modulo));
     if (inicio) return <Navigate to={inicio.href} replace />;
   }
   if (loading || !data) return <CarregandoPagina />;

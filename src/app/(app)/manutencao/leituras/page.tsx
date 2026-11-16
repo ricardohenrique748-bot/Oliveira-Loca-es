@@ -28,7 +28,7 @@ export default function LeiturasPage() {
     return {
       veiculos: (veiculos ?? []).map((v) => ({ ...v, ultima: ultima.get(v.id) ?? null })),
       filtroInicial: placa,
-      podeEditar: podeEscrever(s.perfil, "manutencao"),
+      podeEditar: podeEscrever(s, "manutencao"),
     };
   }, [placa, sessao?.empresaId]);
 

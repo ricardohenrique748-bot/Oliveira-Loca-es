@@ -33,7 +33,7 @@ export default function DocumentosPage() {
       linhas: (docs ?? []).map((d) => ({ ...d, placa: placa.get(d.veiculo_id) ?? "" })) as LinhaDoc[],
       veiculos: (veiculos ?? []).map((v) => ({ value: v.id, label: v.placa })),
       veiculoInicial: p.get("veiculo"),
-      podeEditar: podeEscrever(s.perfil, "manutencao"),
+      podeEditar: podeEscrever(s, "manutencao"),
     };
   }, [searchParams, sessao?.empresaId]);
 

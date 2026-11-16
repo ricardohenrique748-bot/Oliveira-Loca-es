@@ -45,6 +45,7 @@ const usuarioSchema = z.object({
   ativo: z.boolean().default(true),
   soAvulsas: z.boolean().default(false),
   ocultaPagar: z.boolean().default(false),
+  cuidaFrota: z.boolean().default(false),
   empresas: z.array(z.string().uuid()).default([]),
 });
 
@@ -67,6 +68,12 @@ export async function salvarUsuario(userId: string | null, dados: unknown) {
     checar(await supabase.from("usuarios_perfil")
       .update({ so_faturas_avulsas: u.soAvulsas, oculta_contas_pagar: u.ocultaPagar })
       .eq("user_id", (id as string | null) ?? userId!));
+    // separado: antes da migration 0080 a coluna não existe e desmarcado não deve travar o cadastro
+    const frota = await supabase.from("usuarios_perfil").update({ cuida_frota: u.cuidaFrota } as never).eq("user_id", (id as string | null) ?? userId!);
+    if (frota.error) {
+      const semColuna = /cuida_frota/.test(frota.error.message);
+      if (!semColuna || u.cuidaFrota) throw new Error(semColuna ? "Para usar \"Também cuida da frota\", aplique a migration 0080 no Supabase." : frota.error.message);
+    }
     return { id };
   }, ["/configuracoes"], userId ? "Usuário atualizado" : "Usuário criado. Passe a senha inicial ao usuário.");
 }

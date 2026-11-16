@@ -14,7 +14,7 @@ export function MenuTopo({ perfil, className }: { perfil: Perfil; className?: st
   const marcado = MENU.flatMap((g) => g.itens).filter((it) => ativo(pathname, it.href)).sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   const itens: NavItem[] = MENU.flatMap((grupo): NavItem[] => {
-    const visiveis = grupo.itens.filter((it) => podeLer(perfil, it.modulo) && !moduloOculto(sessao, it.modulo));
+    const visiveis = grupo.itens.filter((it) => podeLer(sessao ?? perfil, it.modulo) && !moduloOculto(sessao, it.modulo));
     if (!visiveis.length) return [];
     if (!grupo.titulo) return visiveis.map((it) => ({ id: it.href, label: it.titulo, link: it.href, active: it.href === marcado }));
 

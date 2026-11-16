@@ -80,7 +80,7 @@ export default function ContratosPage() {
       opcoes,
       empresas: s.empresas.map((e) => ({ value: e.id, label: e.apelido })),
       empresaPadrao: s.empresaId,
-      podeEditar: podeEscrever(s.perfil, "contratos"),
+      podeEditar: podeEscrever(s, "contratos"),
       novo: p.get("novo") === "1",
     };
   }, [searchParams, sessao?.empresaId]);

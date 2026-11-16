@@ -27,7 +27,7 @@ export default function EspelhoDetalhePage() {
     // erro na busca (ex.: banco sem uma coluna nova) não é "não encontrado": mostra o motivo
     if (error) return { naoEncontrado: true as const, erro: error.message };
     if (!e) return { naoEncontrado: true as const, erro: null };
-    const podeEditar = podeEscrever(s.perfil, "medicoes");
+    const podeEditar = podeEscrever(s, "medicoes");
     const opcoes = podeEditar ? await carregarOpcoesEspelho(supabase, s.empresaId) : null;
     return {
       opcoes,

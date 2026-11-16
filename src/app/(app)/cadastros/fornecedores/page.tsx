@@ -29,7 +29,7 @@ export default function FornecedoresPage() {
       pagina: p.pagina,
       tamanho: p.tamanho,
       categorias,
-      podeEditar: podeEscrever(s.perfil, "fornecedores"),
+      podeEditar: podeEscrever(s, "fornecedores"),
       novo: p.get("novo") === "1",
     };
   }, [searchParams, sessao?.empresaId]);

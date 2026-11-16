@@ -15,7 +15,7 @@ export default function CategoriasPage() {
     const { data: linhas } = await supabase.from("categorias_despesa").select("id, nome, tipo, ativo").order("tipo").order("nome");
     return {
       linhas: linhas ?? [],
-      podeEditar: podeEscrever(s.perfil, "categorias"),
+      podeEditar: podeEscrever(s, "categorias"),
     };
   }, [sessao?.empresaId]);
 

@@ -33,12 +33,23 @@ export const MODULOS = {
 
 export type Modulo = keyof typeof MODULOS;
 
-export function podeLer(perfil: Perfil | null | undefined, modulo: Modulo): boolean {
-  return !!perfil && (MODULOS[modulo].ler as readonly Perfil[]).includes(perfil);
+/** Quem está pedindo: só o perfil, ou a sessão (perfil + marcações por usuário). */
+export type Quem = Perfil | { perfil: Perfil; cuidaFrota?: boolean } | null | undefined;
+
+/** Liberados pela marcação "Também cuida da frota" (o que o perfil Manutenção edita); espelha a migration 0080. */
+export const MODULOS_FROTA: readonly Modulo[] = ["veiculos", "fornecedores", "manutencao"];
+
+const perfilDe = (q: Quem) => (typeof q === "string" ? q : q?.perfil);
+const pelaFrota = (q: Quem, modulo: Modulo) => typeof q === "object" && !!q?.cuidaFrota && MODULOS_FROTA.includes(modulo);
+
+export function podeLer(quem: Quem, modulo: Modulo): boolean {
+  const perfil = perfilDe(quem);
+  return (!!perfil && (MODULOS[modulo].ler as readonly Perfil[]).includes(perfil)) || pelaFrota(quem, modulo);
 }
 
-export function podeEscrever(perfil: Perfil | null | undefined, modulo: Modulo): boolean {
-  return !!perfil && (MODULOS[modulo].escrever as readonly Perfil[]).includes(perfil);
+export function podeEscrever(quem: Quem, modulo: Modulo): boolean {
+  const perfil = perfilDe(quem);
+  return (!!perfil && (MODULOS[modulo].escrever as readonly Perfil[]).includes(perfil)) || pelaFrota(quem, modulo);
 }
 
 /** LGPD: CPF/CNPJ e PIX de locadores só para admin e financeiro. */

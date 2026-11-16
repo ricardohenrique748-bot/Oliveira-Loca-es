@@ -26,7 +26,7 @@ export default function ClienteDetalhePage() {
     const [{ data: obras }, { data: contatos }, contratos] = await Promise.all([
       supabase.from("obras").select("id, cliente_id, nome, codigo, cidade, uf, ativo").eq("cliente_id", id).order("nome"),
       supabase.from("contatos").select("id, cliente_id, obra_id, nome, email, whatsapp, recebe_fatura, obras(nome)").eq("cliente_id", id).order("nome"),
-      podeLer(s.perfil, "contratos")
+      podeLer(s, "contratos")
         ? supabase.from("contratos").select("id, numero, status, valor_mensal, data_inicio, data_desmobilizacao, obras(nome), veiculos(placa), empresas(apelido)").eq("cliente_id", id).order("data_inicio", { ascending: false })
         : Promise.resolve({ data: [] }),
     ]);
@@ -47,8 +47,8 @@ export default function ClienteDetalhePage() {
         placa: c.veiculos?.placa ?? "",
         empresa: c.empresas?.apelido ?? "",
       })),
-      podeEditar: podeEscrever(s.perfil, "cadastros"),
-      veContratos: podeLer(s.perfil, "contratos"),
+      podeEditar: podeEscrever(s, "cadastros"),
+      veContratos: podeLer(s, "contratos"),
     };
   }, [id, sessao?.empresaId]);
 

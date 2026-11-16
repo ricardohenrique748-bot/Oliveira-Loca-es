@@ -67,7 +67,7 @@ export default function RepassesPage() {
       descontosPendentes: (descontos ?? [])
         .map((d) => ({ ...d, saldo: Math.round(((d.valor_locador ?? d.valor ?? 0) - (d.valor_abatido ?? 0)) * 100) / 100, locador_id: locadorDoVeiculo.get(d.veiculo_id ?? "") ?? null }))
         .filter((d) => d.saldo > 0 && (!p.get("locador") || d.locador_id === p.get("locador"))) as DescontoPendente[],
-      podeEditar: podeEscrever(s.perfil, "repasses"),
+      podeEditar: podeEscrever(s, "repasses"),
     };
   }, [searchParams, sessao?.empresaId]);
 

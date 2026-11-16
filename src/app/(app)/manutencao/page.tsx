@@ -61,7 +61,7 @@ export default function ManutencaoPage() {
     });
     const contagem = (st: string) => (veiculos ?? []).filter((v) => v.status === st).length;
     const vencidas = (planos ?? []).filter((p) => p.status === "vencida" && lista.some((v) => v.id === p.veiculo_id)).length;
-    const podeEditar = podeEscrever(s.perfil, "manutencao");
+    const podeEditar = podeEscrever(s, "manutencao");
 
     return {
       hoje,

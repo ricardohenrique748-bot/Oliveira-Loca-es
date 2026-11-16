@@ -102,7 +102,7 @@ export default function MedicoesPage() {
       empresas: s.empresas.map((e) => ({ value: e.id, label: e.apelido })),
       empresaPadrao: s.empresaId,
       baseDias: Number(cfg.base_dias_mes) || 30,
-      podeEditar: podeEscrever(s.perfil, "medicoes"),
+      podeEditar: podeEscrever(s, "medicoes"),
     };
   }, [searchParams, sessao?.empresaId]);
 

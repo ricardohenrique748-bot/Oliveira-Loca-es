@@ -33,7 +33,7 @@ export default function ClientesPage() {
       total: count ?? 0,
       pagina: p.pagina,
       tamanho: p.tamanho,
-      podeEditar: podeEscrever(s.perfil, "cadastros"),
+      podeEditar: podeEscrever(s, "cadastros"),
     };
   }, [searchParams, sessao?.empresaId]);
 

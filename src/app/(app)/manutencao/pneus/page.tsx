@@ -31,7 +31,7 @@ export default function PneusPage() {
         km_rodado: n.veiculos && n.km_instalacao != null ? n.veiculos.km_atual - n.km_instalacao : null,
       })) as LinhaPneu[],
       veiculos: (veiculos ?? []).map((v) => ({ value: v.id, label: v.placa })),
-      podeEditar: podeEscrever(s.perfil, "manutencao"),
+      podeEditar: podeEscrever(s, "manutencao"),
     };
   }, [searchParams, sessao?.empresaId]);
 

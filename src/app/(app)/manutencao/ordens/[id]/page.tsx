@@ -30,7 +30,7 @@ export default function OrdemDetalhePage() {
       supabase.from("planos_manutencao").select("id, servico").eq("veiculo_id", os.veiculo_id).eq("ativo", true),
       supabase.from("categorias_despesa").select("id, nome").eq("tipo", "veiculo").eq("ativo", true).order("nome"),
       supabase.from("contas_bancarias").select("id, apelido").eq("empresa_id", os.empresa_id).eq("ativo", true),
-      podeLer(s.perfil, "pagar") || s.perfil === "manutencao"
+      podeLer(s, "pagar") || s.perfil === "manutencao"
         ? supabase.from("contas_pagar").select("id, descricao, vencimento, valor, pago_em, descontar_locador").eq("ordem_servico_id", id).maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
@@ -54,7 +54,7 @@ export default function OrdemDetalhePage() {
       categorias: (categorias ?? []).map((c) => ({ value: c.id, label: c.nome })),
       contas: (contas ?? []).map((c) => ({ value: c.id, label: c.apelido })),
       contaGerada: contaGerada.data,
-      podeEditar: podeEscrever(s.perfil, "manutencao"),
+      podeEditar: podeEscrever(s, "manutencao"),
       abrirFechamento: fechar === "1",
     };
   }, [id, fechar, sessao?.empresaId]);

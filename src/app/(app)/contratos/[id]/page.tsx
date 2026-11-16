@@ -79,8 +79,8 @@ export default function ContratoDetalhePage() {
       medicoes: (medicoes ?? []) as never,
       opcoes,
       empresas: s.empresas.map((e) => ({ value: e.id, label: e.apelido })),
-      podeEditar: podeEscrever(s.perfil, "contratos"),
-      podeLancar: podeEscrever(s.perfil, "medicoes"),
+      podeEditar: podeEscrever(s, "contratos"),
+      podeLancar: podeEscrever(s, "medicoes"),
       baseDias: Number(cfg.base_dias_mes) || 30,
     };
   }, [id, sessao?.empresaId]);

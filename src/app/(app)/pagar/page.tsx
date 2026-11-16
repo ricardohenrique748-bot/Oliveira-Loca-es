@@ -59,7 +59,7 @@ export default function PagarPage() {
         contas: (contas ?? []).map((c) => ({ value: c.id, label: c.apelido, banco: c.banco, empresa_id: c.empresa_id })),
       },
       empresaPadrao: s.empresaId,
-      podeEditar: podeEscrever(s.perfil, "pagar"),
+      podeEditar: podeEscrever(s, "pagar"),
       abrirNovo: p.get("novo") === "1",
     };
   }, [searchParams, sessao?.empresaId]);

@@ -50,7 +50,7 @@ export default function PlanosPage() {
       linhas,
       veiculos: (veiculos ?? []).map((v) => ({ value: v.id, label: `${v.placa}${v.modelo ? ` · ${v.modelo}` : ""}`, km: v.km_atual, horas: v.horimetro_atual })),
       modelos,
-      podeEditar: podeEscrever(s.perfil, "manutencao"),
+      podeEditar: podeEscrever(s, "manutencao"),
       abrirNovo: p.get("novo") === "1",
     };
   }, [searchParams, sessao?.empresaId]);

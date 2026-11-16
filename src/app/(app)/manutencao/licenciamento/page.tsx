@@ -23,7 +23,7 @@ export default function LicenciamentoPage() {
     const { data: linhas } = await q.order("validade", { ascending: true, nullsFirst: true }).order("placa");
     return {
       linhas: (linhas ?? []) as LinhaLicenciamento[],
-      podeEditar: podeEscrever(s.perfil, "manutencao"),
+      podeEditar: podeEscrever(s, "manutencao"),
     };
   }, [searchParams, sessao?.empresaId]);
 

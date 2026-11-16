@@ -64,7 +64,7 @@ export default function EspelhoPage() {
       obra: e.obras?.nome ?? null,
     })).sort((a, b) => (historico ? b.competencia.localeCompare(a.competencia) : 0) || a.placa.localeCompare(b.placa));
 
-    return { comp, historico, espelhos: lista, opcoes, podeEditar: podeEscrever(s.perfil, "medicoes") };
+    return { comp, historico, espelhos: lista, opcoes, podeEditar: podeEscrever(s, "medicoes") };
   }, [comp, historico, filtroPlaca, filtroCliente, filtroStatus, sessao?.empresaId]);
 
   if (loading || !data) return <CarregandoPagina />;

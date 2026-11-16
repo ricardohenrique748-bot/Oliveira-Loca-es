@@ -15,7 +15,7 @@ export default function EmpresasPage() {
     const { data: linhas } = await supabase.from("empresas").select("id, apelido, razao_social, cnpj, ativo, endereco, cidade, uf, contato_nome, telefone, email, inscricao_municipal, regime_tributario, codigo_ibge, nfse_codigo_servico, nfse_aliquota_iss, nfse_aliquota_simples, nfse_texto_complementar").order("apelido");
     return {
       linhas: linhas ?? [],
-      podeEditar: podeEscrever(s.perfil, "configuracoes"),
+      podeEditar: podeEscrever(s, "configuracoes"),
     };
   }, [sessao?.empresaId]);
 

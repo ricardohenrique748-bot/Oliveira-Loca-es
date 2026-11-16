@@ -2260,6 +2260,7 @@ export type Database = {
         Row: {
           ativo: boolean
           created_at: string
+          cuida_frota: boolean
           created_by: string | null
           nome: string
           oculta_contas_pagar: boolean
@@ -2271,6 +2272,7 @@ export type Database = {
         Insert: {
           ativo?: boolean
           created_at?: string
+          cuida_frota?: boolean
           created_by?: string | null
           nome: string
           oculta_contas_pagar?: boolean
@@ -2282,6 +2284,7 @@ export type Database = {
         Update: {
           ativo?: boolean
           created_at?: string
+          cuida_frota?: boolean
           created_by?: string | null
           nome?: string
           oculta_contas_pagar?: boolean

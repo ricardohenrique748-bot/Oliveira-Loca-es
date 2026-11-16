@@ -111,7 +111,7 @@ export default function ReceberPage() {
         encargos: { multa_pct: c.boleto_multa_pct, juros: c.boleto_juros, juros_tipo: c.boleto_juros_tipo, apos_vencimento: c.boleto_apos_vencimento, dias_apos_vencimento: c.boleto_dias_apos_vencimento } })),
       contatos: (contatos ?? []) as ContatoCobranca[],
       templates: { email: cfg.template_cobranca_email, whatsapp: cfg.template_cobranca_whatsapp },
-      podeEditar: podeEscrever(s.perfil, "receber"),
+      podeEditar: podeEscrever(s, "receber"),
       soAvulsas: s.soFaturasAvulsas,
     };
   }, [searchParams, sessao?.empresaId]);

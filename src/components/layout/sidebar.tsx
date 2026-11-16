@@ -31,7 +31,7 @@ function Navegacao({ perfil, aoNavegar }: { perfil: Perfil; aoNavegar?: () => vo
   const { sessao } = useAuth();
   const termo = normalizar(busca.trim());
   const grupos = MENU
-    .map((g) => ({ ...g, itens: g.itens.filter((it) => podeLer(perfil, it.modulo) && !moduloOculto(sessao, it.modulo) && (!termo || normalizar(it.titulo).includes(termo))) }))
+    .map((g) => ({ ...g, itens: g.itens.filter((it) => podeLer(sessao ?? perfil, it.modulo) && !moduloOculto(sessao, it.modulo) && (!termo || normalizar(it.titulo).includes(termo))) }))
     .filter((g) => g.itens.length);
 
   return (

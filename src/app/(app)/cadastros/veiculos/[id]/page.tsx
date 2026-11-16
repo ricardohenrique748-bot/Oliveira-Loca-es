@@ -23,9 +23,9 @@ export default function VeiculoDetalhePage() {
 
     if (!v) return { naoEncontrado: true } as const;
 
-    const veContratos = podeLer(s.perfil, "contratos");
-    const veMedicoes = podeLer(s.perfil, "medicoes");
-    const veResultado = podeLer(s.perfil, "relatorios");
+    const veContratos = podeLer(s, "contratos");
+    const veMedicoes = podeLer(s, "medicoes");
+    const veResultado = podeLer(s, "relatorios");
     const vazio = Promise.resolve({ data: [] as never[] });
 
     const [locadores, contratos, medicoes, os, docs, leituras, planos, resultado, multas] = await Promise.all([
@@ -65,7 +65,7 @@ export default function VeiculoDetalhePage() {
       leituras: leituras.data ?? [],
       planos: (planos.data ?? []) as never,
       resultado: (resultado.data ?? []) as never,
-      permissoes: { editar: podeEscrever(s.perfil, "veiculos"), documentos: podeEscrever(s.perfil, "manutencao"), contratos: veContratos, medicoes: veMedicoes, resultado: veResultado },
+      permissoes: { editar: podeEscrever(s, "veiculos"), documentos: podeEscrever(s, "manutencao"), contratos: veContratos, medicoes: veMedicoes, resultado: veResultado },
     };
   }, [id, sessao?.empresaId]);
 
