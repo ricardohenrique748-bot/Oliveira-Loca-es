@@ -669,6 +669,33 @@ describe("repasse: escolher os descontos do mês", () => {
   });
 });
 
+describe("repasse: descontos da fatura saem do dono", () => {
+  it("na proporção do repasse; desmarcado não sai; volta ao normal ao tirar o desconto", async () => {
+    const [rp] = await q<{ id: string; medicao_id: string; valor_bruto: string; valor_base: string; descontos_itens: unknown; descontos: string }>(
+      `select r.id, r.medicao_id, r.valor_bruto::text, m.valor_base::text, m.descontos_itens, m.descontos::text
+         from public.repasses r join public.medicoes m on m.id = r.medicao_id
+        where r.status in ('previsto','liberado') and m.valor_base > 0 and r.valor_bruto > 1000 order by r.created_at limit 1`);
+    expect(rp).toBeTruthy();
+    const desconto = Math.round(Number(rp.valor_base) * 0.25 * 100) / 100;
+    const linha = async () => (await q<{ valor: string }>(
+      "select valor::text from public.repasse_abatimentos where repasse_id = $1 and conta_pagar_id is null and descricao = 'Desconto da fatura: Dias parados'", [rp.id]))[0];
+    const aplicar = (itens: unknown[], total: number) =>
+      db.query("update public.medicoes set descontos_itens = $2::jsonb, descontos = $3 where id = $1", [rp.medicao_id, JSON.stringify(itens), total]);
+
+    await aplicar([{ descricao: "Dias parados", valor: desconto }], desconto);
+    const esperado = Math.round(Number(rp.valor_bruto) * desconto / Number(rp.valor_base) * 100) / 100;
+    expect(Number((await linha())?.valor)).toBeCloseTo(esperado, 2);
+    const [r] = await q<{ a: string; l: string; b: string }>("select valor_abatimentos::text a, valor_liquido::text l, valor_bruto::text b from public.repasses where id = $1", [rp.id]);
+    expect(Number(r.l)).toBeCloseTo(Number(r.b) - Number(r.a), 2);
+
+    await aplicar([{ descricao: "Dias parados", valor: desconto, descontar_locador: false }], desconto);
+    expect(await linha()).toBeUndefined();
+
+    await db.query("update public.medicoes set descontos_itens = $2::jsonb, descontos = $3 where id = $1",
+      [rp.medicao_id, JSON.stringify(rp.descontos_itens ?? []), rp.descontos]);
+  });
+});
+
 describe("NFS-e: cancelamento", () => {
   it("só admin/financeiro; registra a nota cancelada e libera nova emissão", async () => {
     const CH = "3".repeat(50);

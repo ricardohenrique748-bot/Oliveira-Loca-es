@@ -82,6 +82,8 @@ export const renovacaoSchema = z.object({
 const itensFatura = (nome: string) => z.array(z.object({
   descricao: z.string().trim().min(1, `Descreva o ${nome}`).max(200),
   valor: z.number().positive(`Valor do ${nome} deve ser maior que zero`),
+  /** só em descontos: false = não sai do repasse do dono do veículo (ausente = sai) */
+  descontar_locador: z.boolean().optional(),
 })).max(50);
 
 /** Linha de placa da fatura de contrato com várias placas (medicoes.placas, montada pelo banco) */
@@ -112,7 +114,7 @@ export const edicaoMedicaoSchema = z.object({
   acrescimos_itens: itensFatura("acréscimo").optional(),
   descontos_itens: itensFatura("desconto").optional(),
 });
-export type ItemFatura = { descricao: string; valor: number };
+export type ItemFatura = { descricao: string; valor: number; descontar_locador?: boolean };
 export type EdicaoMedicao = z.infer<typeof edicaoMedicaoSchema>;
 
 /** Condição de pagamento da fatura */

@@ -454,7 +454,7 @@ function HistoricoMedicao({ id }: { id: string }) {
 function itensDe(m: LinhaMedicao | null, tipo: "acrescimos" | "descontos"): ItemFatura[] {
   if (!m) return [];
   const salvos = m[`${tipo}_itens`];
-  if (salvos?.length) return salvos.map((i) => ({ descricao: i.descricao, valor: Number(i.valor) }));
+  if (salvos?.length) return salvos.map((i) => ({ descricao: i.descricao, valor: Number(i.valor), ...(i.descontar_locador === false ? { descontar_locador: false } : {}) }));
   return m[tipo] > 0 ? [{ descricao: tipo === "acrescimos" ? "Acréscimos" : "Descontos", valor: m[tipo] }] : [];
 }
 
@@ -472,10 +472,12 @@ function comHoraExtra(itens: ItemFatura[], valorDiaria: number, diarias: number,
 const preenchidos = (itens: ItemFatura[]) => itens.filter((i) => i.descricao.trim() || i.valor);
 
 /** Lista editável de acréscimos ou descontos: descrição + valor, quantas linhas quiser. */
-function ListaItensFatura({ titulo, nome, exemplo, itens, total, editavel, onChange, negativo }: {
+function ListaItensFatura({ titulo, nome, exemplo, itens, total, editavel, onChange, negativo, opcaoDono }: {
   titulo: string; nome: string; exemplo: string; itens: ItemFatura[]; total: number; editavel: boolean; onChange: (itens: ItemFatura[]) => void;
   /** descontos: mostra o valor com sinal de menos (digita-se positivo) */
   negativo?: boolean;
+  /** veículo sublocado: cada desconto pode sair (ou não) do repasse do dono, na proporção do repasse */
+  opcaoDono?: boolean;
 }) {
   const editar = (i: number, campo: Partial<ItemFatura>) => onChange(itens.map((it, j) => (j === i ? { ...it, ...campo } : it)));
   return (
@@ -493,6 +495,14 @@ function ListaItensFatura({ titulo, nome, exemplo, itens, total, editavel, onCha
             onChange={(v) => editar(i, { valor: v ?? 0 })} /></div>
           {editavel && <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label={`Remover ${nome} ${i + 1}`}
             onClick={() => onChange(itens.filter((_, j) => j !== i))}><Trash2 /></Button>}
+          {opcaoDono && (
+            <label className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground"
+              title="Sai do repasse do dono do veículo na mesma proporção do desconto do cliente">
+              <Checkbox checked={it.descontar_locador !== false} disabled={!editavel} aria-label={`Descontar do dono o ${nome} ${i + 1}`}
+                onCheckedChange={(v) => editar(i, { descontar_locador: v === true ? undefined : false })} />
+              Descontar do dono
+            </label>
+          )}
         </div>
       ))}
       {editavel && <Button size="xs" variant="outline" onClick={() => onChange([...itens, { descricao: "", valor: 0 }])}>
@@ -740,6 +750,7 @@ function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalv
                 <ListaItensFatura titulo="Acréscimos" nome="acréscimo" exemplo="Ex.: hora extra do operador, frete, pedágio…" itens={ajuste.acrescimos} total={acrescimos}
                   editavel={ed} onChange={(itens) => setAjuste((a) => ({ ...a, acrescimos: itens }))} />
                 <ListaItensFatura titulo="Descontos" nome="desconto" exemplo="Ex.: dia parado por chuva, abatimento combinado…" itens={ajuste.descontos} total={descontos} negativo
+                  opcaoDono={m.proprietario === "locador" || m.repasse_liquido != null || !!m.placas?.some((p) => p.proprietario === "locador")}
                   editavel={ed} onChange={(itens) => setAjuste((a) => ({ ...a, descontos: itens }))} />
               </TableBody>
               <TableFooter><TableRow><TableCell>Total da fatura</TableCell><TableCell className="text-right"><Moeda valor={total} /></TableCell></TableRow></TableFooter>

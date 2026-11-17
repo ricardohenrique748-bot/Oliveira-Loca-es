@@ -41,3 +41,5 @@ begin
       comp := (comp + interval '1 month')::date;
     end loop;
   end loop;
+  return n;
+end $$;
