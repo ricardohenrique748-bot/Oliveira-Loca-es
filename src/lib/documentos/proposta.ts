@@ -6,6 +6,7 @@
  */
 import { formatBRL, formatData, formatPlaca, maskTelefone } from "@/lib/format";
 import { hojeSP } from "@/lib/calculos/datas";
+import { somar } from "@/lib/calculos";
 import { ROTULOS } from "@/lib/schemas/cadastros";
 import type { ModalidadeProposta, ModeloProposta } from "@/lib/schemas/comercial";
 import type { Bloco, Documento } from "./pdf";
@@ -29,6 +30,8 @@ export interface DadosProposta {
   prazo_pagamento_dias: number; dia_corte_inicio: number;
   valor_mobilizacao: number | null; valor_desmobilizacao: number | null; multa_rescisao_pct: number; condicoes: string | null;
   empresa: EmpresaDoc; cliente: ClienteDoc;
+  /** outros caminhões da proposta, cada um com o seu valor (mensal ou por diária) */
+  outras_placas?: { veiculo: VeiculoDoc; valor: number }[];
 }
 
 export const JORNADA_PADRAO = "10 horas por dia, de segunda a sexta-feira, das 07:00 às 17:00";
@@ -61,8 +64,17 @@ const extras = (c: string | null) => (c ?? "").split(/\r?\n/).map((l) => l.repla
 
 function tabelaPrecos(p: DadosProposta, colunaQtd: (p: DadosProposta) => string): Bloco[] {
   const diaria = p.tipo_cobranca === "diaria";
-  const linhas: string[][] = [["01", descricaoEquipamento(p), colunaQtd(p), `${formatBRL(p.valor)}${diaria ? " / diária" : " / mês"}`]];
+  const unidade = diaria ? " / diária" : " / mês";
+  const linhas: string[][] = [["01", descricaoEquipamento(p), colunaQtd(p), `${formatBRL(p.valor)}${unidade}`]];
+  // um item por caminhão a mais
+  for (const o of p.outras_placas ?? []) {
+    linhas.push([String(linhas.length + 1).padStart(2, "0"), descricaoEquipamento({ equipamento: null, veiculo: o.veiculo }), colunaQtd(p), `${formatBRL(o.valor)}${unidade}`]);
+  }
   if (p.km_livre) linhas.push(["", p.km_livre, "", ""]);
+  // vários caminhões (cada um com o seu valor): soma das linhas. A quantidade não multiplica o valor digitado.
+  if ((p.outras_placas?.length ?? 0) > 0) {
+    linhas.push(["", diaria ? "Total por diária" : "Total mensal", "", `${formatBRL(somar([p.valor, ...(p.outras_placas ?? []).map((o) => o.valor)]))}${unidade}`]);
+  }
   const blocos: Bloco[] = [{ t: "tabela", cabecalho: ["Item", "Descrição", "Quant.", diaria ? "Valor por diária" : "Valor mensal"], linhas, direita: [3], larguras: [12, 0, 38, 36] }];
   const mob: string[][] = [];
   if (p.valor_mobilizacao != null) mob.push([String(mob.length + 1).padStart(2, "0"), "Mobilização", "01", formatBRL(p.valor_mobilizacao)]);
@@ -117,7 +129,12 @@ function modeloCaminhao(p: DadosProposta): Bloco[] {
 function modeloGuindaste(p: DadosProposta): Bloco[] {
   const diaria = p.tipo_cobranca === "diaria";
   const jornada = p.jornada || JORNADA_PADRAO;
-  const qtd = (x: DadosProposta) => x.franquia || (diaria ? `${x.quantidade} diária${x.quantidade > 1 ? "s" : ""}` : String(x.quantidade).padStart(2, "0"));
+  const qtd = (x: DadosProposta) => {
+    const base = diaria ? `${x.quantidade} diária${x.quantidade > 1 ? "s" : ""}` : String(x.quantidade).padStart(2, "0");
+    // com franquia: a quantidade só aparece junto quando é mais de uma
+    if (!x.franquia) return base;
+    return x.quantidade > 1 ? `${base} — ${x.franquia}` : x.franquia;
+  };
   const aCargoOliveira = ["Fornecimento dos equipamentos", "Fornecimento do operador para operar os equipamentos", "Manutenção",
     "EPIs, obedecendo às normas de segurança", "Óleos lubrificantes"];
   const aCargoContratante = ["Fornecer local para guarda dos equipamentos", "Alimentação do operador", "Hospedagem do operador",

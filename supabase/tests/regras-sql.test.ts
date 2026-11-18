@@ -404,6 +404,31 @@ describe("propostas", () => {
       await q("rollback");
     }
   });
+
+  it("proposta com vários caminhões leva as outras placas para o contrato", async () => {
+    await q("begin");
+    try {
+      const livres = (await q<{ id: string }>(
+        `select v.id from public.veiculos v where v.empresa_id = $1 and v.status in ('disponivel','parado')
+          and not exists (select 1 from public.contratos c where c.veiculo_id = v.id and c.status = 'ativo')
+          and not exists (select 1 from public.contrato_placas cp where cp.veiculo_id = v.id) order by v.placa limit 3`, [OLIVEIRA])).map((r) => r.id);
+      expect(livres.length).toBe(3);
+      const [principal, segunda, terceira] = livres;
+      const [{ id: proposta }] = await q<{ id: string }>(
+        `insert into public.propostas (empresa_id, cliente_id, veiculo_id, valor, status, data_inicio_prevista)
+         values ($1, '44444444-0000-0000-0000-000000000001', $2, 1000, 'enviada', '2026-11-01') returning id`, [OLIVEIRA, principal]);
+      await q(`insert into public.proposta_placas (proposta_id, veiculo_id, valor, ordem) values ($1, $2, 800, 0), ($1, $3, 700, 1)`, [proposta, segunda, terceira]);
+
+      const contratoId = (await comoUsuario(db, U.admin, () => db.query<{ id: string }>("select public.fn_proposta_gerar_contrato($1) as id", [proposta]))).rows[0].id;
+      const placas = await q<{ veiculo_id: string; valor_mensal: string }>(
+        "select veiculo_id, valor_mensal::text from public.contrato_placas where contrato_id = $1 order by ordem", [contratoId]);
+      expect(placas).toEqual([{ veiculo_id: segunda, valor_mensal: "800.00" }, { veiculo_id: terceira, valor_mensal: "700.00" }]);
+      const status = await q<{ status: string }>("select status::text from public.veiculos where id = any($1::uuid[])", [livres]);
+      expect(status.every((s) => s.status === "locado")).toBe(true);
+    } finally {
+      await q("rollback");
+    }
+  });
 });
 
 describe("multas", () => {

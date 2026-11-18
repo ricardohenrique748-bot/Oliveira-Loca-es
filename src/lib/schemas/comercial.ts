@@ -68,9 +68,23 @@ const exigirItem = (p: { veiculo_id: string | null; equipamento: string | null }
 /** o que é gravado em propostas */
 export const propostaSchema = propostaBase.superRefine(exigirItem);
 
+/** Placa a mais na proposta: cada uma com o seu valor (mensal ou por diária, igual à proposta). */
+export const placaPropostaSchema = z.object({
+  veiculo_id: uuidObr("a placa"),
+  valor: moedaObr("o valor da placa").refine((v) => v > 0, "Informe o valor da placa"),
+});
+export type PlacaProposta = z.input<typeof placaPropostaSchema>;
+
+/** as outras placas da proposta (a principal é veiculo_id) */
+export const placasPropostaSchema = z.array(placaPropostaSchema).max(50).default([]);
+
 /** formulário: aceita cliente sem cadastro (CLIENTE_NOVO + nome digitado), que é cadastrado ao salvar */
-export const propostaFormSchema = propostaBase.extend(clienteFormCampos).superRefine((p, ctx) => {
+export const propostaFormSchema = propostaBase.extend({ ...clienteFormCampos, placas_extras: placasPropostaSchema.optional() }).superRefine((p, ctx) => {
   exigirItem(p, ctx);
   validarClienteForm(p, ctx);
+  const extras = p.placas_extras ?? [];
+  if (extras.length && !p.veiculo_id) ctx.addIssue({ code: "custom", path: ["placas_extras"], message: "Escolha primeiro o veículo principal" });
+  const todas = [p.veiculo_id, ...extras.map((x) => x.veiculo_id)].filter(Boolean);
+  if (new Set(todas).size !== todas.length) ctx.addIssue({ code: "custom", path: ["placas_extras"], message: "A mesma placa aparece duas vezes na proposta" });
 });
 export type PropostaForm = z.input<typeof propostaFormSchema>;

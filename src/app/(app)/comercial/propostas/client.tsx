@@ -3,15 +3,17 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { FileDown, FileText } from "lucide-react";
+import { FileDown, FileText, Plus, Trash2 } from "lucide-react";
 import { CrudSimples } from "@/components/app/crud";
 import { Confirmar, Moeda, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { FiltroSelectUrl } from "@/components/app/url";
 import type { Campo } from "@/components/app/formulario";
-import { Badge } from "@/components/ui/basicos";
+import { InputMoeda } from "@/components/app/campos";
+import { Badge, Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
-import type { Opcao } from "@/components/ui/select";
-import { CLIENTE_NOVO, MODALIDADE_PROPOSTA, MODELO_PROPOSTA, propostaFormSchema, STATUS_PROPOSTA, type ModalidadeProposta, type ModeloProposta, type PropostaForm, type StatusProposta } from "@/lib/schemas/comercial";
+import { SelectSimples, type Opcao } from "@/components/ui/select";
+import { somar } from "@/lib/calculos";
+import { CLIENTE_NOVO, MODALIDADE_PROPOSTA, MODELO_PROPOSTA, propostaFormSchema, STATUS_PROPOSTA, type ModalidadeProposta, type ModeloProposta, type PlacaProposta, type PropostaForm, type StatusProposta } from "@/lib/schemas/comercial";
 import { formatBRL, formatData, formatPlaca, hojeSP } from "@/lib/format";
 import { baixarPropostaPDF } from "@/lib/documentos/baixar";
 import { JORNADA_PADRAO } from "@/lib/documentos/proposta";
@@ -27,13 +29,56 @@ export type LinhaProposta = {
   status: StatusProposta; motivo_recusa: string | null; contrato_id: string | null; created_at: string;
   empresa: string; empresa_razao: string; empresa_cnpj: string | null;
   cliente: string; cliente_razao: string; cliente_cnpj: string | null; obra: string | null; placa: string | null; modelo: string | null;
+  /** as outras placas da proposta (a principal é veiculo_id / placa); undefined = banco sem a tabela (SQL 0085) */
+  placas_extras?: (PlacaProposta & { placa: string })[];
 };
 
 const ROTULO_STATUS_VEICULO: Record<string, string> = { locado: "locado", manutencao: "em manutenção", parado: "parado" };
 
-/** "Placa · modelo" ou a descrição livre do equipamento. */
+/** "Placa · modelo" (+ outras placas) ou a descrição livre do equipamento. */
 const descricaoItem = (r: LinhaProposta) =>
-  [r.placa ? `${formatPlaca(r.placa)}${r.modelo ? ` · ${r.modelo}` : ""}` : null, r.equipamento].filter(Boolean).join(" — ");
+  [r.placa ? `${formatPlaca(r.placa)}${r.modelo ? ` · ${r.modelo}` : ""}` : null,
+    r.placas_extras?.length ? `+ ${r.placas_extras.map((p) => formatPlaca(p.placa)).join(", ")}` : null,
+    r.equipamento].filter(Boolean).join(" — ");
+
+const PLACA_VAZIA = { veiculo_id: undefined, valor: undefined } as unknown as PlacaProposta;
+
+/** As outras placas da proposta: cada uma com o seu valor. Viram as "outras placas" do contrato. */
+function EditorPlacasProposta({ placas, onChange, veiculos, principal, valorPrincipal, unidade }: {
+  placas: PlacaProposta[]; onChange: (v: PlacaProposta[]) => void; veiculos: Opcao[];
+  principal: string | null; valorPrincipal: number; unidade: string;
+}) {
+  const alterar = (i: number, p: Partial<PlacaProposta>) => onChange(placas.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const total = somar([valorPrincipal, ...placas.map((p) => p.valor ?? 0)]);
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-xs text-muted-foreground">
+        O caminhão escolhido em <strong>Veículo</strong> é o principal. Inclua aqui os outros caminhões desta proposta, cada um com o seu valor.
+        Ao gerar o contrato, todos vão juntos.
+      </p>
+      {placas.map((p, i) => {
+        // não repete a principal nem uma placa de outra linha
+        const opcoesPlaca = veiculos.filter((x) => x.value !== principal && !placas.some((o, j) => j !== i && o.veiculo_id === x.value));
+        return (
+          <div key={i} className="grid grid-cols-6 items-end gap-2 border-b pb-2 last:border-0">
+            <div className="col-span-6 space-y-1 sm:col-span-3"><Label className="text-xs">Caminhão</Label>
+              <SelectSimples value={p.veiculo_id ?? null} vazio="—" opcoes={opcoesPlaca} aria-label="Caminhão"
+                onChange={(v) => alterar(i, { veiculo_id: (v ?? undefined) as string })} /></div>
+            <div className="col-span-5 space-y-1 sm:col-span-2"><Label className="text-xs">Valor/{unidade}</Label>
+              <InputMoeda value={p.valor ?? null} onChange={(v) => alterar(i, { valor: (v ?? undefined) as number })} aria-label="Valor do caminhão" /></div>
+            <div className="col-span-1 flex justify-end">
+              <Button type="button" variant="ghost" size="icon-sm" title="Tirar este caminhão da proposta" aria-label="Tirar caminhão" onClick={() => onChange(placas.filter((_, j) => j !== i))}><Trash2 /></Button>
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => onChange([...placas, { ...PLACA_VAZIA }])}><Plus /> Adicionar caminhão</Button>
+        {placas.length > 0 && <p className="text-sm text-muted-foreground">Total: <strong>{formatBRL(total)}</strong>/{unidade} ({placas.length + 1} caminhões)</p>}
+      </div>
+    </div>
+  );
+}
 
 /** gerar o contrato já vale como aceite (sem passar por "aprovada") */
 const PODE_VIRAR_CONTRATO: StatusProposta[] = ["rascunho", "enviada", "aprovada"];
@@ -62,6 +107,15 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
     { nome: "tipo_cobranca", rotulo: "Cobrança", tipo: "select", col: 3, opcoes: [{ value: "mensal", label: "Mensal" }, { value: "diaria", label: "Diária" }] },
     { nome: "valor", rotulo: "Valor mensal", tipo: "moeda", obrigatorio: true, col: 3, visivel: (v) => !diaria(v) },
     { nome: "valor", rotulo: "Valor da diária", tipo: "moeda", obrigatorio: true, col: 3, visivel: diaria },
+    // só informa no PDF (coluna Quant.); não multiplica o valor digitado
+    { nome: "quantidade", rotulo: "Quantidade de veículos", tipo: "numero", col: 3, visivel: (v) => !diaria(v), ajuda: "Sai no PDF; não altera o valor" },
+    { nome: "quantidade", rotulo: "Quantidade de diárias", tipo: "numero", col: 3, visivel: diaria, ajuda: "Sai no PDF; não altera o valor" },
+    // mais de um caminhão na mesma proposta: cada um com o seu valor; ao gerar o contrato vão todos juntos
+    { nome: "placas_extras", rotulo: "Outros caminhões da proposta", tipo: "personalizado", col: 6, visivel: (v) => !!v.veiculo_id,
+      render: ({ value, onChange, valores }) => (
+        <EditorPlacasProposta placas={(value as PlacaProposta[] | undefined) ?? []} onChange={onChange} veiculos={veiculos} principal={valores.veiculo_id ?? null}
+          valorPrincipal={typeof valores.valor === "number" ? valores.valor : 0} unidade={diaria(valores) ? "diária" : "mês"} />
+      ) },
     // mobilização/desmobilização: cobradas uma vez cada; saem numa tabela própria no PDF (todos os modelos)
     { nome: "valor_mobilizacao", rotulo: "Valor da mobilização", tipo: "moeda", col: 3, placeholder: "Sem mobilização" },
     { nome: "valor_desmobilizacao", rotulo: "Valor da desmobilização", tipo: "moeda", col: 3, placeholder: "Sem desmobilização" },
@@ -79,7 +133,6 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
       opcoes: (Object.keys(MODELO_PROPOSTA) as ModeloProposta[]).map((m) => ({ value: m, label: MODELO_PROPOSTA[m] })) },
     { nome: "contato_cliente", rotulo: "A/C (contato no cliente)", col: 3, placeholder: "Ex.: Otávio — compras", avancado: true },
     { nome: "local_operacao", rotulo: "Local da operação", col: 3, placeholder: "Se vazio, usa a obra", avancado: true },
-    { nome: "quantidade", rotulo: "Quantidade", tipo: "numero", col: 2, ajuda: "Diárias ou equipamentos", avancado: true },
     { nome: "franquia", rotulo: "Franquia", col: 2, placeholder: "Ex.: 220 horas/mês", avancado: true },
     { nome: "km_livre", rotulo: "Km livre", col: 2, placeholder: "Ex.: 3 mil km/mês", avancado: true },
     { nome: "periodo_minimo", rotulo: "Prazo / período mínimo", col: 2, placeholder: "Ex.: 7 meses", avancado: true },
@@ -110,11 +163,13 @@ function ResumoContrato({ v, opcoes }: { v: PropostaForm; opcoes: OpcoesContrato
   const cliente = v.cliente_id === CLIENTE_NOVO ? v.cliente_novo : opcoes.clientes.find((c) => c.value === v.cliente_id)?.label;
   const obra = opcoes.obras.find((o) => o.value === v.obra_id)?.label;
   const veiculo = opcoes.veiculos.find((x) => x.value === v.veiculo_id)?.label;
+  const outras = (v.placas_extras ?? []).filter((p) => p.veiculo_id).length;
   const valor = typeof v.valor === "number" && v.valor > 0 ? v.valor : null;
   const itens: [string, React.ReactNode][] = [
     ["Cliente", cliente ? `${cliente}${obra ? ` · ${obra}` : ""}` : <span className="text-muted-foreground">—</span>],
-    ["Veículo", veiculo ?? <span className="text-status-alerta">definir para gerar o contrato</span>],
+    ["Veículo", veiculo ? `${veiculo}${outras ? ` + ${outras} caminhão${outras > 1 ? "ões" : ""}` : ""}` : <span className="text-status-alerta">definir para gerar o contrato</span>],
     [diaria ? "Diária" : "Mensal", valor ? formatBRL(valor) : <span className="text-muted-foreground">—</span>],
+    ...(typeof v.quantidade === "number" && v.quantidade > 1 ? [[diaria ? "Diárias" : "Veículos", String(v.quantidade)] as [string, React.ReactNode]] : []),
     ["Início", v.data_inicio_prevista ? formatData(v.data_inicio_prevista) : "na geração do contrato"],
     ["Medição", diaria ? "valor × dias" : String(v.dia_corte_inicio) === "21" ? "21 → 20" : "01 → fim do mês"],
     ["Pagamento", `${v.prazo_pagamento_dias ?? "—"} dias`],
@@ -177,7 +232,7 @@ export function PropostasCliente({ linhas, total, pagina, tamanho, opcoes, empre
         novo={{ modelo_documento: "guindaste", contato_cliente: null, local_operacao: null, quantidade: 1, franquia: null, km_livre: null, jornada: null,
           valor_mobilizacao: null, valor_desmobilizacao: null, multa_rescisao_pct: 10, tipo_cobranca: "mensal", modalidade: "com_motorista", empresa_id: empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: null, equipamento: null,
           valor: undefined, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_inicio_prevista: null, periodo_minimo: null,
-          validade: null, condicoes: null, observacoes: null, status: "rascunho", motivo_recusa: null }}
+          validade: null, condicoes: null, observacoes: null, status: "rascunho", motivo_recusa: null, placas_extras: [] }}
         paraForm={(r) => ({
           modelo_documento: r.modelo_documento, contato_cliente: r.contato_cliente, local_operacao: r.local_operacao, quantidade: r.quantidade, franquia: r.franquia,
           km_livre: r.km_livre, jornada: r.jornada, valor_mobilizacao: r.valor_mobilizacao, valor_desmobilizacao: r.valor_desmobilizacao,
@@ -185,6 +240,8 @@ export function PropostasCliente({ linhas, total, pagina, tamanho, opcoes, empre
           valor: r.valor, dia_corte_inicio: String(r.dia_corte_inicio) as never, prazo_pagamento_dias: r.prazo_pagamento_dias,
           data_inicio_prevista: r.data_inicio_prevista, periodo_minimo: r.periodo_minimo, validade: r.validade, condicoes: r.condicoes,
           observacoes: r.observacoes, status: r.status as PropostaForm["status"], motivo_recusa: r.motivo_recusa,
+          // sem a lista (tabela ainda não criada no banco): o formulário não mexe nas outras placas
+          placas_extras: r.placas_extras?.map(({ placa: _placa, ...p }) => p),
         })}
         salvar={salvarProposta} excluir={excluirProposta} podeEditar={podeEditar}
         acoesLinha={(r) => (
@@ -212,7 +269,8 @@ export function PropostasCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <div className="space-y-2">
             <p>Proposta <strong className="font-mono">{convertendo.numero}</strong> — {convertendo.cliente}{convertendo.obra ? ` / ${convertendo.obra}` : ""}.</p>
             {convertendo.veiculo_id
-              ? <p>Será criado um contrato <strong>ativo</strong> ({convertendo.tipo_cobranca === "diaria" ? "diária" : "mensal"} de {formatBRL(convertendo.valor)}) para <strong className="font-mono">{formatPlaca(convertendo.placa)}</strong>, com início em {formatData(convertendo.data_inicio_prevista ?? hojeSP())}. O repasse ao locador (se sublocado) é definido depois no contrato.</p>
+              ? <p>Será criado um contrato <strong>ativo</strong> ({convertendo.tipo_cobranca === "diaria" ? "diária" : "mensal"} de {formatBRL(convertendo.valor)}) para <strong className="font-mono">{formatPlaca(convertendo.placa)}</strong>
+                {!!convertendo.placas_extras?.length && <> e mais <strong className="font-mono">{convertendo.placas_extras.map((p) => `${formatPlaca(p.placa)} (${formatBRL(p.valor)})`).join(", ")}</strong></>}, com início em {formatData(convertendo.data_inicio_prevista ?? hojeSP())}. O repasse ao locador (se sublocado) é definido depois no contrato.</p>
               : <p className="text-status-critico">Edite a proposta e escolha o veículo antes de gerar o contrato.</p>}
           </div>
         )}

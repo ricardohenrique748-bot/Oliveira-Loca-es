@@ -35,6 +35,20 @@ export default function PropostasPage() {
       opcoesContrato(supabase, s.empresaId),
     ]);
 
+    // outras placas de cada proposta; sem a tabela (SQL 0085 não rodado) fica undefined e o formulário não mexe nelas
+    const ids = (linhas ?? []).map((r) => r.id);
+    let extras: Map<string, { veiculo_id: string; valor: number; placa: string }[]> | null = new Map();
+    if (ids.length) {
+      const { data: pp, error } = await supabase.from("proposta_placas")
+        .select("proposta_id, veiculo_id, valor, ordem, veiculos(placa)").in("proposta_id", ids).order("ordem").order("created_at");
+      if (error) extras = null;
+      else for (const x of pp ?? []) {
+        const lista = extras.get(x.proposta_id) ?? [];
+        lista.push({ veiculo_id: x.veiculo_id, valor: Number(x.valor), placa: x.veiculos?.placa ?? "" });
+        extras.set(x.proposta_id, lista);
+      }
+    }
+
     return {
       linhas: (linhas ?? []).map((r) => ({
         id: r.id, numero: r.numero, empresa_id: r.empresa_id, cliente_id: r.cliente_id, obra_id: r.obra_id, veiculo_id: r.veiculo_id,
@@ -48,6 +62,7 @@ export default function PropostasPage() {
         empresa: r.empresas?.apelido ?? "", empresa_razao: r.empresas?.razao_social ?? "", empresa_cnpj: r.empresas?.cnpj ?? null,
         cliente: r.clientes?.nome_fantasia ?? r.clientes?.razao_social ?? "", cliente_razao: r.clientes?.razao_social ?? "",
         cliente_cnpj: r.clientes?.cnpj ?? null, obra: r.obras?.nome ?? null, placa: r.veiculos?.placa ?? null, modelo: r.veiculos?.modelo ?? null,
+        placas_extras: extras ? extras.get(r.id) ?? [] : undefined,
       })),
       total: count ?? 0,
       pagina: p.pagina,

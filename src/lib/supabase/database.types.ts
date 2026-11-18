@@ -1873,6 +1873,51 @@ export type Database = {
           },
         ]
       }
+      proposta_placas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          ordem: number
+          proposta_id: string
+          valor: number
+          veiculo_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ordem?: number
+          proposta_id: string
+          valor: number
+          veiculo_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ordem?: number
+          proposta_id?: string
+          valor?: number
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposta_placas_proposta_id_fkey"
+            columns: ["proposta_id"]
+            isOneToOne: false
+            referencedRelation: "propostas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposta_placas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       propostas: {
         Row: {
           cliente_id: string

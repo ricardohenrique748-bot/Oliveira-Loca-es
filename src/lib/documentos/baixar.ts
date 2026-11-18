@@ -37,6 +37,9 @@ export function baixarPropostaPDF(id: string) {
       .eq("id", id).maybeSingle();
     if (error) throw error;
     if (!p?.empresas || !p.clientes) return null;
+    // outros caminhões da proposta (consulta à parte: sem a migration 0085 o PDF sai só com o principal)
+    const { data: outras } = await createClient().from("proposta_placas")
+      .select("valor, veiculos(placa, tipo, marca, modelo, ano)").eq("proposta_id", id).order("ordem").order("created_at");
     const dados: DadosProposta = {
       ...p,
       modelo_documento: p.modelo_documento as DadosProposta["modelo_documento"], modalidade: p.modalidade as DadosProposta["modalidade"],
@@ -45,6 +48,7 @@ export function baixarPropostaPDF(id: string) {
       valor_desmobilizacao: p.valor_desmobilizacao == null ? null : Number(p.valor_desmobilizacao),
       multa_rescisao_pct: Number(p.multa_rescisao_pct),
       empresa: p.empresas, cliente: p.clientes, obra: p.obras?.nome ?? null, veiculo: p.veiculos ?? null,
+      outras_placas: (outras ?? []).filter((o) => o.veiculos).map((o) => ({ veiculo: o.veiculos!, valor: Number(o.valor) })),
     };
     return montarProposta(dados);
   });
