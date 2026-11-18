@@ -59,6 +59,9 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
     { nome: "tipo_cobranca", rotulo: "Cobrança", tipo: "select", col: 3, opcoes: [{ value: "mensal", label: "Mensal" }, { value: "diaria", label: "Diária" }] },
     { nome: "valor", rotulo: "Valor mensal", tipo: "moeda", obrigatorio: true, col: 3, visivel: (v) => !diaria(v) },
     { nome: "valor", rotulo: "Valor da diária", tipo: "moeda", obrigatorio: true, col: 3, visivel: diaria },
+    // mobilização/desmobilização: cobradas uma vez cada; saem numa tabela própria no PDF (todos os modelos)
+    { nome: "valor_mobilizacao", rotulo: "Valor da mobilização", tipo: "moeda", col: 3, placeholder: "Sem mobilização" },
+    { nome: "valor_desmobilizacao", rotulo: "Valor da desmobilização", tipo: "moeda", col: 3, placeholder: "Sem desmobilização" },
 
     // mais opções
     { nome: "obra_id", rotulo: "Obra", tipo: "select", vazio: "—", opcoes: (v) => opcoes.obras.filter((o) => o.cliente_id === v.cliente_id), col: 3, visivel: (v) => !clienteNovo(v), avancado: true },
@@ -80,8 +83,6 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
     { nome: "periodo_minimo", rotulo: "Prazo / período mínimo", col: 2, placeholder: "Ex.: 7 meses", avancado: true },
     { nome: "multa_rescisao_pct", rotulo: "Multa por quebra (%)", tipo: "decimal", col: 2, avancado: true },
     { nome: "jornada", rotulo: "Jornada garantida", col: 2, visivel: guindaste, placeholder: JORNADA_PADRAO, avancado: true },
-    { nome: "valor_mobilizacao", rotulo: "Mobilização", tipo: "moeda", col: 3, visivel: guindaste, avancado: true },
-    { nome: "valor_desmobilizacao", rotulo: "Desmobilização", tipo: "moeda", col: 3, visivel: guindaste, avancado: true },
     { nome: "condicoes", rotulo: "Condições adicionais", tipo: "textarea", col: 6, ajuda: "Uma por linha. As condições padrão do modelo já saem no PDF.", placeholder: "Ex.: Seguro de carga por conta da contratante", avancado: true },
     { nome: "observacoes", rotulo: "Observações internas", tipo: "textarea", col: 6, avancado: true },
   ];

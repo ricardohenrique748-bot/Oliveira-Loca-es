@@ -172,7 +172,7 @@ export function CampoControlado<V extends FieldValues>({ campo, control, valores
             case "textarea":
               return <Textarea {...comum} placeholder={campo.placeholder} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value || null)} />;
             case "moeda":
-              return <InputMoeda {...comum} value={field.value} onChange={field.onChange} />;
+              return <InputMoeda {...comum} value={field.value} onChange={field.onChange} placeholder={campo.placeholder} />;
             case "numero":
             case "decimal":
               return <InputNumero {...comum} casas={tipo === "decimal" ? 2 : 0} value={field.value} onChange={field.onChange} placeholder={campo.placeholder} />;
