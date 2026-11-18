@@ -37,6 +37,26 @@ export async function alterarValorRepasse(repasseId: string, valorMensal: number
   }, REVALIDAR, "Valor do repasse salvo");
 }
 
+const ajusteRepasse = z.object({
+  tipo: z.enum(["acrescimo", "desconto"]),
+  descricao: z.string().trim().min(1, "Descreva o acréscimo/desconto").max(200),
+  valor: z.number().positive("Valor deve ser maior que zero"),
+});
+
+/** Acréscimos e descontos do recibo: gravados no repasse (mudam o líquido a pagar). Grava a lista inteira. */
+export async function salvarAjustesRepasse(repasseId: string, ajustes: unknown) {
+  return executar(async () => {
+    await exigirEscrita("repasses");
+    const p_repasse = z.string().uuid().parse(repasseId);
+    const p_ajustes = z.array(ajusteRepasse).max(50).parse(ajustes);
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_salvar_ajustes_repasse", { p_repasse, p_ajustes });
+    if (error && /fn_salvar_ajustes_repasse/.test(error.message)) throw new Error("O banco ainda não tem os ajustes do recibo: rode o SQL 0083 no Supabase");
+    if (error) throw error;
+    return null;
+  }, REVALIDAR, "Acréscimos e descontos salvos no repasse");
+}
+
 /** Marca / desmarca uma despesa "descontar do locador" neste repasse (o que fica de fora espera o próximo). */
 export async function escolherDescontoRepasse(repasseId: string, contaId: string, incluir: boolean) {
   return executar(async () => {

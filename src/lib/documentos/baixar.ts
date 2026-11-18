@@ -121,8 +121,11 @@ export function baixarFaturaPDF(id: string, baseDias: number) {
   });
 }
 
-/** Recibo para o locador assinar: os repasses escolhidos (mesma placa), com os abatimentos de cada um. */
-export function baixarReciboRepassePDF(ids: string[], ajustes?: DadosReciboRepasse["ajustes"]) {
+/**
+ * Recibo para o locador assinar: os repasses escolhidos (mesma placa), com os abatimentos de cada um.
+ * Descontos salvos no repasse já vêm nos abatimentos; acréscimos salvos saem como linhas "(+)".
+ */
+export function baixarReciboRepassePDF(ids: string[]) {
   return gerar(async () => {
     const supabase = createClient();
     const { data: rs, error } = await supabase.from("repasses_v")
@@ -130,17 +133,23 @@ export function baixarReciboRepassePDF(ids: string[], ajustes?: DadosReciboRepas
     if (error) throw error;
     const [r0] = rs ?? [];
     if (!r0?.locador_id || !r0.empresa_id) return null;
-    const [loc, emp, abat] = await Promise.all([
+    const [loc, emp, abat, aj] = await Promise.all([
       supabase.from("locadores").select("nome, cpf_cnpj, chave_pix, tipo_chave_pix, banco, nome_titular_pix").eq("id", r0.locador_id).maybeSingle(),
       supabase.from("empresas").select(EMPRESA).eq("id", r0.empresa_id).maybeSingle(),
       supabase.from("repasse_abatimentos").select("repasse_id, descricao, valor").in("repasse_id", ids),
+      supabase.from("repasse_ajustes").select("repasse_id, descricao, valor").eq("tipo", "acrescimo").in("repasse_id", ids).order("ordem"),
     ]);
-    for (const x of [loc, emp, abat]) if (x.error) throw x.error;
+    for (const x of [loc, emp, abat, aj]) if (x.error) throw x.error;
     if (!loc.data || !emp.data) return null;
+    const acrescimos = aj.data ?? [];
+    const acrescimoDe = (id: string) => acrescimos.filter((a) => a.repasse_id === id).reduce((s, a) => s + Number(a.valor), 0);
     const dados: DadosReciboRepasse = {
-      placa: r0.placa ?? "", empresa: emp.data, locador: loc.data as DadosReciboRepasse["locador"], data: hojeSP(), ajustes,
+      placa: r0.placa ?? "", empresa: emp.data, locador: loc.data as DadosReciboRepasse["locador"], data: hojeSP(),
+      ajustes: { acrescimos: acrescimos.map((a) => ({ descricao: a.descricao, valor: Number(a.valor) })), descontos: [] },
       repasses: (rs ?? []).map((r) => ({
-        periodo_inicio: r.periodo_inicio!, periodo_fim: r.periodo_fim!, dias: r.dias, valor_bruto: r.valor_bruto ?? 0, valor_liquido: r.valor_liquido ?? 0,
+        // o líquido gravado já soma os acréscimos; o recibo os soma de novo como linhas "(+)"
+        periodo_inicio: r.periodo_inicio!, periodo_fim: r.periodo_fim!, dias: r.dias, valor_bruto: r.valor_bruto ?? 0,
+        valor_liquido: Math.round(((r.valor_liquido ?? 0) - acrescimoDe(r.id!)) * 100) / 100,
         abatimentos: (abat.data ?? []).filter((a) => a.repasse_id === r.id).map((a) => ({ descricao: a.descricao, valor: a.valor })),
       })),
     };

@@ -2129,6 +2129,20 @@ export type Database = {
           },
         ]
       }
+      repasse_ajustes: {
+        Row: { created_at: string; created_by: string | null; descricao: string; id: string; ordem: number; repasse_id: string; tipo: string; updated_at: string; valor: number }
+        Insert: { created_at?: string; created_by?: string | null; descricao: string; id?: string; ordem?: number; repasse_id: string; tipo: string; updated_at?: string; valor: number }
+        Update: { created_at?: string; created_by?: string | null; descricao?: string; id?: string; ordem?: number; repasse_id?: string; tipo?: string; updated_at?: string; valor?: number }
+        Relationships: [
+          {
+            foreignKeyName: "repasse_ajustes_repasse_id_fkey"
+            columns: ["repasse_id"]
+            isOneToOne: false
+            referencedRelation: "repasses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       repasses: {
         Row: {
           adiantado: boolean
@@ -2800,6 +2814,13 @@ export type Database = {
         Args: {
           p_repasse: string
           p_valor_mensal: number
+        }
+        Returns: { adiantado: boolean; aprovado_por: string | null; comprovante_url: string | null; created_at: string; created_by: string | null; data_pagamento: string | null; data_prevista: string | null; empresa_id: string; id: string; locador_id: string; medicao_id: string; observacoes: string | null; status: Database["public"]["Enums"]["status_repasse"]; updated_at: string; valor_abatimentos: number; valor_bruto: number; valor_liquido: number; valor_repasse_mensal: number; veiculo_id: string }
+      }
+      fn_salvar_ajustes_repasse: {
+        Args: {
+          p_repasse: string
+          p_ajustes: Json
         }
         Returns: { adiantado: boolean; aprovado_por: string | null; comprovante_url: string | null; created_at: string; created_by: string | null; data_pagamento: string | null; data_prevista: string | null; empresa_id: string; id: string; locador_id: string; medicao_id: string; observacoes: string | null; status: Database["public"]["Enums"]["status_repasse"]; updated_at: string; valor_abatimentos: number; valor_bruto: number; valor_liquido: number; valor_repasse_mensal: number; veiculo_id: string }
       }

@@ -1,6 +1,9 @@
 "use client";
 import * as React from "react";
-import { FileText, Loader2, Minus, Plus, Trash2 } from "lucide-react";
+import { FileText, Loader2, Minus, Plus, Save, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
+import { salvarAjustesRepasse } from "./actions";
 import { Checkbox, Label } from "@/components/ui/basicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,47 +14,121 @@ import { somar } from "@/lib/calculos";
 import { formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { baixarReciboDescontosPDF, baixarReciboRepassePDF, type ItemRecibo } from "@/lib/documentos/baixar";
 
-type RepasseRecibo = { id: string; placa: string; periodo_inicio: string; periodo_fim: string; valor_liquido: number };
+type RepasseRecibo = { id: string; placa: string; periodo_inicio: string; periodo_fim: string; valor_liquido: number; status: string };
 type Tipo = "acrescimos" | "descontos";
+const VAZIO: Record<Tipo, ItemRecibo[]> = { acrescimos: [], descontos: [] };
+/** acréscimos − descontos */
+const efeito = (a: Record<Tipo, ItemRecibo[]>) => somar([...a.acrescimos.map((x) => x.valor), ...a.descontos.map((x) => -x.valor)]);
 
 /**
  * Recibo do repasse para o locador assinar. Começa com o repasse clicado; os outros da mesma placa
- * na lista podem entrar no mesmo recibo. Acréscimos e descontos digitados aqui só saem no PDF
- * (o valor do repasse registrado não muda).
+ * na lista podem entrar no mesmo recibo. Acréscimos e descontos digitados aqui ficam gravados no
+ * repasse clicado (mudam o líquido a pagar) — salvos ao gerar o PDF ou no botão Salvar.
  */
-export function DialogoReciboRepasse({ repasse, mesmaPlaca, onOpenChange }: {
+export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenChange, onSalvo }: {
   repasse: RepasseRecibo | null;
   /** repasses da mesma placa na lista (inclui o clicado) */
   mesmaPlaca: RepasseRecibo[];
+  podeEditar: boolean;
   onOpenChange: (v: boolean) => void;
+  onSalvo: () => void;
 }) {
   const [marcados, setMarcados] = React.useState<Set<string>>(new Set());
-  const [ajustes, setAjustes] = React.useState<Record<Tipo, ItemRecibo[]>>({ acrescimos: [], descontos: [] });
+  const [ajustes, setAjustes] = React.useState<Record<Tipo, ItemRecibo[]>>(VAZIO);
+  /** o que está gravado no banco para o repasse clicado */
+  const [salvos, setSalvos] = React.useState<Record<Tipo, ItemRecibo[]>>(VAZIO);
+  /** efeito (acréscimos − descontos) que o líquido da lista já carrega; muda quando a lista recarrega após salvar */
+  const [naLista, setNaLista] = React.useState(0);
+  const salvosRef = React.useRef(salvos);
+  salvosRef.current = salvos;
+  const [carregando, setCarregando] = React.useState(false);
   const [gerando, setGerando] = React.useState(false);
+  const [salvando, setSalvando] = React.useState(false);
+  const editavel = !!repasse && podeEditar && (repasse.status === "previsto" || repasse.status === "liberado");
 
+  const repasseId = repasse?.id;
   React.useEffect(() => {
-    if (repasse) { setMarcados(new Set([repasse.id])); setAjustes({ acrescimos: [], descontos: [] }); }
-  }, [repasse]);
+    if (!repasseId) return;
+    setMarcados(new Set([repasseId]));
+    setAjustes(VAZIO); setSalvos(VAZIO); setNaLista(0);
+    let vivo = true;
+    setCarregando(true);
+    createClient().from("repasse_ajustes").select("tipo, descricao, valor").eq("repasse_id", repasseId).order("ordem")
+      .then(({ data, error }) => {
+        if (!vivo) return;
+        setCarregando(false);
+        if (error) return; // banco sem a tabela (SQL 0083 não rodado): começa vazio
+        const lidos = {
+          acrescimos: (data ?? []).filter((a) => a.tipo === "acrescimo").map((a) => ({ descricao: a.descricao, valor: Number(a.valor) })),
+          descontos: (data ?? []).filter((a) => a.tipo === "desconto").map((a) => ({ descricao: a.descricao, valor: Number(a.valor) })),
+        };
+        setAjustes(lidos); setSalvos(lidos); setNaLista(efeito(lidos));
+      });
+    return () => { vivo = false; };
+  }, [repasseId]);
+
+  // a lista recarregou com o líquido novo (já com o que foi salvo)
+  const liquidoLista = repasse?.valor_liquido;
+  const visto = React.useRef<{ id?: string; liquido?: number }>({});
+  React.useEffect(() => {
+    const antes = visto.current;
+    visto.current = { id: repasseId, liquido: liquidoLista };
+    // só quando é o mesmo repasse e o valor mudou (troca de repasse é tratada na carga acima)
+    if (antes.id === repasseId && antes.liquido !== liquidoLista) setNaLista(efeito(salvosRef.current));
+  }, [repasseId, liquidoLista]);
 
   const opcoes = [...mesmaPlaca].sort((a, b) => a.periodo_inicio.localeCompare(b.periodo_inicio));
   const escolhidos = opcoes.filter((r) => marcados.has(r.id));
   const marcar = (id: string, sim: boolean) => setMarcados((m) => { const n = new Set(m); if (sim) n.add(id); else n.delete(id); return n; });
 
-  const total = somar([...escolhidos.map((r) => r.valor_liquido), ...ajustes.acrescimos.map((a) => a.valor), ...ajustes.descontos.map((a) => -a.valor)]);
+  // o líquido da lista já tem os ajustes salvos: troca pelos da tela
+  const doClicado = repasse && marcados.has(repasse.id) ? efeito(ajustes) - naLista : 0;
+  const total = somar([...escolhidos.map((r) => r.valor_liquido), doClicado]);
   const incompleto = ajustesIncompletos(ajustes);
+  const mudou = JSON.stringify(ajustes) !== JSON.stringify(salvos);
+
+  const salvar = async () => {
+    if (!repasse) return false;
+    setSalvando(true);
+    const res = await salvarAjustesRepasse(repasse.id, [
+      ...ajustes.acrescimos.map((a) => ({ tipo: "acrescimo", descricao: a.descricao, valor: a.valor })),
+      ...ajustes.descontos.map((a) => ({ tipo: "desconto", descricao: a.descricao, valor: a.valor })),
+    ]);
+    setSalvando(false);
+    if (!res.ok) { toast.error(res.erro); return false; }
+    toast.success(res.mensagem);
+    setSalvos(ajustes);
+    onSalvo();
+    return true;
+  };
 
   const gerar = async () => {
+    if (mudou && !(await salvar())) return;
     setGerando(true);
-    await baixarReciboRepassePDF(escolhidos.map((r) => r.id), ajustes);
+    await baixarReciboRepassePDF(escolhidos.map((r) => r.id));
     setGerando(false);
   };
 
+  const fechar = async (v: boolean) => {
+    if (!v && editavel && mudou) {
+      // incompleto ou passando do repasse: não fecha calado, avisa o que falta
+      if (incompleto) { toast.error("Preencha descrição e valor de cada acréscimo/desconto (ou remova a linha) antes de fechar"); return; }
+      if (total < 0) { toast.error("Os descontos passam do valor do repasse"); return; }
+      if (!(await salvar())) return;
+    }
+    onOpenChange(v);
+  };
+
   return (
-    <Dialog open={!!repasse} onOpenChange={onOpenChange}>
+    <Dialog open={!!repasse} onOpenChange={fechar}>
       <DialogContent tamanho="lg">
         <DialogHeader>
           <DialogTitle>Recibo do repasse · <span className="font-mono">{repasse ? formatPlaca(repasse.placa) : ""}</span></DialogTitle>
-          <DialogDescription>Acréscimos e descontos incluídos aqui saem só no recibo; o valor do repasse no sistema não muda.</DialogDescription>
+          <DialogDescription>
+            {editavel
+              ? "Acréscimos e descontos incluídos aqui ficam salvos neste repasse e mudam o valor a pagar ao dono."
+              : "Repasse pago ou cancelado: os acréscimos e descontos não podem mais ser alterados."}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -66,16 +143,24 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, onOpenChange }: {
               ))}
             </div>
           </div>
-          <EditorAjustes ajustes={ajustes} onChange={setAjustes} />
+          {carregando
+            ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando acréscimos e descontos…</p>
+            : <EditorAjustes ajustes={ajustes} onChange={setAjustes} editavel={editavel} />}
           <div className="flex items-center justify-between rounded-md bg-muted p-3 text-sm">
             <span className="text-muted-foreground">Total do recibo</span>
             <span className="text-lg font-semibold"><Moeda valor={total} /></span>
           </div>
           {total < 0 && <p className="text-sm text-destructive">Os descontos passam do valor do repasse.</p>}
+          {mudou && editavel && <p className="text-xs text-muted-foreground">Alterações ainda não salvas — salvam ao fechar, ao gerar o recibo ou no botão Salvar.</p>}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          <Button disabled={!escolhidos.length || incompleto || total < 0 || gerando} onClick={gerar}>
+          <Button variant="outline" onClick={() => fechar(false)}>Fechar</Button>
+          {editavel && (
+            <Button variant="outline" disabled={!mudou || incompleto || total < 0 || salvando || carregando} onClick={salvar}>
+              {salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar
+            </Button>
+          )}
+          <Button disabled={!escolhidos.length || incompleto || total < 0 || gerando || salvando || carregando} onClick={gerar}>
             {gerando ? <Loader2 className="animate-spin" /> : <FileText />} Gerar recibo (PDF)
           </Button>
         </DialogFooter>
@@ -86,8 +171,8 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, onOpenChange }: {
 
 const ajustesIncompletos = (a: Record<Tipo, ItemRecibo[]>) => [...a.acrescimos, ...a.descontos].some((x) => !x.descricao.trim() || x.valor <= 0);
 
-/** Acréscimos e descontos digitados na hora: só saem no PDF. */
-function EditorAjustes({ ajustes, onChange }: { ajustes: Record<Tipo, ItemRecibo[]>; onChange: (a: Record<Tipo, ItemRecibo[]>) => void }) {
+/** Acréscimos e descontos digitados no recibo (no repasse ficam salvos; na placa sem fatura, só saem no PDF). */
+function EditorAjustes({ ajustes, onChange, editavel = true }: { ajustes: Record<Tipo, ItemRecibo[]>; onChange: (a: Record<Tipo, ItemRecibo[]>) => void; editavel?: boolean }) {
   const editar = (tipo: Tipo, k: number, campos: Partial<ItemRecibo>) =>
     onChange({ ...ajustes, [tipo]: ajustes[tipo].map((it, j) => (j === k ? { ...it, ...campos } : it)) });
   const remover = (tipo: Tipo, k: number) => onChange({ ...ajustes, [tipo]: ajustes[tipo].filter((_, j) => j !== k) });
@@ -97,14 +182,14 @@ function EditorAjustes({ ajustes, onChange }: { ajustes: Record<Tipo, ItemRecibo
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label>{titulo}</Label>
-        <Button size="xs" variant="outline" onClick={() => incluir(tipo)}>{tipo === "acrescimos" ? <Plus /> : <Minus />} {tipo === "acrescimos" ? "Acréscimo" : "Desconto"}</Button>
+        {editavel && <Button size="xs" variant="outline" onClick={() => incluir(tipo)}>{tipo === "acrescimos" ? <Plus /> : <Minus />} {tipo === "acrescimos" ? "Acréscimo" : "Desconto"}</Button>}
       </div>
       {ajustes[tipo].map((it, k) => (
         <div key={k} className="flex items-center gap-2">
-          <Input aria-label={`Descrição do ${tipo === "acrescimos" ? "acréscimo" : "desconto"} ${k + 1}`} className="flex-1" value={it.descricao} maxLength={200}
+          <Input aria-label={`Descrição do ${tipo === "acrescimos" ? "acréscimo" : "desconto"} ${k + 1}`} className="flex-1" disabled={!editavel} value={it.descricao} maxLength={200}
             placeholder={exemplo} onChange={(e) => editar(tipo, k, { descricao: e.target.value })} />
-          <InputMoeda aria-label="Valor" className="w-36" permitirVazio={false} value={it.valor} onChange={(v) => editar(tipo, k, { valor: v ?? 0 })} />
-          <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" aria-label="Remover" onClick={() => remover(tipo, k)}><Trash2 /></Button>
+          <InputMoeda aria-label="Valor" className="w-36" disabled={!editavel} permitirVazio={false} value={it.valor} onChange={(v) => editar(tipo, k, { valor: v ?? 0 })} />
+          {editavel && <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" aria-label="Remover" onClick={() => remover(tipo, k)}><Trash2 /></Button>}
         </div>
       ))}
     </div>

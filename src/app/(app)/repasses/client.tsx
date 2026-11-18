@@ -52,7 +52,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
   const router = useRouter();
   const [pagando, setPagando] = React.useState<Repasse | null>(null);
   const [lancando, setLancando] = React.useState(false);
-  // recibo do repasse para o locador assinar (acréscimos/descontos só no PDF)
+  // recibo do repasse para o locador assinar (acréscimos/descontos ficam salvos no repasse)
   const [recibo, setRecibo] = React.useState<Repasse | null>(null);
   const [reciboDescontos, setReciboDescontos] = React.useState<{ placa: string | null; ds: DescontoPendente[] } | null>(null);
   const [abertos, setAbertos] = React.useState<Set<string>>(new Set());
@@ -291,8 +291,8 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
         </Card>
       )}
 
-      <DialogoReciboRepasse repasse={recibo} mesmaPlaca={recibo ? repasses.filter((x) => x.veiculo_id === recibo.veiculo_id && x.status !== "cancelado") : []}
-        onOpenChange={(v) => !v && setRecibo(null)} />
+      <DialogoReciboRepasse repasse={recibo ? repasses.find((x) => x.id === recibo.id) ?? recibo : null} mesmaPlaca={recibo ? repasses.filter((x) => x.veiculo_id === recibo.veiculo_id && x.status !== "cancelado") : []}
+        podeEditar={podeEditar} onOpenChange={(v) => !v && setRecibo(null)} onSalvo={() => router.refresh()} />
       <DialogoReciboDescontos placa={reciboDescontos?.placa ?? null} descontos={reciboDescontos?.ds ?? SEM_DESCONTOS} onOpenChange={(v) => !v && setReciboDescontos(null)} />
       <DialogoLancar aberto={lancando} onOpenChange={setLancando} onEscolher={(r) => { setLancando(false); setPagando(r); }} />
       <DialogoPagar repasse={pagando} locador={pagando ? locadorDe(pagando.locador_id, pagando.locador_nome) : null} onOpenChange={(v) => !v && setPagando(null)} onFeito={() => router.refresh()} />

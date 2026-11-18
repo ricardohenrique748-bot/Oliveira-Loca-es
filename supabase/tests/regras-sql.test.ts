@@ -696,6 +696,30 @@ describe("repasse: descontos da fatura saem do dono", () => {
   });
 });
 
+describe("repasse: acréscimos e descontos do recibo ficam salvos", () => {
+  it("mudam o líquido, aparecem nos abatimentos, regravam a lista e só admin/financeiro alteram", async () => {
+    const [rp] = await q<{ id: string; b: string; l: string; a: string }>(
+      `select id, valor_bruto::text b, valor_liquido::text l, valor_abatimentos::text a from public.repasses
+        where status in ('previsto','liberado') and valor_bruto > 3000 order by created_at limit 1`);
+    const ler = async () => (await q<{ l: string; a: string }>("select valor_liquido::text l, valor_abatimentos::text a from public.repasses where id = $1", [rp.id]))[0];
+    const salvar = (aj: unknown[], u = U.financeiro) => comoUsuario(db, u, () => q("select public.fn_salvar_ajustes_repasse($1, $2::jsonb)", [rp.id, JSON.stringify(aj)]));
+
+    await salvar([{ tipo: "desconto", descricao: "Serviço Bomba Injetora 4/6", valor: 1500 }, { tipo: "acrescimo", descricao: "Frete", valor: 200 }]);
+    let r = await ler();
+    expect(Number(r.l)).toBeCloseTo(Number(rp.l) - 1500 + 200, 2);
+    expect(Number(r.a)).toBeCloseTo(Number(rp.a) + 1500, 2);
+    const [linha] = await q("select 1 from public.repasse_abatimentos where repasse_id = $1 and descricao = 'Serviço Bomba Injetora 4/6' and conta_pagar_id is null", [rp.id]);
+    expect(linha).toBeTruthy();
+
+    // regrava a lista inteira: tirar tudo volta ao valor de antes
+    await salvar([]);
+    r = await ler();
+    expect(Number(r.l)).toBeCloseTo(Number(rp.l), 2);
+
+    await expect(salvar([{ tipo: "desconto", descricao: "x", valor: 10 }], U.consulta)).rejects.toThrow();
+  });
+});
+
 describe("NFS-e: cancelamento", () => {
   it("só admin/financeiro; registra a nota cancelada e libera nova emissão", async () => {
     const CH = "3".repeat(50);
