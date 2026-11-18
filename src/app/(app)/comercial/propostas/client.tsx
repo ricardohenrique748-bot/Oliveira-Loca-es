@@ -48,8 +48,11 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
   const clienteNovo = (v: PropostaForm) => v.cliente_id === CLIENTE_NOVO;
   return [
     // essencial
-    { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: [{ value: CLIENTE_NOVO, label: "+ Cliente sem cadastro (digitar nome)" }, ...opcoes.clientes], obrigatorio: true, col: 4 },
-    { nome: "data_inicio_prevista", rotulo: "Início previsto", tipo: "data", col: 2 },
+    // empresa que emite a proposta: dados do fornecedor, CNPJ e numeração (PR-001/26 é por empresa) saem dela
+    { nome: "empresa_id", rotulo: "Empresa emissora", tipo: "select", opcoes: empresas, obrigatorio: true, col: 3,
+      ajuda: "Escolher um veículo troca para a empresa dona dele" },
+    { nome: "data_inicio_prevista", rotulo: "Início previsto", tipo: "data", col: 3 },
+    { nome: "cliente_id", rotulo: "Cliente", tipo: "select", opcoes: [{ value: CLIENTE_NOVO, label: "+ Cliente sem cadastro (digitar nome)" }, ...opcoes.clientes], obrigatorio: true, col: 6 },
     { nome: "cliente_novo", rotulo: "Nome do cliente", obrigatorio: true, col: 6, visivel: clienteNovo, placeholder: "Ex.: Construtora Alfa Ltda" },
     { nome: "cliente_novo_endereco", rotulo: "Endereço", col: 4, visivel: clienteNovo, placeholder: "Rua, número, bairro, cidade" },
     { nome: "cliente_novo_telefone", rotulo: "Telefone", tipo: "telefone", col: 2, visivel: clienteNovo,
@@ -74,7 +77,6 @@ function camposProposta(opcoes: OpcoesContrato, empresas: Opcao[]): Campo<Propos
       opcoes: [{ value: "com_motorista", label: "Com motorista" }, { value: "sem_motorista", label: "Sem motorista" }] },
     { nome: "modelo_documento", rotulo: "Modelo do PDF", tipo: "select", col: 2, avancado: true,
       opcoes: (Object.keys(MODELO_PROPOSTA) as ModeloProposta[]).map((m) => ({ value: m, label: MODELO_PROPOSTA[m] })) },
-    { nome: "empresa_id", rotulo: "Empresa emissora", tipo: "select", opcoes: empresas, obrigatorio: true, col: 2, avancado: true },
     { nome: "contato_cliente", rotulo: "A/C (contato no cliente)", col: 3, placeholder: "Ex.: Otávio — compras", avancado: true },
     { nome: "local_operacao", rotulo: "Local da operação", col: 3, placeholder: "Se vazio, usa a obra", avancado: true },
     { nome: "quantidade", rotulo: "Quantidade", tipo: "numero", col: 2, ajuda: "Diárias ou equipamentos", avancado: true },
