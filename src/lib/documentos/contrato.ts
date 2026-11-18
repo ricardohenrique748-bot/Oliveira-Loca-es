@@ -18,6 +18,8 @@ export interface DadosContrato {
     placa: string; marca: string | null; modelo: string | null; ano: number | null; chassi: string | null; cor: string | null;
     km_atual: number; horimetro_atual: number; proprietario: "proprio" | "locador";
   };
+  /** quantidade informativa de veículos/equipamentos (não muda o valor); vazia = não sai */
+  quantidade?: number | null;
   /** contrato com várias placas: as outras, cada uma com o seu valor (a principal usa valor_mensal) */
   outros_veiculos?: { placa: string; marca: string | null; modelo: string | null; ano: number | null; chassi: string | null; cor: string | null; valor_mensal: number }[];
 }
@@ -68,6 +70,8 @@ export function montarContrato(c: DadosContrato): Documento {
     ? `${outros.length + 1} veículos/equipamentos — Placas ${[v.placa, ...outros.map((x) => x.placa)].map(formatPlaca).join(", ")}`
     : [v.marca, v.modelo, v.ano && `(${v.ano})`].filter(Boolean).join(" ") + ` — Placa ${formatPlaca(v.placa)}`;
   const comMotorista = v.proprietario === "proprio";
+  const qtd = c.quantidade && c.quantidade > 0 ? c.quantidade : null;
+  const qtdTexto = qtd ? `${extensoDias(qtd)} ${qtd === 1 ? "veículo/equipamento" : "veículos/equipamentos"}` : null;
   const enderecoCli = enderecoCompleto(cli) || "[ENDEREÇO COMPLETO]";
 
   const blocos: Bloco[] = [
@@ -85,6 +89,7 @@ export function montarContrato(c: DadosContrato): Documento {
       ["LOCATÁRIA", `${cli.razao_social} — CNPJ ${cli.cnpj ?? "[●]"}`],
       ...(c.obra ? [["Obra", c.obra] as [string, string]] : []),
       ["Veículo/equipamento", `${veiculoCurto} — cláusula 1`],
+      ...(qtdTexto ? [["Quantidade", `${qtdTexto} — cláusula 1`] as [string, string]] : []),
       ["Modalidade", comMotorista ? "Com motorista/operador fornecido pela LOCADORA — cláusula 8" : "Sem motorista: condução e operação pela LOCATÁRIA — cláusula 8"],
       ["Início da locação", `${formatData(c.data_inicio)} — cláusula 2`],
       ["Prazo", `${prazoDias != null ? `${prazoDias} dias` : "Indeterminado"} — cláusula 2`],
@@ -100,6 +105,7 @@ export function montarContrato(c: DadosContrato): Documento {
       varias ? "O presente contrato tem por objeto a locação dos seguintes veículos/equipamentos:" : "O presente contrato tem por objeto a locação do seguinte veículo/equipamento:",
       { bloco: { t: "tabela", cabecalho: ["Marca", "Modelo", "Ano", "Chassi", "Placa", "Cor"],
         linhas: [v, ...outros].map((x) => [x.marca ?? "", x.modelo ?? "", x.ano ? String(x.ano) : "", x.chassi ?? "", formatPlaca(x.placa), x.cor ?? ""]) } },
+      ...(qtdTexto ? [`A quantidade contratada é de ${qtdTexto}.`] : []),
       "As informações constantes desta cláusula poderão ser adaptadas a cada contratação, conforme o veículo ou equipamento efetivamente locado, sendo vedada a substituição do bem por outro sem registro e concordância entre as partes.",
       "Integram o presente contrato, para todos os efeitos, a Ordem de Serviço/Ordem de Locação, o checklist de entrega, o registro fotográfico, o checklist de devolução, propostas comerciais eventualmente aprovadas e demais documentos expressamente vinculados à contratação.",
       "Havendo divergência entre informações exclusivamente operacionais constantes da Ordem de Serviço e deste contrato, prevalecerão as disposições deste instrumento, ressalvadas condições comerciais específicas formalmente acordadas entre as partes.",

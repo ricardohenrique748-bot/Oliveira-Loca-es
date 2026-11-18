@@ -14,6 +14,8 @@ const contratoBase = z.object({
   tipo_cobranca: z.enum(["mensal", "diaria", "hora"]).default("mensal"),
   valor_mensal: moedaObr("o valor").refine((v) => v > 0, "Informe o valor"),
   valor_repasse_mensal: moedaOpc,
+  /** quantidade de veículos/equipamentos: só informativa (sai no PDF do contrato, não muda o valor) */
+  quantidade: z.number().int("Quantidade sem casas decimais").min(1, "Mínimo 1").max(9999).nullish().transform((v) => v ?? null),
   dia_corte_inicio: z.coerce.number().refine((v) => v === 1 || v === 21, "Corte deve ser dia 1 ou 21"),
   prazo_pagamento_dias: z.number({ invalid_type_error: "Informe o prazo" }).int().min(0).max(365),
   /** data do pagamento: preenchida, a fatura vence nesse dia do mês seguinte à emissão (o prazo em dias deixa de valer) */

@@ -73,13 +73,15 @@ async function documentoContrato(id: string) {
     .eq("id", id).maybeSingle();
   if (error) throw error;
   if (!c?.empresas || !c.clientes || !c.veiculos) return null;
+  // quantidade informativa (consulta à parte: sem a migration 0086 o PDF sai sem ela)
+  const { data: qtd } = await createClient().from("contratos").select("quantidade").eq("id", id).maybeSingle();
   // outras placas do contrato (consulta à parte: sem a migration 0071 o PDF sai só com a principal)
   const { data: outras } = await createClient().from("contrato_placas")
     .select("valor_mensal, ordem, created_at, veiculos(placa, marca, modelo, ano, chassi, cor)").eq("contrato_id", id).order("ordem").order("created_at");
   const dados: DadosContrato = {
     outros_veiculos: (outras ?? []).filter((o) => o.veiculos).map((o) => ({ ...o.veiculos!, valor_mensal: Number(o.valor_mensal) })),
     ...c,
-    tipo_cobranca: c.tipo_cobranca as DadosContrato["tipo_cobranca"], valor_mensal: Number(c.valor_mensal),
+    tipo_cobranca: c.tipo_cobranca as DadosContrato["tipo_cobranca"], valor_mensal: Number(c.valor_mensal), quantidade: qtd?.quantidade ?? null,
     empresa: c.empresas, cliente: c.clientes, obra: c.obras?.nome ?? null,
     veiculo: { ...c.veiculos, km_atual: Number(c.veiculos.km_atual), horimetro_atual: Number(c.veiculos.horimetro_atual) },
   };

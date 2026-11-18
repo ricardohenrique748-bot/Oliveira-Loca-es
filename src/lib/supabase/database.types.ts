@@ -703,6 +703,7 @@ export type Database = {
           obra_id: string | null
           observacoes: string | null
           prazo_pagamento_dias: number
+          quantidade: number | null
           status: Database["public"]["Enums"]["status_contrato"]
           tipo_cobranca: string
           updated_at: string
@@ -736,6 +737,7 @@ export type Database = {
           obra_id?: string | null
           observacoes?: string | null
           prazo_pagamento_dias?: number
+          quantidade?: number | null
           status?: Database["public"]["Enums"]["status_contrato"]
           tipo_cobranca?: string
           updated_at?: string
@@ -769,6 +771,7 @@ export type Database = {
           obra_id?: string | null
           observacoes?: string | null
           prazo_pagamento_dias?: number
+          quantidade?: number | null
           status?: Database["public"]["Enums"]["status_contrato"]
           tipo_cobranca?: string
           updated_at?: string

@@ -64,6 +64,9 @@ export async function gerarContratoDaProposta(propostaId: string) {
     const id = z.string().uuid().parse(propostaId);
     const supabase = await createClient();
     const contratoId = checar(await supabase.rpc("fn_proposta_gerar_contrato", { p_proposta: id })) as string;
+    // quantidade da proposta vai para o contrato (só informativa); sem a migration 0086, segue sem ela
+    const { data: prop } = await supabase.from("propostas").select("quantidade").eq("id", id).maybeSingle();
+    if (prop?.quantidade && prop.quantidade > 0) await supabase.from("contratos").update({ quantidade: prop.quantidade }).eq("id", contratoId);
     // como no contrato criado à mão, a primeira fatura já vai para o faturamento
     await enviarAoFaturamento(contratoId);
     return { contratoId };

@@ -7,7 +7,7 @@ import { lerParams } from "@/lib/consulta";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { ContratosCliente } from "./client";
-import { opcoesContrato, placasDosContratos } from "./dados";
+import { opcoesContrato, placasDosContratos, quantidadesDosContratos } from "./dados";
 
 export default function ContratosPage() {
   const { sessao } = useAuth();
@@ -41,7 +41,8 @@ export default function ContratosPage() {
       opcoesContrato(supabase, s.empresaId),
     ]);
 
-    const extras = await placasDosContratos(supabase, (linhas ?? []).map((c) => c.id));
+    const ids = (linhas ?? []).map((c) => c.id);
+    const [extras, qtds] = await Promise.all([placasDosContratos(supabase, ids), quantidadesDosContratos(supabase, ids)]);
 
     return {
       linhas: (linhas ?? []).map((c) => ({
@@ -73,6 +74,7 @@ export default function ContratosPage() {
         modelo: c.veiculos.modelo,
         proprietario: c.veiculos.proprietario,
         placas_extras: extras ? extras.get(c.id) ?? [] : undefined,
+        quantidade: qtds.get(c.id) ?? null,
       })),
       total: count ?? 0,
       pagina: p.pagina,

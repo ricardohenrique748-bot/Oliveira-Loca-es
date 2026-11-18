@@ -9,6 +9,9 @@ import { createClient } from "@/lib/supabase/server";
 import { contratoSchema, desmobilizarSchema, placasContratoSchema, renovacaoSchema } from "@/lib/schemas/operacao";
 import { cobrancaAvulsa } from "@/lib/calculos";
 
+/** quantidade só vai ao banco quando preenchida: sem a migration 0086, o contrato continua salvando */
+const contratoSalvar = contratoSchema.transform(({ quantidade, ...resto }) => (quantidade == null ? resto : { ...resto, quantidade }));
+
 export async function salvarContrato(id: string | null, dados: unknown) {
   const cliente = await resolverClienteNovo(dados, "contratos");
   if (!cliente.ok) return cliente;
@@ -34,7 +37,7 @@ export async function salvarContrato(id: string | null, dados: unknown) {
         return { ok: false as const, erro: `A placa ${ocupada.placa} está ${ocupada.status === "locado" ? "locada em outro contrato" : "em manutenção ou vendida"} — escolha um veículo disponível` };
     }
   }
-  const r = await salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados: valores, schema: contratoSchema, revalidar: ["/contratos", "/medicoes", "/dashboard", "/cadastros/veiculos", "/manutencao"] });
+  const r = await salvarRegistro({ tabela: "contratos", modulo: "contratos", id, dados: valores, schema: contratoSalvar, revalidar: ["/contratos", "/medicoes", "/dashboard", "/cadastros/veiculos", "/manutencao"] });
   if (!r.ok) return r;
   let erroPlacas: string | null = null;
   if (temExtras && (id || extras.data.length)) {

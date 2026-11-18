@@ -26,6 +26,8 @@ export type LinhaContrato = {
   tipo_cobranca: TipoCobranca; valor_mensal: number; valor_repasse_mensal: number | null; dia_corte_inicio: number; prazo_pagamento_dias: number; dia_pagamento: number | null; data_pagamento: string | null;
   data_inicio: string; data_fim: string | null; hora_inicio: string | null; hora_fim: string | null; data_desmobilizacao: string | null; status: "ativo" | "encerrado" | "suspenso"; observacoes: string | null; anexo_url: string | null;
   empresa: string; cliente: string; obra: string | null; placa: string; modelo: string | null; proprietario: "proprio" | "locador";
+  /** quantidade informativa de veículos/equipamentos (sai no PDF, não muda o valor) */
+  quantidade?: number | null;
   /** as outras placas do contrato (a principal é veiculo_id / placa) */
   placas_extras?: (PlacaContrato & { placa: string })[];
 };
@@ -63,6 +65,7 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
     { nome: "valor_mensal", rotulo: "Valor mensal (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: mensal },
     { nome: "valor_mensal", rotulo: "Valor da diária (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: diaria, ajuda: "Diária = 10 horas. Hora extra = 10% da diária (ex.: diária R$ 1.800 → hora extra R$ 180)" },
     { nome: "valor_mensal", rotulo: "Valor da hora (cliente)", tipo: "moeda", obrigatorio: true, col: 3, visivel: hora, ajuda: "Fatura = horas trabalhadas × valor da hora" },
+    { nome: "quantidade", rotulo: "Quantidade", tipo: "numero", col: 3, placeholder: "Ex.: 3", ajuda: "Veículos/equipamentos. Só sai no PDF do contrato, não muda o valor" },
     { nome: "valor_repasse_mensal", rotulo: "Repasse mensal (locador)", tipo: "moeda", col: 3, visivel: (v) => mensal(v) && locador(v), ajuda: "Valor fixo mensal pago ao dono do veículo" },
     { nome: "valor_repasse_mensal", rotulo: "Repasse por dia (locador)", tipo: "moeda", col: 3, visivel: (v) => diaria(v) && locador(v), ajuda: "Valor por dia pago ao dono do veículo" },
     { nome: "valor_repasse_mensal", rotulo: "Repasse por hora (locador)", tipo: "moeda", col: 3, visivel: (v) => hora(v) && locador(v), ajuda: "Valor por hora pago ao dono do veículo" },
@@ -88,7 +91,7 @@ export function camposContrato(opcoes: OpcoesContrato, empresas: Opcao[]): Campo
 export function valoresContrato(c: LinhaContrato): ContratoFormTela {
   return {
     sublocado: c.proprietario === "locador" ? "sim" : "nao", tipo_cobranca: c.tipo_cobranca, empresa_id: c.empresa_id, cliente_id: c.cliente_id, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: c.obra_id, veiculo_id: c.veiculo_id, numero: c.numero,
-    valor_mensal: c.valor_mensal, valor_repasse_mensal: c.valor_repasse_mensal, dia_corte_inicio: c.dia_corte_inicio as never,
+    valor_mensal: c.valor_mensal, valor_repasse_mensal: c.valor_repasse_mensal, quantidade: c.quantidade ?? null, dia_corte_inicio: c.dia_corte_inicio as never,
     prazo_pagamento_dias: c.prazo_pagamento_dias, data_pagamento: c.data_pagamento, data_inicio: c.data_inicio, data_fim: c.data_fim, hora_inicio: c.hora_inicio, hora_fim: c.hora_fim, status: c.status, observacoes: c.observacoes, anexo_url: c.anexo_url,
     // sem a lista (tabela ainda não criada no banco): o formulário não mexe nas outras placas
     placas_extras: c.placas_extras?.map(({ placa: _placa, ...p }) => p),
@@ -276,7 +279,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <FiltroSelectUrl param="cliente" rotulo="Cliente" opcoes={opcoes.clientes} />
           <FiltroSelectUrl param="corte" rotulo="Período" opcoes={[{ value: "1", label: "01 → fim" }, { value: "21", label: "21 → 20" }]} />
         </>}
-        novo={{ placas_extras: [], sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_pagamento: null, data_inicio: hojeSP(), data_fim: null, hora_inicio: null, hora_fim: null, status: "ativo", observacoes: null, anexo_url: null }}
+        novo={{ placas_extras: [], sublocado: "nao", tipo_cobranca: "mensal", empresa_id:empresaPadrao ?? empresas[0]?.value, cliente_id: undefined, cliente_novo: null, cliente_novo_endereco: null, cliente_novo_telefone: null, obra_id: null, veiculo_id: undefined, numero: null, valor_mensal: undefined, valor_repasse_mensal: null, quantidade: null, dia_corte_inicio: "1" as never, prazo_pagamento_dias: 30, data_pagamento: null, data_inicio: hojeSP(), data_fim: null, hora_inicio: null, hora_fim: null, status: "ativo", observacoes: null, anexo_url: null }}
         paraForm={(c) => ({ ...valoresContrato(c), dia_corte_inicio: String(c.dia_corte_inicio) as never })}
         salvar={salvarContrato} excluir={excluirContrato} podeEditar={podeEditar}
         avisoExcluir={(c) => <>O contrato <strong className="font-mono">{c.numero ?? formatPlaca(c.placa)}</strong> ({c.cliente}) será apagado <strong>junto com todas as medições dele</strong>, inclusive recebimentos, boletos e repasses. Esta ação não pode ser desfeita. Se o contrato só terminou, use <strong>Desmobilizar</strong>.</>}
