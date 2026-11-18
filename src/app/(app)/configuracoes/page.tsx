@@ -43,13 +43,16 @@ export default function ConfiguracoesPage() {
       // Fallback para cliente autenticado normal
       try {
         const supabase = createClient();
-        const [{ data: perfis }, { data: vinculos }] = await Promise.all([
+        const [{ data: perfis }, { data: vinculos }, { data: contas }] = await Promise.all([
           supabase.from("usuarios_perfil").select("*"),
           supabase.from("usuario_empresas").select("user_id, empresa_id"),
+          // e-mail e último acesso (SQL 0084); sem a função, vem vazio e o e-mail fica opcional ao editar
+          supabase.rpc("fn_admin_listar_usuarios" as never).then((r) => r, () => ({ data: null })),
         ]);
+        const contaDe = new Map(((contas ?? []) as { user_id: string; email: string | null; ultimo_acesso: string | null }[]).map((c) => [c.user_id, c]));
         usuarios = (perfis ?? []).map((p) => ({
           id: p.user_id,
-          email: "",
+          email: contaDe.get(p.user_id)?.email ?? "",
           nome: p.nome,
           perfil: p.perfil,
           ativo: p.ativo,
@@ -57,7 +60,7 @@ export default function ConfiguracoesPage() {
           ocultaPagar: p.oculta_contas_pagar ?? false,
           perfisExtras: (p as { perfis_extras?: Perfil[] | null }).perfis_extras ?? [],
           empresas: (vinculos ?? []).filter((v) => v.user_id === p.user_id).map((v) => v.empresa_id),
-          ultimoAcesso: null,
+          ultimoAcesso: contaDe.get(p.user_id)?.ultimo_acesso ?? null,
         })).sort((a, b) => a.nome.localeCompare(b.nome));
       } catch (err2) {
         erroUsuarios = (err2 as Error).message;

@@ -39,7 +39,8 @@ export async function rodarJobs() {
 const perfil = z.enum(["admin", "financeiro", "faturamento", "manutencao", "consulta", "comercial"]);
 const usuarioSchema = z.object({
   nome: z.string().trim().min(2, "Informe o nome"),
-  email: z.string().trim().email("E-mail inválido"),
+  /** ao editar, vazio = mantém o e-mail atual */
+  email: z.string().trim().email("E-mail inválido").or(z.literal("")).nullish().transform((v) => v || null),
   senha: z.string().trim().min(8, "Senha com no mínimo 8 caracteres")
     .regex(/[A-Za-z]/, "A senha precisa ter letras").regex(/\d/, "A senha precisa ter números").nullish(),
   /** setores marcados (um ou mais); o de mais acesso vira o principal */
@@ -55,6 +56,7 @@ export async function salvarUsuario(userId: string | null, dados: unknown) {
     await exigirEscrita("configuracoes");
     const u = usuarioSchema.parse(dados);
     if (!userId && !u.senha) throw new Error("Informe a senha inicial do usuário");
+    if (!userId && !u.email) throw new Error("Informe o e-mail do usuário");
 
     const { perfil: principal, extras } = separarPerfis(u.perfis);
     const supabase = await createClient();

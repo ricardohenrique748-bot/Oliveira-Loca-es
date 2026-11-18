@@ -148,7 +148,7 @@ function DialogoUsuario({ usuario, empresas, onOpenChange, onFeito }: { usuario:
         <DialogHeader><DialogTitle>{u ? "Editar usuário" : "Novo usuário"}</DialogTitle><DialogDescription>Os setores definem o que o usuário pode ver e mexer (pode marcar mais de um); empresas limitam os dados visíveis (admin vê todas).</DialogDescription></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5"><Label htmlFor="u-nome">Nome</Label><Input id="u-nome" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} /></div>
-          <div className="space-y-1.5"><Label htmlFor="u-email">E-mail</Label><Input id="u-email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
+          <div className="space-y-1.5"><Label htmlFor="u-email">E-mail</Label><Input id="u-email" type="email" value={f.email} placeholder={u ? "Manter o atual" : ""} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
           <div className="space-y-1.5">
             <Label htmlFor="u-senha">{u ? "Nova senha (opcional)" : "Senha inicial temporária"}</Label>
             <div className="flex gap-2">
