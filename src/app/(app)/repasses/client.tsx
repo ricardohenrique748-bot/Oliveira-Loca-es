@@ -105,9 +105,11 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
    * PDF enviado ao locador: só abatimentos e líquido (o bruto fica na tela, uso interno).
    * Faturas em cima (uma por linha) e TODAS as despesas descontadas juntas embaixo, por data — sem separar por fatura.
    */
-  const extrato = async (loc: Locador, rs: Repasse[]) => {
+  const extrato = async (loc: Locador, rs: Repasse[], abatsSimulados?: Abatimento[]) => {
     type L = { tipo: "repasse" | "secao" | "abat"; r: Repasse; a: Abatimento | null };
-    const descontos = rs.flatMap((r) => abatDe(r.id).map((a): L => ({ tipo: "abat", r, a })))
+    // simulados: a fatura escolhida no bloco da placa com as despesas marcadas (antes de pagar)
+    const abatsDe = (id: string) => (abatsSimulados ? abatsSimulados.filter((a) => a.repasse_id === id) : abatDe(id));
+    const descontos = rs.flatMap((r) => abatsDe(r.id).map((a): L => ({ tipo: "abat", r, a })))
       .sort((x, y) => (x.a!.vencimento ?? "9999").localeCompare(y.a!.vencimento ?? "9999") || x.a!.descricao.localeCompare(y.a!.descricao));
     const linhas: L[] = [
       ...rs.map((r): L => ({ tipo: "repasse", r, a: null })),
@@ -117,7 +119,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
     const fim = rs.reduce((m, r) => (r.periodo_fim > m ? r.periodo_fim : m), rs[0].periodo_fim);
     await exportarPDF(`extrato_${loc.nome}`, `Extrato do locador — ${loc.nome}`, [
       { titulo: "Placa", valor: (l) => (l.tipo === "secao" ? "" : formatPlaca(l.r.placa)) },
-      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : l.tipo === "secao" ? "DESPESAS DESCONTADAS (todas as faturas)" : `(-) ${l.a!.descricao}`) },
+      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : l.tipo === "secao" ? (rs.length > 1 ? "DESPESAS DESCONTADAS (todas as faturas)" : "DESPESAS DESCONTADAS") : `(-) ${l.a!.descricao}`) },
       { titulo: "Período / data", valor: (l) => (l.tipo === "repasse" ? formatPeriodo(l.r.periodo_inicio, l.r.periodo_fim) : l.tipo === "abat" ? formatData(l.a!.vencimento) : "") },
       { titulo: "Dias", valor: (l) => (l.tipo === "repasse" ? l.r.dias : null), tipo: "numero" },
       { titulo: "Abatimento", valor: (l) => (l.tipo === "abat" ? l.a!.valor : null), tipo: "moeda" },
@@ -134,6 +136,23 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
       totais: ["Total", "", "", "", somar(rs.map((r) => r.valor_abatimentos)), somar(rs.map((r) => r.valor_liquido)), ""],
       rodape: ["Valores proporcionais aos dias medidos (base 30). Abatimentos referentes a despesas do veículo marcadas “descontar do locador”."],
     });
+  };
+
+  /** extrato só da fatura escolhida no bloco da placa, com as despesas marcadas (como ficará ao pagar) */
+  const extratoSelecao = (f: Repasse, ids: string[]) => {
+    const r2 = (v: number) => Math.round(v * 100) / 100;
+    const daFatura = abatDe(f.id).filter((a) => !a.conta_pagar_id); // descontos da fatura/recibo saem primeiro
+    let disponivel = Math.max(0, r2(f.valor_liquido + f.valor_abatimentos - somar(daFatura.map((a) => a.valor))));
+    const sim: Abatimento[] = [...daFatura];
+    for (const d of despesasDaPlaca(f.veiculo_id).filter((x) => ids.includes(x.id))) {
+      const usar = Math.min(r2(somar(Object.values(d.porRepasse)) + d.pendente), disponivel);
+      if (usar <= 0) break;
+      disponivel = r2(disponivel - usar);
+      sim.push({ id: `sim-${d.id}`, repasse_id: f.id, conta_pagar_id: d.id, ordem_servico_id: null, descricao: d.descricao, valor: r2(usar), vencimento: d.vencimento, os_numero: null });
+    }
+    const total = r2(somar(sim.map((a) => a.valor)));
+    void extrato(locadorDe(f.locador_id, f.locador_nome),
+      [{ ...f, valor_abatimentos: total, valor_liquido: r2(f.valor_liquido + f.valor_abatimentos - total) }], sim);
   };
 
   return (
@@ -212,8 +231,8 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                           {/* ícones em cima e "Pagar" embaixo: a coluna fica estreita e a tabela cabe na tela */}
                           <div className="flex flex-col items-end gap-1">
                           <div className="flex items-center justify-end whitespace-nowrap">
-                          <Button variant="ghost" size="icon-sm" title={`Extrato de ${r.locador_nome}`} aria-label={`Extrato PDF de ${r.locador_nome}`}
-                            onClick={() => extrato(locadorDe(r.locador_id, r.locador_nome), repasses.filter((x) => x.locador_id === r.locador_id))}><FileText /></Button>
+                          <Button variant="ghost" size="icon-sm" title="Extrato desta fatura (PDF)" aria-label={`Extrato PDF da fatura ${formatPlaca(r.placa)} ${formatPeriodo(r.periodo_inicio, r.periodo_fim)}`}
+                            onClick={() => extrato(locadorDe(r.locador_id, r.locador_nome), [r])}><FileText /></Button>
                           <Button variant="ghost" size="icon-sm" title="Recibo do repasse (PDF)" aria-label={`Recibo do repasse ${formatPlaca(r.placa)}`}
                             onClick={() => setRecibo(r)}><FileSignature /></Button>
                           {r.comprovante_url && <LinkAnexo referencia={r.comprovante_url} rotulo="Comprovante" />}
@@ -239,7 +258,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                       ))}
                       {ultimoDaPlaca && <BlocoDespesasPlaca placa={r.placa} veiculoId={r.veiculo_id} despesas={despesasDaPlaca(r.veiculo_id)}
                         faturas={ordenados.filter((x) => x.veiculo_id === r.veiculo_id && aberta(x))} podeEditar={podeEditar}
-                        onPagar={(f, ids) => { setSelecaoPagar(ids); setPagando(f); }}
+                        onPagar={(f, ids) => { setSelecaoPagar(ids); setPagando(f); }} onExtrato={extratoSelecao}
                         aberto={!abertos.has(`placa-${r.veiculo_id}`)} onAlternar={() => setAbertos((x) => { const n = new Set(x); const k = `placa-${r.veiculo_id}`; if (n.has(k)) n.delete(k); else n.add(k); return n; })} />}
                     </React.Fragment>
                   );
@@ -593,9 +612,9 @@ function DialogoPagar({ repasse: inicial, selecaoInicial, locador: l, onOpenChan
  * Todas as despesas "descontar do locador" da placa juntas (não por fatura), logo depois das faturas dela.
  * Marque as despesas, escolha a fatura e clique em Pagar: a tela de pagamento abre com elas.
  */
-function BlocoDespesasPlaca({ placa, despesas, faturas, podeEditar, onPagar, aberto, onAlternar }: {
+function BlocoDespesasPlaca({ placa, despesas, faturas, podeEditar, onPagar, onExtrato, aberto, onAlternar }: {
   placa: string; veiculoId: string; despesas: DespesaDaPlaca[]; faturas: Repasse[]; podeEditar: boolean;
-  onPagar: (fatura: Repasse, contas: string[]) => void; aberto: boolean; onAlternar: () => void;
+  onPagar: (fatura: Repasse, contas: string[]) => void; onExtrato: (fatura: Repasse, contas: string[]) => void; aberto: boolean; onAlternar: () => void;
 }) {
   // fatura a pagar: a primeira com o cliente já pago; senão a mais antiga
   const padrao = (faturas.find((f) => f.status === "liberado") ?? faturas[0])?.id ?? null;
@@ -659,6 +678,7 @@ function BlocoDespesasPlaca({ placa, despesas, faturas, podeEditar, onPagar, abe
                 {faturas.map((f) => <option key={f.id} value={f.id}>{rotulo(f)}{f.status === "liberado" ? " (cliente pagou)" : ""}</option>)}
               </select>
               <span className="text-muted-foreground">com {marcadas.length} despesa(s) <span className="text-status-critico">−{formatBRL(somar(marcadas.map(valorDe)))}</span></span>
+              <Button type="button" size="sm" variant="outline" title="Extrato desta fatura com as despesas marcadas" onClick={() => onExtrato(fatura, [...sel])}><FileText /> PDF</Button>
               <Button type="button" size="sm" onClick={() => onPagar(fatura, [...sel])}><Wallet /> Pagar…</Button>
             </div>
           </TableCell>
