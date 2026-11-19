@@ -512,7 +512,8 @@ function ListaItensFatura({ titulo, nome, exemplo, itens, total, editavel, onCha
   );
 }
 
-function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalvo }: {
+/** Janela da fatura (também aberta pela tela de Repasses, em "Ver fatura"). */
+export function DialogoDetalhe({ medicao: m, baseDias, podeEditar, onOpenChange, onSalvo }: {
   medicao: LinhaMedicao | null; baseDias: number; podeEditar: boolean; onOpenChange: (v: boolean) => void; onSalvo: () => void;
 }) {
   const [gerando, setGerando] = React.useState(false);

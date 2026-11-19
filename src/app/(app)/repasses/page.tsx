@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth, exigirSessao } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { podeEscrever } from "@/lib/permissoes";
+import { getConfig } from "@/lib/config";
 import { buscarTudo, lerParams } from "@/lib/consulta";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
@@ -19,7 +20,7 @@ export default function RepassesPage() {
 
     let q = supabase.from("repasses_v").select(`id, medicao_id, locador_id, locador_nome, empresa_id, empresa_apelido, veiculo_id, placa, valor_repasse_mensal,
       valor_bruto, valor_abatimentos, valor_liquido, data_prevista, data_pagamento, adiantado, aprovado_por, comprovante_url, status,
-      periodo_inicio, periodo_fim, dias, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado,
+      periodo_inicio, periodo_fim, dias, dias_placa, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado,
       obra_nome, medicao_emissao, contrato_numero, responsavel_nome, responsavel_whatsapp, responsavel_email`);
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     const status = p.get("status") ?? "pendentes";
@@ -68,6 +69,10 @@ export default function RepassesPage() {
         .map((d) => ({ ...d, saldo: Math.round(((d.valor_locador ?? d.valor ?? 0) - (d.valor_abatido ?? 0)) * 100) / 100, locador_id: locadorDoVeiculo.get(d.veiculo_id ?? "") ?? null }))
         .filter((d) => d.saldo > 0 && (!p.get("locador") || d.locador_id === p.get("locador"))) as DescontoPendente[],
       podeEditar: podeEscrever(s, "repasses"),
+      // a janela da fatura (Ver fatura) edita só para quem pode mexer no Faturamento
+      podeEditarFatura: podeEscrever(s, "medicoes"),
+      // base de dias do proporcional, para o PDF da fatura (igual ao Faturamento)
+      baseDias: Number((await getConfig()).base_dias_mes) || 30,
     };
   }, [searchParams, sessao?.empresaId]);
 

@@ -2629,6 +2629,7 @@ export type Database = {
           data_pagamento: string | null
           data_prevista: string | null
           dias: number | null
+          dias_placa: number | null
           empresa_apelido: string | null
           empresa_id: string | null
           id: string | null

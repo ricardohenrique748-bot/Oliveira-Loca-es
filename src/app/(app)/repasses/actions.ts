@@ -89,7 +89,7 @@ export async function buscarRepassesPendentes(busca: string) {
     const supabase = await createClient();
     let q = supabase.from("repasses_v").select(`id, medicao_id, locador_id, locador_nome, empresa_id, empresa_apelido, veiculo_id, placa, valor_repasse_mensal,
       valor_bruto, valor_abatimentos, valor_liquido, data_prevista, data_pagamento, adiantado, aprovado_por, comprovante_url, status,
-      periodo_inicio, periodo_fim, dias, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado`)
+      periodo_inicio, periodo_fim, dias, dias_placa, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado`)
       .in("status", ["previsto", "liberado"]);
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     const termo = busca.trim();
@@ -115,7 +115,7 @@ export async function cancelarRepasse(repasseId: string) {
 
 const COLUNAS_REPASSE = `id, medicao_id, locador_id, locador_nome, empresa_id, empresa_apelido, veiculo_id, placa, valor_repasse_mensal,
       valor_bruto, valor_abatimentos, valor_liquido, data_prevista, data_pagamento, adiantado, aprovado_por, comprovante_url, status,
-      periodo_inicio, periodo_fim, dias, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado,
+      periodo_inicio, periodo_fim, dias, dias_placa, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado,
       obra_nome, medicao_emissao, contrato_numero`;
 
 /** Despesa "descontar do locador" da placa, com quanto ainda pode ser descontado e onde está hoje. */
