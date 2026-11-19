@@ -84,10 +84,15 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenCh
   const marcar = (id: string, sim: boolean) => setMarcados((m) => { const n = new Set(m); if (sim) n.add(id); else n.delete(id); return n; });
 
   // o líquido da lista já tem os ajustes salvos: troca pelos da tela
+  // (o banco não deixa o líquido ficar negativo: as despesas só consomem o que há; então aqui também não)
   const doClicado = repasse && marcados.has(repasse.id) ? efeito(ajustes) - naLista : 0;
-  const total = somar([...escolhidos.map((r) => r.valor_liquido), doClicado]);
+  const estimadoClicado = repasse && marcados.has(repasse.id) ? somar([repasse.valor_liquido, doClicado]) : 0;
+  const total = somar([...escolhidos.filter((r) => r.id !== repasse?.id).map((r) => r.valor_liquido), Math.max(0, estimadoClicado)]);
   const incompleto = ajustesIncompletos(ajustes);
   const mudou = JSON.stringify(ajustes) !== JSON.stringify(salvos);
+  const somaDescontos = (a: Record<Tipo, ItemRecibo[]>) => somar(a.descontos.map((x) => x.valor));
+  // só barra quando a mudança acrescenta desconto além do que o repasse tem (tirar/reduzir sempre pode)
+  const descontoPassa = estimadoClicado < 0 && somaDescontos(ajustes) > somaDescontos(salvos);
 
   const salvar = async () => {
     if (!repasse) return false;
@@ -115,7 +120,7 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenCh
     if (!v && editavel && mudou) {
       // incompleto ou passando do repasse: não fecha calado, avisa o que falta
       if (incompleto) { toast.error("Preencha descrição e valor de cada acréscimo/desconto (ou remova a linha) antes de fechar"); return; }
-      if (total < 0) { toast.error("Os descontos passam do valor do repasse"); return; }
+      if (descontoPassa) { toast.error("Os descontos passam do valor do repasse"); return; }
       if (!(await salvar())) return;
     }
     onOpenChange(v);
@@ -160,13 +165,13 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenCh
               {" "}As despesas vêm do bloco “Despesas da placa” (o líquido não fica negativo).
             </p>
           )}
-          {total < 0 && <p className="text-sm text-destructive">Os descontos passam do valor do repasse.</p>}
+          {descontoPassa && <p className="text-sm text-destructive">Os descontos passam do valor do repasse.</p>}
           {mudou && editavel && <p className="text-xs text-muted-foreground">Alterações ainda não salvas — salvam ao fechar, ao gerar o recibo ou no botão Salvar.</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => fechar(false)}>Fechar</Button>
           {editavel && (
-            <Button variant="outline" disabled={!mudou || incompleto || total < 0 || salvando || carregando} onClick={salvar}>
+            <Button variant="outline" disabled={!mudou || incompleto || descontoPassa || salvando || carregando} onClick={salvar}>
               {salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar
             </Button>
           )}
@@ -174,7 +179,7 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenCh
             <Button variant="outline" disabled={!escolhidos.length || mudou || carregando} title={mudou ? "Salve antes para o extrato sair com os acréscimos e descontos novos" : "Extrato do locador com os repasses marcados"}
               onClick={() => onExtrato(escolhidos.map((x) => x.id))}><FileText /> Extrato (PDF)</Button>
           )}
-          <Button disabled={!escolhidos.length || incompleto || total < 0 || gerando || salvando || carregando} onClick={gerar}>
+          <Button disabled={!escolhidos.length || incompleto || descontoPassa || gerando || salvando || carregando} onClick={gerar}>
             {gerando ? <Loader2 className="animate-spin" /> : <FileText />} Gerar recibo (PDF)
           </Button>
         </DialogFooter>
