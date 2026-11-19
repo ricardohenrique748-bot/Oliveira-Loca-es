@@ -99,12 +99,17 @@ export async function exportarPDF<T>(nome: string, titulo: string, colunas: Colu
   }
   if (op.resumo?.length) {
     doc.setFontSize(9);
+    // a coluna do valor começa depois do rótulo mais comprido (rótulos longos não invadem o valor)
+    doc.setFont("helvetica", "bold");
+    const xValor = Math.min(10 + Math.max(42, ...op.resumo.map(([k]) => doc.getTextWidth(`${k}:`))) + 4, larg / 2);
     for (const [k, v] of op.resumo) {
       doc.setFont("helvetica", "bold");
-      doc.text(`${k}:`, 10, y);
+      const rotulo = doc.splitTextToSize(`${k}:`, xValor - 14) as string[];
+      doc.text(rotulo, 10, y);
       doc.setFont("helvetica", "normal");
-      doc.text(v, 52, y);
-      y += 5;
+      const valor = doc.splitTextToSize(v, larg - xValor - 10) as string[];
+      doc.text(valor, xValor, y);
+      y += 4 * Math.max(rotulo.length, valor.length) + 1;
     }
     y += 2;
   }

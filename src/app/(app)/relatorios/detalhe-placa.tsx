@@ -101,7 +101,7 @@ export function DetalhePlaca({ placa, onOpenChange, ini, fim, empresaId, periodo
     if (!grupos || !placa) return;
     type L = { grupo: string; data: string; descricao: string; detalhe: string; valor: number | null; titulo?: boolean };
     const linhas: L[] = grupos.flatMap((g) => [
-      { grupo: `${g.titulo} (${g.linhas.length})`, data: "", descricao: "", detalhe: "", valor: g.sinal * total(g), titulo: true },
+      { grupo: `${g.titulo} (${g.linhas.length})`, data: "", descricao: "", detalhe: "", valor: g.sinal * total(g) || 0, titulo: true },
       ...g.linhas.map((l) => ({ grupo: "", data: formatData(l.data), descricao: l.descricao, detalhe: [l.detalhe, l.fora && `${l.fora} · não entra`].filter(Boolean).join(" · "), valor: l.fora ? null : g.sinal * l.valor })),
     ]);
     const resultado = somar(grupos.map((g) => g.sinal * total(g)));
@@ -113,7 +113,7 @@ export function DetalhePlaca({ placa, onOpenChange, ini, fim, empresaId, periodo
       { titulo: "Valor", valor: (l: L) => l.valor, tipo: "moeda" },
     ], linhas, {
       paisagem: true, subtitulo: periodo,
-      resumo: grupos.map((g) => [g.titulo, formatBRL(g.sinal * total(g))] as [string, string]).concat([["Resultado da placa", formatBRL(resultado)]]),
+      resumo: grupos.map((g) => [g.titulo, formatBRL(g.sinal * total(g) || 0)] as [string, string]).concat([["Resultado da placa", formatBRL(resultado)]]),
       totais: ["Resultado", "", "", "", resultado],
       rodape: ["Despesas descontadas do locador aparecem na lista, mas não entram no resultado (o locador paga)."],
     });
