@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth, exigirSessao } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { podeEscrever } from "@/lib/permissoes";
-import { lerParams } from "@/lib/consulta";
+import { buscarTudo, lerParams } from "@/lib/consulta";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
 import { RepassesCliente, type Repasse, type Abatimento, type Locador, type DescontoPendente } from "./client";
@@ -28,8 +28,8 @@ export default function RepassesPage() {
     if (p.get("comp")) q = q.eq("competencia", `${p.get("comp")}-01`);
     if (p.get("locador")) q = q.eq("locador_id", p.get("locador")!);
     if (p.get("placa")) q = q.eq("placa", p.get("placa")!);
-    const { data: repassesData } = await q.order("locador_nome").order("periodo_inicio").limit(1000);
-    const repasses = (repassesData ?? []) as Repasse[];
+    // sem limite de 1000: busca página a página
+    const repasses = (await buscarTudo(q.order("locador_nome").order("periodo_inicio").order("id"))) as Repasse[];
 
     // despesas "descontar do locador" ainda sem repasse para abater (ex.: placa sem fatura lançada)
     let qd = supabase.from("contas_pagar_v").select("id, placa, veiculo_id, descricao, fornecedor_nome, vencimento, valor, valor_locador, valor_abatido, empresa_apelido")
@@ -38,14 +38,14 @@ export default function RepassesPage() {
     if (p.get("placa")) qd = qd.eq("placa", p.get("placa")!);
 
     const ids = repasses.map((r) => r.id);
-    const [{ data: abat }, { data: locadores }, { data: placas }, { data: descontos }, { data: veicLocador }] = await Promise.all([
+    const [abat, { data: locadores }, { data: placas }, descontos, { data: veicLocador }] = await Promise.all([
       ids.length
-        ? supabase.from("repasse_abatimentos").select("id, repasse_id, conta_pagar_id, ordem_servico_id, descricao, valor, contas_pagar(vencimento), ordens_servico(numero)").in("repasse_id", ids)
-        : Promise.resolve({ data: [] }),
+        ? buscarTudo(supabase.from("repasse_abatimentos").select("id, repasse_id, conta_pagar_id, ordem_servico_id, descricao, valor, contas_pagar(vencimento), ordens_servico(numero)").in("repasse_id", ids).order("id"))
+        : Promise.resolve([]),
       supabase.from("locadores").select("id, nome, cpf_cnpj, telefone, chave_pix, tipo_chave_pix, banco, nome_titular_pix").order("nome"),
       // lista do filtro: só sublocados (os que têm repasse)
       supabase.from("veiculos").select("placa").eq("proprietario", "locador").order("placa"),
-      qd.order("vencimento"),
+      buscarTudo(qd.order("vencimento").order("id")),
       supabase.from("veiculos").select("id, locador_id").eq("proprietario", "locador"),
     ]);
     const locadorDoVeiculo = new Map((veicLocador ?? []).map((v) => [v.id, v.locador_id]));

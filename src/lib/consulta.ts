@@ -35,3 +35,18 @@ export function lerParams(sp: SearchParams, padrao: { tamanho?: number; ordem?: 
 export function termoBusca(q: string): string {
   return `%${q.replace(/[%,()*]/g, " ").trim()}%`;
 }
+
+/**
+ * O Supabase devolve no máximo 1000 linhas por consulta (max_rows): acima disso o resto some sem aviso.
+ * Busca página a página até acabar. A consulta precisa de uma ordem estável (ex.: .order("id")).
+ */
+export async function buscarTudo<T>(q: { range: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: unknown }> }, pagina = 1000): Promise<T[]> {
+  const todas: T[] = [];
+  for (let de = 0; de < 500_000; de += pagina) {
+    const { data, error } = await q.range(de, de + pagina - 1);
+    if (error) throw error;
+    todas.push(...(data ?? []));
+    if (!data || data.length < pagina) break;
+  }
+  return todas;
+}

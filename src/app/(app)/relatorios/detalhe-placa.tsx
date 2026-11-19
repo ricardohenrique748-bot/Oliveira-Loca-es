@@ -1,13 +1,16 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { exportarPDF } from "@/lib/exportar";
 import { Badge, Table, TableBody, TableCell, TableRow } from "@/components/ui/basicos";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/overlays";
 import { Moeda } from "@/components/app/comuns";
 import { createClient } from "@/lib/supabase/client";
 import { somar } from "@/lib/calculos";
-import { formatData, formatPeriodo, formatPlaca } from "@/lib/format";
+import { buscarTudo } from "@/lib/consulta";
+import { formatBRL, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import type { ItemAvulsoSalvo } from "@/lib/schemas/operacao";
 
 type Lancamento = { id?: string; data: string; descricao: string; detalhe?: string | null; valor: number; href?: string; fora?: string };
@@ -23,20 +26,21 @@ type FaturaV = { periodo_inicio: string; periodo_fim: string; valor_final: numbe
 async function carregar(veiculoId: string, placa: string, ini: string, fim: string, empresaId: string | null): Promise<Grupo[]> {
   const supabase = createClient();
   const emp = <Q extends { eq: (c: string, v: string) => Q }>(q: Q) => (empresaId ? q.eq("empresa_id", empresaId) : q);
-  const [med, avulsas, rep, os, cp] = await Promise.all([
-    emp(supabase.from("medicoes_v").select("id, periodo_inicio, periodo_fim, valor_final, cliente_fantasia, descricao, numero_nf, contrato_numero, itens")
-      .eq("veiculo_id", veiculoId).gte("periodo_fim", ini).lte("periodo_fim", fim).neq("status", "cancelado")),
+  // tudo paginado: o Supabase corta em 1000 linhas (as avulsas sem placa no cabeçalho são de todos os clientes)
+  const [medD, avulsasD, repD, osD, cpD] = await Promise.all([
+    buscarTudo(emp(supabase.from("medicoes_v").select("id, periodo_inicio, periodo_fim, valor_final, cliente_fantasia, descricao, numero_nf, contrato_numero, itens")
+      .eq("veiculo_id", veiculoId).gte("periodo_fim", ini).lte("periodo_fim", fim).neq("status", "cancelado")).order("id")),
     // fatura avulsa com itens de placas diferentes: o veículo está só nos itens
-    emp(supabase.from("medicoes_v").select("id, periodo_inicio, periodo_fim, valor_final, valor_base, cliente_fantasia, numero_nf, itens")
-      .is("contrato_id", null).is("veiculo_id", null).gte("periodo_fim", ini).lte("periodo_fim", fim).neq("status", "cancelado")),
-    emp(supabase.from("repasses_v").select("id, periodo_inicio, periodo_fim, valor_bruto, locador_nome, status")
-      .eq("veiculo_id", veiculoId).gte("periodo_fim", ini).lte("periodo_fim", fim).neq("status", "cancelado")),
-    emp(supabase.from("ordens_servico").select("id, numero, data_fechamento, descricao_problema, custo_total, descontar_locador, fornecedores(nome)")
-      .eq("veiculo_id", veiculoId).eq("status", "fechada").gte("data_fechamento", ini).lte("data_fechamento", fim)),
-    emp(supabase.from("contas_pagar_v").select("id, vencimento, descricao, categoria_nome, fornecedor_nome, valor, pago_em, descontar_locador")
-      .eq("veiculo_id", veiculoId).eq("tipo", "veiculo").is("ordem_servico_id", null).gte("vencimento", ini).lte("vencimento", fim)),
+    buscarTudo(emp(supabase.from("medicoes_v").select("id, periodo_inicio, periodo_fim, valor_final, valor_base, cliente_fantasia, numero_nf, itens")
+      .is("contrato_id", null).is("veiculo_id", null).gte("periodo_fim", ini).lte("periodo_fim", fim).neq("status", "cancelado")).order("id")),
+    buscarTudo(emp(supabase.from("repasses_v").select("id, periodo_inicio, periodo_fim, valor_bruto, locador_nome, status")
+      .eq("veiculo_id", veiculoId).gte("periodo_fim", ini).lte("periodo_fim", fim).neq("status", "cancelado")).order("id")),
+    buscarTudo(emp(supabase.from("ordens_servico").select("id, numero, data_fechamento, descricao_problema, custo_total, descontar_locador, fornecedores(nome)")
+      .eq("veiculo_id", veiculoId).eq("status", "fechada").gte("data_fechamento", ini).lte("data_fechamento", fim)).order("id")),
+    buscarTudo(emp(supabase.from("contas_pagar_v").select("id, vencimento, descricao, categoria_nome, fornecedor_nome, valor, pago_em, descontar_locador")
+      .eq("veiculo_id", veiculoId).eq("tipo", "veiculo").is("ordem_servico_id", null).gte("vencimento", ini).lte("vencimento", fim)).order("id")),
   ]);
-  for (const r of [med, avulsas, rep, os, cp]) if (r.error) throw new Error(r.error.message);
+  const [med, avulsas, rep, os, cp] = [medD, avulsasD, repD, osD, cpD].map((data) => ({ data })) as [{ data: typeof medD }, { data: typeof avulsasD }, { data: typeof repD }, { data: typeof osD }, { data: typeof cpD }];
 
   // vários itens: cada item da placa leva o seu subtotal, ajustado por acréscimos/descontos da fatura (igual à view)
   const daPlaca = (m: FaturaV, base: number) => {
@@ -92,12 +96,36 @@ export function DetalhePlaca({ placa, onOpenChange, ini, fim, empresaId, periodo
 
   const total = (g: Grupo) => somar(g.linhas.filter((l) => !l.fora).map((l) => l.valor));
 
+  /** PDF com todos os lançamentos da placa, agrupados (receita, repasse, manutenção, despesas) e o resultado */
+  const pdf = async () => {
+    if (!grupos || !placa) return;
+    type L = { grupo: string; data: string; descricao: string; detalhe: string; valor: number | null; titulo?: boolean };
+    const linhas: L[] = grupos.flatMap((g) => [
+      { grupo: `${g.titulo} (${g.linhas.length})`, data: "", descricao: "", detalhe: "", valor: g.sinal * total(g), titulo: true },
+      ...g.linhas.map((l) => ({ grupo: "", data: formatData(l.data), descricao: l.descricao, detalhe: [l.detalhe, l.fora && `${l.fora} · não entra`].filter(Boolean).join(" · "), valor: l.fora ? null : g.sinal * l.valor })),
+    ]);
+    const resultado = somar(grupos.map((g) => g.sinal * total(g)));
+    await exportarPDF(`lancamentos_${placa.placa}`, `Lançamentos da placa ${formatPlaca(placa.placa)}`, [
+      { titulo: "Grupo", valor: (l: L) => l.grupo },
+      { titulo: "Data", valor: (l: L) => l.data },
+      { titulo: "Descrição", valor: (l: L) => l.descricao },
+      { titulo: "Detalhe", valor: (l: L) => l.detalhe },
+      { titulo: "Valor", valor: (l: L) => l.valor, tipo: "moeda" },
+    ], linhas, {
+      paisagem: true, subtitulo: periodo,
+      resumo: grupos.map((g) => [g.titulo, formatBRL(g.sinal * total(g))] as [string, string]).concat([["Resultado da placa", formatBRL(resultado)]]),
+      totais: ["Resultado", "", "", "", resultado],
+      rodape: ["Despesas descontadas do locador aparecem na lista, mas não entram no resultado (o locador paga)."],
+    });
+  };
+
   return (
     <Dialog open={!!placa} onOpenChange={onOpenChange}>
       <DialogContent tamanho="xl">
         <DialogHeader>
           <DialogTitle>Lançamentos da placa <span className="font-mono">{placa ? formatPlaca(placa.placa) : ""}</span></DialogTitle>
           <DialogDescription>{periodo} · receitas, repasses, manutenções e contas a pagar que compõem o DRE da placa.</DialogDescription>
+          {grupos && <Button variant="outline" size="sm" className="w-fit" onClick={() => void pdf()}><FileText /> PDF</Button>}
         </DialogHeader>
         {erro && <p className="text-sm text-destructive">{erro}</p>}
         {!grupos && !erro && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>}

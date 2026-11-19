@@ -125,14 +125,14 @@ function celula(c: Col, v: string | number | null) {
   }
 }
 
-export function RelatoriosCliente({ carregando, relatorio, linhas: todas, totais: totaisPeriodo, de, ate, ini, fim, empresa, empresaId }: {
-  carregando?: boolean; relatorio: Relatorio; linhas: Linha[]; totais: Record<string, number>; de: string; ate: string; empresa: string;
+export function RelatoriosCliente({ carregando, tudo = false, relatorio, linhas: todas, totais: totaisPeriodo, de, ate, ini, fim, empresa, empresaId }: {
+  carregando?: boolean; /** sem filtro de meses: todo o período */ tudo?: boolean; relatorio: Relatorio; linhas: Linha[]; totais: Record<string, number>; de: string; ate: string; empresa: string;
   /** período em datas (início do mês "de" e fim do mês "até") e empresa escolhida, para o detalhe da placa */
   ini: string; fim: string; empresaId: string | null;
 }) {
   const url = useUrlParams();
   const cfg = RELATORIOS[relatorio];
-  const periodo = `${formatCompetencia(de)} a ${formatCompetencia(ate)}`;
+  const periodo = tudo ? "Todo o período" : `${formatCompetencia(de)} a ${formatCompetencia(ate)}`;
   // DRE por placa: clicar na placa abre os lançamentos dela no período
   const [detalhe, setDetalhe] = React.useState<{ veiculoId: string; placa: string } | null>(null);
 
@@ -190,8 +190,16 @@ export function RelatoriosCliente({ carregando, relatorio, linhas: todas, totais
       </Tabs>
       <BarraFiltros>
         {relatorio !== "aging" && <>
-          <CampoMes id="rel-de" rotulo="De" valor={de} max={ate} onChange={(v) => url.set({ de: v })} />
-          <CampoMes id="rel-ate" rotulo="Até" valor={ate} min={de} onChange={(v) => url.set({ ate: v })} />
+          <div className="flex flex-col gap-1"><span className="text-xs text-muted-foreground">Período</span>
+            <div className="flex h-9 rounded-md border p-0.5">
+              <Button type="button" size="sm" variant={tudo ? "default" : "ghost"} className="h-full" onClick={() => url.set({ de: null, ate: null })}>Tudo</Button>
+              <Button type="button" size="sm" variant={tudo ? "ghost" : "default"} className="h-full" onClick={() => tudo && url.set({ de, ate })}>Escolher meses</Button>
+            </div>
+          </div>
+          {!tudo && <>
+            <CampoMes id="rel-de" rotulo="De" valor={de} max={ate} onChange={(v) => url.set({ de: v, ate })} />
+            <CampoMes id="rel-ate" rotulo="Até" valor={ate} min={de} onChange={(v) => url.set({ ate: v, de })} />
+          </>}
         </>}
         {filtros.map((f) => (
           <div key={f.col.chave} className="flex flex-col gap-1"><Label htmlFor={`rel-f-${f.col.chave}`} className="text-xs text-muted-foreground">{f.col.titulo}</Label>
