@@ -84,18 +84,24 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
   const pendentes = repasses.filter((r) => r.status === "previsto" || r.status === "liberado");
   const liberados = repasses.filter((r) => r.status === "liberado");
 
-  /** PDF enviado ao locador: só abatimentos e líquido (o bruto fica na tela, uso interno) */
+  /**
+   * PDF enviado ao locador: só abatimentos e líquido (o bruto fica na tela, uso interno).
+   * Faturas em cima (uma por linha) e TODAS as despesas descontadas juntas embaixo, por data — sem separar por fatura.
+   */
   const extrato = async (loc: Locador, rs: Repasse[]) => {
-    const linhas = rs.flatMap((r) => [
-      { tipo: "repasse", r, a: null as Abatimento | null },
-      ...abatDe(r.id).map((a) => ({ tipo: "abat", r, a })),
-    ]);
+    type L = { tipo: "repasse" | "secao" | "abat"; r: Repasse; a: Abatimento | null };
+    const descontos = rs.flatMap((r) => abatDe(r.id).map((a): L => ({ tipo: "abat", r, a })))
+      .sort((x, y) => (x.a!.vencimento ?? "9999").localeCompare(y.a!.vencimento ?? "9999") || x.a!.descricao.localeCompare(y.a!.descricao));
+    const linhas: L[] = [
+      ...rs.map((r): L => ({ tipo: "repasse", r, a: null })),
+      ...(descontos.length ? [{ tipo: "secao", r: rs[0], a: null } as L, ...descontos] : []),
+    ];
     const ini = rs.reduce((m, r) => (r.periodo_inicio < m ? r.periodo_inicio : m), rs[0].periodo_inicio);
     const fim = rs.reduce((m, r) => (r.periodo_fim > m ? r.periodo_fim : m), rs[0].periodo_fim);
     await exportarPDF(`extrato_${loc.nome}`, `Extrato do locador — ${loc.nome}`, [
-      { titulo: "Placa", valor: (l) => (l.tipo === "repasse" ? formatPlaca(l.r.placa) : "") },
-      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : `   (-) ${l.a!.descricao}`) },
-      { titulo: "Período", valor: (l) => (l.tipo === "repasse" ? formatPeriodo(l.r.periodo_inicio, l.r.periodo_fim) : formatData(l.a!.vencimento)) },
+      { titulo: "Placa", valor: (l) => (l.tipo === "secao" ? "" : formatPlaca(l.r.placa)) },
+      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : l.tipo === "secao" ? "DESPESAS DESCONTADAS (todas as faturas)" : `(-) ${l.a!.descricao}`) },
+      { titulo: "Período / data", valor: (l) => (l.tipo === "repasse" ? formatPeriodo(l.r.periodo_inicio, l.r.periodo_fim) : l.tipo === "abat" ? formatData(l.a!.vencimento) : "") },
       { titulo: "Dias", valor: (l) => (l.tipo === "repasse" ? l.r.dias : null), tipo: "numero" },
       { titulo: "Abatimento", valor: (l) => (l.tipo === "abat" ? l.a!.valor : null), tipo: "moeda" },
       { titulo: "Líquido", valor: (l) => (l.tipo === "repasse" ? l.r.valor_liquido : null), tipo: "moeda" },
