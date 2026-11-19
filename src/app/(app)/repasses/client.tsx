@@ -250,6 +250,9 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                           )}
                           {/* o repasse do período: mensal ÷ 30 × dias (o que o locador recebe antes das despesas) */}
                           <p className="whitespace-nowrap text-[11px] text-muted-foreground" title="Valor mensal ÷ 30 × dias da placa na fatura">{r.dias_placa ?? r.dias} dias = {formatBRL(r.valor_bruto)}</p>
+                          {acrescimos.filter((x) => x.repasse_id === r.id).map((x, k) => (
+                            <p key={k} className="whitespace-nowrap text-[11px] text-muted-foreground" title="Acréscimo lançado no recibo deste repasse">+ {x.descricao} {formatBRL(x.valor)}</p>
+                          ))}
                           {abs.length > 0 ? (
                             <button type="button" onClick={alternar} aria-expanded={aberto} className="flex w-full items-center justify-end gap-0.5 whitespace-nowrap text-xs text-muted-foreground hover:underline">
                               {aberto ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} despesas {formatBRL(r.valor_abatimentos)}
