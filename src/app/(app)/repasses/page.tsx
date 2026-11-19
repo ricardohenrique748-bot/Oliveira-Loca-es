@@ -20,7 +20,7 @@ export default function RepassesPage() {
 
     let q = supabase.from("repasses_v").select(`id, medicao_id, locador_id, locador_nome, empresa_id, empresa_apelido, veiculo_id, placa, valor_repasse_mensal,
       valor_bruto, valor_abatimentos, valor_liquido, data_prevista, data_pagamento, adiantado, aprovado_por, comprovante_url, status,
-      periodo_inicio, periodo_fim, dias, dias_placa, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado,
+      periodo_inicio, periodo_fim, dias, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado,
       obra_nome, medicao_emissao, contrato_numero, responsavel_nome, responsavel_whatsapp, responsavel_email`);
     if (s.empresaId) q = q.eq("empresa_id", s.empresaId);
     const status = p.get("status") ?? "pendentes";
