@@ -18,7 +18,7 @@ import { exportarPDF } from "@/lib/exportar";
 import { ROTULOS } from "@/lib/schemas/cadastros";
 import { cn } from "@/lib/utils";
 import { InputMoeda } from "@/components/app/campos";
-import { alterarValorRepasse, buscarRepassesPendentes, escolherDescontoRepasse, pagarRepasse } from "./actions";
+import { alterarValorRepasse, buscarRepassesPendentes, definirDescontosRepasse, despesasParaPagar, escolherDescontoRepasse, pagarRepasse, type DespesaPlaca } from "./actions";
 import { DialogoReciboDescontos, DialogoReciboRepasse } from "./recibo";
 
 export type Repasse = {
@@ -385,18 +385,69 @@ function ValorMensalRepasse({ repasse: r, onSalvo }: { repasse: Repasse; onSalvo
   );
 }
 
-function DialogoPagar({ repasse: r, locador: l, onOpenChange, onFeito }: { repasse: Repasse | null; locador: Locador | null; onOpenChange: (v: boolean) => void; onFeito: () => void }) {
+/**
+ * Pagar um repasse escolhendo os descontos: em cima os repasses abertos da placa (as faturas/contratos) para escolher
+ * qual pagar; embaixo TODAS as despesas "descontar do locador" da placa juntas, para marcar as que saem deste pagamento.
+ */
+function DialogoPagar({ repasse: inicial, locador: l, onOpenChange, onFeito }: { repasse: Repasse | null; locador: Locador | null; onOpenChange: (v: boolean) => void; onFeito: () => void }) {
   const [data, setData] = React.useState(hojeSP());
   const [comprovante, setComprovante] = React.useState<string | null>(null);
   const [confirmo, setConfirmo] = React.useState(false);
-  const [salvando, setSalvando] = React.useState(false);
-  React.useEffect(() => { setData(hojeSP()); setComprovante(null); setConfirmo(false); }, [r?.id]);
+  const [salvando, setSalvando] = React.useState<"descontos" | "pagar" | null>(null);
+  const [info, setInfo] = React.useState<{ repasses: Repasse[]; despesas: DespesaPlaca[]; outrosDescontos: Record<string, number> } | null>(null);
+  const [erroInfo, setErroInfo] = React.useState<string | null>(null);
+  const [alvoId, setAlvoId] = React.useState<string | null>(null);
+  const [sel, setSel] = React.useState<Set<string>>(new Set());
+
+  const carregar = React.useCallback(async (id: string) => {
+    const res = await despesasParaPagar(id);
+    if (res.ok) { setInfo(res.dados); setErroInfo(null); } else { setInfo(null); setErroInfo(res.erro); }
+  }, []);
+
+  React.useEffect(() => {
+    setData(hojeSP()); setComprovante(null); setConfirmo(false); setInfo(null); setErroInfo(null);
+    setAlvoId(inicial?.id ?? null);
+    if (inicial) void carregar(inicial.id);
+  }, [inicial?.id, carregar]);
+
+  const r = info?.repasses.find((x) => x.id === alvoId) ?? inicial;
+  /** o que está neste repasse hoje */
+  const atuais = React.useMemo(() => new Set((info?.despesas ?? []).filter((d) => alvoId && (d.porRepasse[alvoId] ?? 0) > 0).map((d) => d.id)), [info, alvoId]);
+  React.useEffect(() => { setSel(new Set(atuais)); setConfirmo(false); }, [atuais]);
+
+  const mudou = sel.size !== atuais.size || [...sel].some((id) => !atuais.has(id));
+  // prévia: bruto (+ acréscimos) − descontos da fatura/recibo − despesas marcadas; nunca negativo
+  const base = r ? r.valor_liquido + r.valor_abatimentos : 0;
+  const outros = r ? info?.outrosDescontos[r.id] ?? 0 : 0;
+  const marcado = somar((info?.despesas ?? []).filter((d) => sel.has(d.id)).map((d) => d.saldo));
+  const disponivel = Math.max(0, Math.round((base - outros) * 100) / 100);
+  const descontoDespesas = Math.min(marcado, disponivel);
+  const liquido = Math.round((disponivel - descontoDespesas) * 100) / 100;
+  const sobra = Math.round((marcado - descontoDespesas) * 100) / 100;
+  const periodoDe = (id: string) => { const x = info?.repasses.find((y) => y.id === id); return x ? `${diaMes(x.periodo_inicio)} a ${diaMes(x.periodo_fim)}` : "outro repasse"; };
+
+  /** grava a escolha de descontos; devolve false se falhou */
+  const gravarDescontos = async () => {
+    if (!r || !mudou) return true;
+    const res = await definirDescontosRepasse(r.id, [...sel]);
+    if (!res.ok) { toast.error(res.erro); return false; }
+    await carregar(r.id);
+    return true;
+  };
+
+  const salvarDescontos = async () => {
+    setSalvando("descontos");
+    const ok = await gravarDescontos();
+    setSalvando(null);
+    if (ok) { toast.success("Descontos deste repasse salvos"); onFeito(); }
+  };
 
   const pagar = async () => {
     if (!r) return;
-    setSalvando(true);
+    setSalvando("pagar");
+    if (!(await gravarDescontos())) return setSalvando(null);
     const res = await pagarRepasse({ repasse_id: r.id, data, comprovante_url: comprovante, confirmar_adiantado: confirmo });
-    setSalvando(false);
+    setSalvando(null);
     if (res.ok) {
       toast.success(res.dados.adiantado ? "Repasse pago (adiantado — registrado com sua aprovação)" : "Repasse pago");
       onOpenChange(false);
@@ -406,20 +457,82 @@ function DialogoPagar({ repasse: r, locador: l, onOpenChange, onFeito }: { repas
     } else toast.error(res.erro);
   };
 
+  const alternar = (id: string, v: boolean) => setSel((s) => { const n = new Set(s); if (v) n.add(id); else n.delete(id); return n; });
+  const despesas = info?.despesas ?? [];
+
   return (
-    <Dialog open={!!r} onOpenChange={onOpenChange}>
-      <DialogContent tamanho="sm">
+    <Dialog open={!!inicial} onOpenChange={onOpenChange}>
+      <DialogContent tamanho="lg">
         <DialogHeader>
           <DialogTitle>Pagar repasse</DialogTitle>
-          <DialogDescription>{r && <>{r.locador_nome} · {formatPlaca(r.placa)} · {formatPeriodo(r.periodo_inicio, r.periodo_fim)}</>}</DialogDescription>
+          <DialogDescription>{r && <>{r.locador_nome} · {formatPlaca(r.placa)} · escolha a fatura que vai pagar e as despesas que saem dela</>}</DialogDescription>
         </DialogHeader>
         {r && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-2 rounded-md bg-muted p-3 text-sm">
-              <div><p className="text-xs text-muted-foreground">Bruto</p><Moeda valor={r.valor_bruto} /></div>
-              <div><p className="text-xs text-muted-foreground">Abatimentos</p><Moeda valor={-r.valor_abatimentos} /></div>
-              <div><p className="text-xs text-muted-foreground">Líquido a pagar</p><Moeda valor={r.valor_liquido} className="font-bold" /></div>
+            {/* 1. qual repasse (fatura/contrato) */}
+            <div className="space-y-1.5">
+              <Label>Repasse que vai pagar</Label>
+              {!info && !erroInfo && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>}
+              <div className="space-y-1">
+                {(info?.repasses ?? [r]).map((x) => (
+                  <label key={x.id} className={cn("flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-sm", x.id === r.id ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                    <input type="radio" name="repasse-alvo" className="accent-primary" checked={x.id === r.id} disabled={!!salvando} onChange={() => setAlvoId(x.id)} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate"><span className="font-medium">{x.cliente_nome}</span>{x.contrato_numero && <span className="text-muted-foreground"> · {x.contrato_numero}</span>}{x.numero_nf && <span className="text-muted-foreground"> · NF {x.numero_nf}</span>}</p>
+                      <p className="text-xs text-muted-foreground">{formatPeriodo(x.periodo_inicio, x.periodo_fim)} · {x.dias} dias</p>
+                    </div>
+                    {x.status === "liberado" ? <Badge variant="ok">Cliente pagou</Badge> : <Badge variant="alerta">Aguardando cliente</Badge>}
+                    <div className="text-right"><Moeda valor={x.valor_liquido} className="font-semibold" /><p className="text-[11px] text-muted-foreground">bruto {formatBRL(x.valor_bruto)}</p></div>
+                  </label>
+                ))}
+              </div>
             </div>
+
+            {/* 2. todas as despesas da placa juntas */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Despesas a descontar do locador</Label>
+                {despesas.length > 0 && (
+                  <div className="flex gap-1">
+                    <Button type="button" size="xs" variant="ghost" disabled={!!salvando} onClick={() => setSel(new Set(despesas.map((d) => d.id)))}>Marcar todas</Button>
+                    <Button type="button" size="xs" variant="ghost" disabled={!!salvando} onClick={() => setSel(new Set())}>Desmarcar</Button>
+                  </div>
+                )}
+              </div>
+              {erroInfo && <p className="text-sm text-destructive">{erroInfo}</p>}
+              {info && despesas.length === 0 && <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">Nenhuma despesa pendente para descontar desta placa.</p>}
+              {despesas.length > 0 && (
+                <div className="max-h-64 overflow-y-auto rounded-md border">
+                  {despesas.map((d) => {
+                    const emOutro = Object.entries(d.porRepasse).filter(([id, v]) => id !== r.id && v > 0).map(([id]) => id);
+                    return (
+                      <label key={d.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0 hover:bg-muted/40">
+                        <Checkbox checked={sel.has(d.id)} disabled={!!salvando} onCheckedChange={(v) => alternar(d.id, !!v)} aria-label={`Descontar ${d.descricao ?? "despesa"} neste repasse`} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate">{d.descricao ?? "Despesa"}{d.parcela_total && d.parcela_total > 1 ? <span className="text-muted-foreground"> · {d.parcela_num}/{d.parcela_total}</span> : null}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {[d.fornecedor_nome, d.vencimento && `vence ${formatData(d.vencimento)}`].filter(Boolean).join(" · ")}
+                            {emOutro.length > 0 && !sel.has(d.id) && <span> · hoje no repasse {emOutro.map(periodoDe).join(", ")}</span>}
+                            {emOutro.length > 0 && sel.has(d.id) && <span className="text-status-alerta"> · sai do repasse {emOutro.map(periodoDe).join(", ")}</span>}
+                          </p>
+                        </div>
+                        <Moeda valor={-d.saldo} className={sel.has(d.id) ? "text-status-critico" : "text-muted-foreground"} />
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 3. prévia do valor */}
+            <div className="grid grid-cols-3 gap-2 rounded-md bg-muted p-3 text-sm">
+              <div><p className="text-xs text-muted-foreground">Bruto{outros > 0 ? " − desc. fatura/recibo" : ""}</p><Moeda valor={disponivel} /></div>
+              <div><p className="text-xs text-muted-foreground">Despesas marcadas</p><Moeda valor={-descontoDespesas} /></div>
+              <div><p className="text-xs text-muted-foreground">Líquido a pagar</p><Moeda valor={liquido} className="font-bold" /></div>
+              {sobra > 0 && <p className="col-span-3 text-xs text-status-alerta">As despesas marcadas passam do valor do repasse: {formatBRL(sobra)} fica para o próximo repasse da placa.</p>}
+              {mudou && <p className="col-span-3 text-xs text-muted-foreground">A escolha das despesas é gravada ao pagar (ou em “Salvar descontos”).</p>}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 text-sm">
               {l?.chave_pix ? (
                 <>
@@ -438,14 +551,17 @@ function DialogoPagar({ repasse: r, locador: l, onOpenChange, onFeito }: { repas
                 </label>
               </div>
             )}
-            <div className="space-y-1.5"><Label htmlFor="pag-data">Data do pagamento</Label><Input id="pag-data" type="date" value={data} onChange={(e) => setData(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Comprovante</Label><CampoAnexo bucket="comprovantes" pasta="repasses" valor={comprovante} onChange={setComprovante} /></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5"><Label htmlFor="pag-data">Data do pagamento</Label><Input id="pag-data" type="date" value={data} onChange={(e) => setData(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Comprovante</Label><CampoAnexo bucket="comprovantes" pasta="repasses" valor={comprovante} onChange={setComprovante} /></div>
+            </div>
           </div>
         )}
-        <DialogFooter>
+        <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={pagar} disabled={salvando || (!!r?.seria_adiantado && !confirmo)} variant={r?.seria_adiantado ? "destructive" : "default"}>
-            {salvando ? <Loader2 className="animate-spin" /> : <Wallet />} {r?.seria_adiantado ? "Pagar adiantado" : "Registrar pagamento"}
+          {mudou && <Button variant="outline" onClick={salvarDescontos} disabled={!!salvando}>{salvando === "descontos" && <Loader2 className="animate-spin" />} Salvar descontos</Button>}
+          <Button onClick={pagar} disabled={!!salvando || !info || (!!r?.seria_adiantado && !confirmo)} variant={r?.seria_adiantado ? "destructive" : "default"}>
+            {salvando === "pagar" ? <Loader2 className="animate-spin" /> : <Wallet />} {r?.seria_adiantado ? "Pagar adiantado" : `Registrar pagamento${info ? ` de ${formatBRL(liquido)}` : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>

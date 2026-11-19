@@ -112,3 +112,78 @@ export async function cancelarRepasse(repasseId: string) {
     return null;
   }, REVALIDAR, "Repasse cancelado");
 }
+
+const COLUNAS_REPASSE = `id, medicao_id, locador_id, locador_nome, empresa_id, empresa_apelido, veiculo_id, placa, valor_repasse_mensal,
+      valor_bruto, valor_abatimentos, valor_liquido, data_prevista, data_pagamento, adiantado, aprovado_por, comprovante_url, status,
+      periodo_inicio, periodo_fim, dias, numero_nf, medicao_valor, medicao_status, medicao_vencimento, competencia, cliente_nome, seria_adiantado,
+      obra_nome, medicao_emissao, contrato_numero`;
+
+/** Despesa "descontar do locador" da placa, com quanto ainda pode ser descontado e onde está hoje. */
+export type DespesaPlaca = {
+  id: string; descricao: string | null; fornecedor_nome: string | null; vencimento: string | null;
+  parcela_num: number | null; parcela_total: number | null;
+  /** o que ainda falta descontar do locador (total − o que já saiu em repasses pagos) */
+  saldo: number;
+  /** quanto está em cada repasse aberto hoje */
+  porRepasse: Record<string, number>;
+};
+
+/**
+ * Para pagar um repasse escolhendo os descontos: todos os repasses abertos da placa (as faturas/contratos)
+ * e todas as despesas pendentes dela juntas, sem separar por repasse.
+ */
+export async function despesasParaPagar(repasseId: string) {
+  return executar(async () => {
+    await exigirEscrita("repasses");
+    const id = z.string().uuid().parse(repasseId);
+    const supabase = await createClient();
+    const { data: alvo } = await supabase.from("repasses").select("veiculo_id").eq("id", id).single();
+    if (!alvo) throw new Error("Repasse não encontrado");
+    const [{ data: abertos }, { data: todos }, { data: contas }] = await Promise.all([
+      supabase.from("repasses_v").select(COLUNAS_REPASSE).eq("veiculo_id", alvo.veiculo_id).in("status", ["previsto", "liberado"]).order("periodo_inicio"),
+      supabase.from("repasses").select("id, status").eq("veiculo_id", alvo.veiculo_id).neq("status", "cancelado"),
+      supabase.from("contas_pagar_v").select("id, descricao, fornecedor_nome, vencimento, parcela_num, parcela_total, valor, valor_locador")
+        .eq("veiculo_id", alvo.veiculo_id).eq("descontar_locador", true).order("vencimento"),
+    ]);
+    const statusDe = new Map((todos ?? []).map((r) => [r.id, r.status]));
+    const ids = [...statusDe.keys()];
+    const { data: abats } = ids.length
+      ? await supabase.from("repasse_abatimentos").select("repasse_id, conta_pagar_id, valor").in("repasse_id", ids)
+      : { data: [] };
+    // descontos que não são conta a pagar (da fatura e do recibo) já saem antes das despesas
+    const outrosDescontos: Record<string, number> = {};
+    const pagoAntes = new Map<string, number>();
+    const porConta = new Map<string, Record<string, number>>();
+    for (const a of abats ?? []) {
+      const v = Number(a.valor);
+      if (!a.conta_pagar_id) { outrosDescontos[a.repasse_id] = (outrosDescontos[a.repasse_id] ?? 0) + v; continue; }
+      if (statusDe.get(a.repasse_id) === "pago") pagoAntes.set(a.conta_pagar_id, (pagoAntes.get(a.conta_pagar_id) ?? 0) + v);
+      else {
+        const m = porConta.get(a.conta_pagar_id) ?? {};
+        m[a.repasse_id] = (m[a.repasse_id] ?? 0) + v;
+        porConta.set(a.conta_pagar_id, m);
+      }
+    }
+    const despesas: DespesaPlaca[] = (contas ?? []).map((c) => ({
+      id: c.id!, descricao: c.descricao, fornecedor_nome: c.fornecedor_nome, vencimento: c.vencimento,
+      parcela_num: c.parcela_num, parcela_total: c.parcela_total,
+      saldo: Math.round((Number(c.valor_locador ?? c.valor ?? 0) - (pagoAntes.get(c.id!) ?? 0)) * 100) / 100,
+      porRepasse: porConta.get(c.id!) ?? {},
+    })).filter((d) => d.saldo > 0);
+    return { repasses: (abertos ?? []) as Repasse[], despesas, outrosDescontos };
+  });
+}
+
+/** Grava quais despesas saem deste repasse: as marcadas entram nele (e saem dos outros abertos da placa); as outras ficam fora. */
+export async function definirDescontosRepasse(repasseId: string, contas: string[]) {
+  return executar(async () => {
+    await exigirEscrita("repasses");
+    const p_repasse = z.string().uuid().parse(repasseId);
+    const p_contas = z.array(z.string().uuid()).max(500).parse(contas);
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_definir_descontos_repasse" as never, { p_repasse, p_contas } as never);
+    if (error && /fn_definir_descontos_repasse/.test(error.message)) throw new Error("O banco ainda não tem a escolha de descontos na hora de pagar: rode o SQL 0087 no Supabase");
+    if (error) throw error;
+    return data as unknown as { valor_liquido: number; valor_abatimentos: number };
+  }, REVALIDAR, "Descontos deste repasse salvos");
+}
