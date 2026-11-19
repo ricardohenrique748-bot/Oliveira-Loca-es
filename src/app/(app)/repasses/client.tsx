@@ -105,7 +105,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
    * PDF enviado ao locador: só abatimentos e líquido (o bruto fica na tela, uso interno).
    * Faturas em cima (uma por linha) e TODAS as despesas descontadas juntas embaixo, por data — sem separar por fatura.
    */
-  const extrato = async (loc: Locador, rs: Repasse[], abatsSimulados?: Abatimento[]) => {
+  const extrato = async (loc: Locador, rs: Repasse[], abatsSimulados?: Abatimento[], ficaParaDepois = 0) => {
     type L = { tipo: "repasse" | "secao" | "abat"; r: Repasse; a: Abatimento | null };
     // simulados: a fatura escolhida no bloco da placa com as despesas marcadas (antes de pagar)
     const abatsDe = (id: string) => (abatsSimulados ? abatsSimulados.filter((a) => a.repasse_id === id) : abatDe(id));
@@ -132,25 +132,28 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
         ["PIX", loc.chave_pix ? `${loc.tipo_chave_pix ? ROTULOS.tipoChavePix[loc.tipo_chave_pix] + ": " : ""}${loc.chave_pix}${loc.nome_titular_pix ? ` (${loc.nome_titular_pix})` : ""}${loc.banco ? ` — ${loc.banco}` : ""}` : "—"],
         ["Abatimentos", formatBRL(somar(rs.map((r) => r.valor_abatimentos)))],
         ["Total líquido", formatBRL(somar(rs.map((r) => r.valor_liquido)))],
+        ...(ficaParaDepois > 0 ? [["Fica para o próximo repasse", `${formatBRL(ficaParaDepois)} (despesas que não couberam nesta fatura)`] as [string, string]] : []),
+        ...(somar(rs.map((r) => r.valor_liquido)) < 0 ? [["Saldo do locador", `${loc.nome} deve ${formatBRL(-somar(rs.map((r) => r.valor_liquido)))} (despesas maiores que o repasse)`] as [string, string]] : []),
       ],
       totais: ["Total", "", "", "", somar(rs.map((r) => r.valor_abatimentos)), somar(rs.map((r) => r.valor_liquido)), ""],
-      rodape: ["Valores proporcionais aos dias medidos (base 30). Abatimentos referentes a despesas do veículo marcadas “descontar do locador”."],
+      rodape: ["Valores proporcionais aos dias medidos (base 30). Abatimentos referentes a despesas do veículo marcadas “descontar do locador”.",
+        ...(ficaParaDepois > 0 ? ["O desconto em cada fatura vai até o valor dela (o líquido não fica negativo); o que não coube é descontado no próximo repasse da placa."] : [])],
     });
   };
 
   /** extrato só da fatura escolhida no bloco da placa, com as despesas marcadas (como ficará ao pagar) */
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  /** quanto ainda cabe de despesas nesta fatura: bruto (+ acréscimos) − descontos da própria fatura/recibo */
+  /** extrato só da fatura escolhida no bloco da placa, com as despesas marcadas (como ficará ao pagar) */
   const extratoSelecao = (f: Repasse, ids: string[]) => {
-    const r2 = (v: number) => Math.round(v * 100) / 100;
     const daFatura = abatDe(f.id).filter((a) => !a.conta_pagar_id); // descontos da fatura/recibo saem primeiro
-    let disponivel = Math.max(0, r2(f.valor_liquido + f.valor_abatimentos - somar(daFatura.map((a) => a.valor))));
     const sim: Abatimento[] = [...daFatura];
     for (const d of despesasDaPlaca(f.veiculo_id).filter((x) => ids.includes(x.id))) {
-      const usar = Math.min(r2(somar(Object.values(d.porRepasse)) + d.pendente), disponivel);
-      if (usar <= 0) break;
-      disponivel = r2(disponivel - usar);
-      sim.push({ id: `sim-${d.id}`, repasse_id: f.id, conta_pagar_id: d.id, ordem_servico_id: null, descricao: d.descricao, valor: r2(usar), vencimento: d.vencimento, os_numero: null });
+      sim.push({ id: `sim-${d.id}`, repasse_id: f.id, conta_pagar_id: d.id, ordem_servico_id: null, descricao: d.descricao,
+        valor: r2(somar(Object.values(d.porRepasse)) + d.pendente), vencimento: d.vencimento, os_numero: null });
     }
     const total = r2(somar(sim.map((a) => a.valor)));
+    // o líquido pode ficar negativo: é o saldo que o locador fica devendo
     void extrato(locadorDe(f.locador_id, f.locador_nome),
       [{ ...f, valor_abatimentos: total, valor_liquido: r2(f.valor_liquido + f.valor_abatimentos - total) }], sim);
   };
