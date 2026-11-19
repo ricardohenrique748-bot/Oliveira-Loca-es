@@ -33,6 +33,8 @@ export type LinhaConta = {
   forma_pagamento: keyof typeof FORMAS; conta_bancaria_id: string | null; banco: string | null; conta_apelido: string | null;
   descontar_locador: boolean; valor_locador: number | null; repasse_id: string | null; ordem_servico_id: string | null; pago_em: string | null; valor_pago: number | null;
   anexo_url: string | null; observacoes: string | null; status: "pago" | "vencido" | "a_vencer"; valor_abatido: number;
+  /** repasse em que a conta foi descontada do locador por inteiro (repasse pago) */
+  repasse_info?: { periodo_inicio: string; periodo_fim: string; data_pagamento: string | null } | null;
 };
 
 type Opcoes = {
@@ -158,7 +160,16 @@ export function PagarCliente({ linhas, mes, foco, opcoes, empresaPadrao, podeEdi
       </div>
     ) },
     { id: "placa", header: "Placa", cell: ({ row: { original: c } }) => c.placa ? (
-      <span className="whitespace-nowrap"><span className="font-mono">{formatPlaca(c.placa)}</span>{c.descontar_locador && <Badge variant="info" className="ml-1" title={`Descontar do locador${c.valor_locador != null ? `: ${formatBRL(c.valor_locador)}` : ""}`}><UserMinus className="h-3 w-3" /> Locador{c.valor_locador != null && ` ${formatBRL(c.valor_locador)}`}</Badge>}</span>
+      <span className="whitespace-nowrap"><span className="font-mono">{formatPlaca(c.placa)}</span>{c.descontar_locador && <Badge variant="info" className="ml-1" title={`Descontar do locador${c.valor_locador != null ? `: ${formatBRL(c.valor_locador)}` : ""}`}><UserMinus className="h-3 w-3" /> Locador{c.valor_locador != null && ` ${formatBRL(c.valor_locador)}`}</Badge>}
+        {/* situação do desconto no locador (não é a baixa do fornecedor, que é o Status) */}
+        {c.descontar_locador && (c.repasse_info
+          ? <Badge variant="ok" className="mt-0.5 flex w-fit" title="O locador já devolveu este valor: foi abatido no repasse pago">
+              Descontado · repasse {formatData(c.repasse_info.periodo_inicio).slice(0, 5)} a {formatData(c.repasse_info.periodo_fim).slice(0, 5)}{c.repasse_info.data_pagamento && ` (pago ${formatData(c.repasse_info.data_pagamento).slice(0, 5)})`}
+            </Badge>
+          : c.valor_abatido > 0
+            ? <span className="block text-[11px] text-muted-foreground" title="Valor já colocado em repasse (aberto ou pago) do locador">em repasse: {formatBRL(c.valor_abatido)} de {formatBRL(c.valor_locador ?? c.valor)}</span>
+            : <span className="block text-[11px] text-muted-foreground">ainda não descontado</span>)}
+      </span>
     ) : <span className="text-muted-foreground">Fixa</span> },
     { id: "pagamento", header: "Forma / banco", cell: ({ row: { original: c } }) => <span className="text-sm">{FORMAS[c.forma_pagamento]}<span className="block text-xs text-muted-foreground">{c.conta_apelido ?? c.banco ?? "—"}</span></span> },
     { accessorKey: "valor", header: "Valor", meta: { direita: true }, cell: ({ getValue }) => <Moeda valor={getValue() as number} className="font-semibold" />, footer: () => <Moeda valor={somar(filtradasDia.map((l) => l.valor))} /> },

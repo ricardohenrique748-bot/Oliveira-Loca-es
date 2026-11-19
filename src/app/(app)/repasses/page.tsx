@@ -49,6 +49,10 @@ export default function RepassesPage() {
       buscarTudo(qd.order("vencimento").order("id")),
       supabase.from("veiculos").select("id, locador_id").eq("proprietario", "locador"),
     ]);
+    // acréscimos do recibo (SQL 0083): saem no extrato; sem a tabela, vem vazio
+    const { data: ajustes } = ids.length
+      ? await supabase.from("repasse_ajustes" as never).select("repasse_id, descricao, valor, tipo").in("repasse_id", ids).eq("tipo", "acrescimo")
+      : { data: [] };
     const locadorDoVeiculo = new Map((veicLocador ?? []).map((v) => [v.id, v.locador_id]));
 
     return {
@@ -68,6 +72,7 @@ export default function RepassesPage() {
       descontosPendentes: (descontos ?? [])
         .map((d) => ({ ...d, saldo: Math.round(((d.valor_locador ?? d.valor ?? 0) - (d.valor_abatido ?? 0)) * 100) / 100, locador_id: locadorDoVeiculo.get(d.veiculo_id ?? "") ?? null }))
         .filter((d) => d.saldo > 0 && (!p.get("locador") || d.locador_id === p.get("locador"))) as DescontoPendente[],
+      acrescimos: ((ajustes ?? []) as unknown as { repasse_id: string; descricao: string; valor: number }[]).map((a) => ({ ...a, valor: Number(a.valor) })),
       podeEditar: podeEscrever(s, "repasses"),
       // a janela da fatura (Ver fatura) edita só para quem pode mexer no Faturamento
       podeEditarFatura: podeEscrever(s, "medicoes"),

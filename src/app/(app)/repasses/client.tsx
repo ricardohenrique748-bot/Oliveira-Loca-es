@@ -51,7 +51,8 @@ const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const SITUACAO_CLIENTE: Record<string, string> = { a_faturar: "a faturar", faturado: "aguard. cliente", recebido_parcial: "receb. parcial", recebido: "cliente pagou", cancelado: "cancelado" };
 const STATUS_MEDICAO: Record<string, string> = { a_faturar: "A faturar", faturado: "Faturado (aguardando cliente)", recebido_parcial: "Recebido parcial", recebido: "Cliente pagou", cancelado: "Cancelado" };
 
-export function RepassesCliente({ repasses, abatimentos, locadores, placas, descontosPendentes = [], podeEditar, podeEditarFatura = false, baseDias = 30 }: {
+export function RepassesCliente({ repasses, abatimentos, locadores, placas, descontosPendentes = [], acrescimos = [], podeEditar, podeEditarFatura = false, baseDias = 30 }: {
+  /** acréscimos gravados no recibo de cada repasse (saem no extrato) */ acrescimos?: { repasse_id: string; descricao: string; valor: number }[];
   repasses: Repasse[]; abatimentos: Abatimento[]; locadores: Locador[]; placas: string[]; descontosPendentes?: DescontoPendente[]; podeEditar: boolean; podeEditarFatura?: boolean; baseDias?: number;
 }) {
   const [abrindoFatura, setAbrindoFatura] = React.useState<string | null>(null);
@@ -119,24 +120,30 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
    * Faturas em cima (uma por linha) e TODAS as despesas descontadas juntas embaixo, por data — sem separar por fatura.
    */
   const extrato = async (loc: Locador, rs: Repasse[], abatsSimulados?: Abatimento[], ficaParaDepois = 0) => {
-    type L = { tipo: "repasse" | "secao" | "abat"; r: Repasse; a: Abatimento | null };
+    type L = { tipo: "repasse" | "secao" | "abat" | "secaoAcr" | "acr"; r: Repasse; a: Abatimento | null };
+    // acréscimos do recibo (somam ao repasse do período)
+    const acrs = rs.flatMap((r) => acrescimos.filter((x) => x.repasse_id === r.id)
+      .map((x): L => ({ tipo: "acr", r, a: { id: `acr-${r.id}-${x.descricao}`, repasse_id: r.id, conta_pagar_id: null, ordem_servico_id: null, descricao: x.descricao, valor: x.valor, vencimento: null, os_numero: null } })));
+    const totalAcr = somar(acrs.map((l) => l.a!.valor));
     // simulados: a fatura escolhida no bloco da placa com as despesas marcadas (antes de pagar)
     const abatsDe = (id: string) => (abatsSimulados ? abatsSimulados.filter((a) => a.repasse_id === id) : abatDe(id));
     const descontos = rs.flatMap((r) => abatsDe(r.id).map((a): L => ({ tipo: "abat", r, a })))
       .sort((x, y) => (x.a!.vencimento ?? "9999").localeCompare(y.a!.vencimento ?? "9999") || x.a!.descricao.localeCompare(y.a!.descricao));
     const linhas: L[] = [
       ...rs.map((r): L => ({ tipo: "repasse", r, a: null })),
+      ...(acrs.length ? [{ tipo: "secaoAcr", r: rs[0], a: null } as L, ...acrs] : []),
       ...(descontos.length ? [{ tipo: "secao", r: rs[0], a: null } as L, ...descontos] : []),
     ];
     const ini = rs.reduce((m, r) => (r.periodo_inicio < m ? r.periodo_inicio : m), rs[0].periodo_inicio);
     const fim = rs.reduce((m, r) => (r.periodo_fim > m ? r.periodo_fim : m), rs[0].periodo_fim);
     await exportarPDF(`extrato_${loc.nome}`, `Extrato do locador — ${loc.nome}`, [
-      { titulo: "Placa", valor: (l) => (l.tipo === "secao" ? "" : formatPlaca(l.r.placa)) },
-      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : l.tipo === "secao" ? (rs.length > 1 ? "DESPESAS DESCONTADAS (todas as faturas)" : "DESPESAS DESCONTADAS") : `(-) ${l.a!.descricao}`) },
+      { titulo: "Placa", valor: (l) => (l.tipo === "secao" || l.tipo === "secaoAcr" ? "" : formatPlaca(l.r.placa)) },
+      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : l.tipo === "secao" ? (rs.length > 1 ? "DESPESAS DESCONTADAS (todas as faturas)" : "DESPESAS DESCONTADAS") : l.tipo === "secaoAcr" ? "ACRÉSCIMOS" : l.tipo === "acr" ? `(+) ${l.a!.descricao}` : `(-) ${l.a!.descricao}`) },
       { titulo: "Período / data", valor: (l) => (l.tipo === "repasse" ? formatPeriodo(l.r.periodo_inicio, l.r.periodo_fim) : l.tipo === "abat" ? formatData(l.a!.vencimento) : "") },
       { titulo: "Dias", valor: (l) => (l.tipo === "repasse" ? l.r.dias : null), tipo: "numero" },
       // repasse do período = bruto (+ acréscimos do recibo): é o que o locador tem a receber antes das despesas
-      { titulo: "Repasse", valor: (l) => (l.tipo === "repasse" ? Math.round((l.r.valor_liquido + l.r.valor_abatimentos) * 100) / 100 : null), tipo: "moeda" },
+      // período: mensal ÷ 30 × dias; os acréscimos vêm em linhas próprias
+      { titulo: "Repasse", valor: (l) => (l.tipo === "repasse" ? l.r.valor_bruto : l.tipo === "acr" ? l.a!.valor : null), tipo: "moeda" },
       { titulo: "Abatimento", valor: (l) => (l.tipo === "abat" ? l.a!.valor : null), tipo: "moeda" },
       { titulo: "Líquido", valor: (l) => (l.tipo === "repasse" ? l.r.valor_liquido : null), tipo: "moeda" },
       { titulo: "Situação", valor: (l) => (l.tipo === "repasse" ? (l.r.status === "pago" ? `Pago ${formatData(l.r.data_pagamento)}` : l.r.status) : "") },
@@ -145,13 +152,14 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
       resumo: [
         ["Locador", `${loc.nome}${loc.cpf_cnpj ? ` — ${loc.cpf_cnpj}` : ""}`],
         ["PIX", loc.chave_pix ? `${loc.tipo_chave_pix ? ROTULOS.tipoChavePix[loc.tipo_chave_pix] + ": " : ""}${loc.chave_pix}${loc.nome_titular_pix ? ` (${loc.nome_titular_pix})` : ""}${loc.banco ? ` — ${loc.banco}` : ""}` : "—"],
-        ["Repasse do período", formatBRL(somar(rs.map((r) => r.valor_liquido + r.valor_abatimentos)))],
+        ["Repasse do período", formatBRL(somar(rs.map((r) => r.valor_bruto)))],
+        ...(totalAcr > 0 ? [["Acréscimos", formatBRL(totalAcr)] as [string, string]] : []),
         ["Abatimentos", formatBRL(somar(rs.map((r) => r.valor_abatimentos)))],
         ["Total líquido", formatBRL(somar(rs.map((r) => r.valor_liquido)))],
         ...(ficaParaDepois > 0 ? [["Fica para o próximo repasse", `${formatBRL(ficaParaDepois)} (despesas que não couberam nesta fatura)`] as [string, string]] : []),
         ...(somar(rs.map((r) => r.valor_liquido)) < 0 ? [["Saldo do locador", `${loc.nome} deve ${formatBRL(-somar(rs.map((r) => r.valor_liquido)))} (despesas maiores que o repasse)`] as [string, string]] : []),
       ],
-      totais: ["Total", "", "", "", somar(rs.map((r) => r.valor_liquido + r.valor_abatimentos)), somar(rs.map((r) => r.valor_abatimentos)), somar(rs.map((r) => r.valor_liquido)), ""],
+      totais: ["Total", "", "", "", somar(rs.map((r) => r.valor_bruto)) + totalAcr, somar(rs.map((r) => r.valor_abatimentos)), somar(rs.map((r) => r.valor_liquido)), ""],
       rodape: ["Valores proporcionais aos dias medidos (base 30). Abatimentos referentes a despesas do veículo marcadas “descontar do locador”.",
         ...(ficaParaDepois > 0 ? ["O desconto em cada fatura vai até o valor dela (o líquido não fica negativo); o que não coube é descontado no próximo repasse da placa."] : [])],
     });
@@ -235,17 +243,19 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                         </TableCell>
                         <TableCell className="text-right"><Moeda valor={r.medicao_valor} /></TableCell>
                         <TableCell className="text-right">
-                          <Moeda valor={r.valor_liquido} className="font-semibold" />
+                          {/* em destaque o repasse do período (antes das despesas); o líquido sai embaixo */}
+                          <Moeda valor={Math.round((r.valor_liquido + r.valor_abatimentos) * 100) / 100} className="font-semibold" />
                           {podeEditar && (r.status === "previsto" || r.status === "liberado") && (
                             <ValorMensalRepasse repasse={r} onSalvo={() => router.refresh()} />
                           )}
                           {/* o repasse do período: mensal ÷ 30 × dias (o que o locador recebe antes das despesas) */}
                           <p className="whitespace-nowrap text-[11px] text-muted-foreground" title="Valor mensal ÷ 30 × dias da placa na fatura">{r.dias_placa ?? r.dias} dias = {formatBRL(r.valor_bruto)}</p>
                           {abs.length > 0 ? (
-                            <button type="button" onClick={alternar} aria-expanded={aberto} className="flex w-full items-center justify-end gap-0.5 whitespace-nowrap text-xs text-status-critico hover:underline">
-                              {aberto ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} −{formatBRL(r.valor_abatimentos)}
+                            <button type="button" onClick={alternar} aria-expanded={aberto} className="flex w-full items-center justify-end gap-0.5 whitespace-nowrap text-xs text-muted-foreground hover:underline">
+                              {aberto ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} despesas {formatBRL(r.valor_abatimentos)}
                             </button>
-                          ) : r.valor_abatimentos > 0 && <p className="whitespace-nowrap text-xs text-status-critico" title="Despesas da placa descontadas nesta fatura (veja o bloco da placa)">−{formatBRL(r.valor_abatimentos)}</p>}
+                          ) : r.valor_abatimentos > 0 && <p className="whitespace-nowrap text-xs text-muted-foreground" title="Despesas da placa descontadas nesta fatura (veja o bloco da placa)">despesas {formatBRL(r.valor_abatimentos)}</p>}
+                          {r.valor_abatimentos > 0 && <p className="whitespace-nowrap text-xs font-medium" title="Repasse do período menos as despesas: o que vai ser pago">líquido {formatBRL(r.valor_liquido)}</p>}
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={r.status} />
@@ -342,7 +352,8 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
         </Card>
       )}
 
-      <DialogoReciboRepasse repasse={recibo ? repasses.find((x) => x.id === recibo.id) ?? recibo : null} mesmaPlaca={recibo ? repasses.filter((x) => x.veiculo_id === recibo.veiculo_id && x.status !== "cancelado") : []}
+      <DialogoReciboRepasse onExtrato={(ids) => { const rs = repasses.filter((x) => ids.includes(x.id)); if (rs.length) void extrato(locadorDe(rs[0].locador_id, rs[0].locador_nome), rs); }}
+        repasse={recibo ? repasses.find((x) => x.id === recibo.id) ?? recibo : null} mesmaPlaca={recibo ? repasses.filter((x) => x.veiculo_id === recibo.veiculo_id && x.status !== "cancelado") : []}
         podeEditar={podeEditar} onOpenChange={(v) => !v && setRecibo(null)} onSalvo={() => router.refresh()} />
       <DialogoReciboDescontos placa={reciboDescontos?.placa ?? null} descontos={reciboDescontos?.ds ?? SEM_DESCONTOS} onOpenChange={(v) => !v && setReciboDescontos(null)} />
       <DialogoDetalhe medicao={fatura} baseDias={baseDias} podeEditar={podeEditarFatura} onOpenChange={(v) => !v && setFatura(null)}

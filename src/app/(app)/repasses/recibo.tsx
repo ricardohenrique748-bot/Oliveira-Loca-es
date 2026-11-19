@@ -11,10 +11,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Moeda } from "@/components/app/comuns";
 import { InputMoeda } from "@/components/app/campos";
 import { somar } from "@/lib/calculos";
-import { formatData, formatPeriodo, formatPlaca } from "@/lib/format";
+import { formatBRL, formatData, formatPeriodo, formatPlaca } from "@/lib/format";
 import { baixarReciboDescontosPDF, baixarReciboRepassePDF, type ItemRecibo } from "@/lib/documentos/baixar";
 
-type RepasseRecibo = { id: string; placa: string; periodo_inicio: string; periodo_fim: string; valor_liquido: number; status: string };
+type RepasseRecibo = { id: string; placa: string; periodo_inicio: string; periodo_fim: string; valor_liquido: number; status: string; valor_bruto?: number; valor_abatimentos?: number };
 type Tipo = "acrescimos" | "descontos";
 const VAZIO: Record<Tipo, ItemRecibo[]> = { acrescimos: [], descontos: [] };
 /** acréscimos − descontos */
@@ -25,13 +25,15 @@ const efeito = (a: Record<Tipo, ItemRecibo[]>) => somar([...a.acrescimos.map((x)
  * na lista podem entrar no mesmo recibo. Acréscimos e descontos digitados aqui ficam gravados no
  * repasse clicado (mudam o líquido a pagar) — salvos ao gerar o PDF ou no botão Salvar.
  */
-export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenChange, onSalvo }: {
+export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenChange, onSalvo, onExtrato }: {
   repasse: RepasseRecibo | null;
   /** repasses da mesma placa na lista (inclui o clicado) */
   mesmaPlaca: RepasseRecibo[];
   podeEditar: boolean;
   onOpenChange: (v: boolean) => void;
   onSalvo: () => void;
+  /** extrato (PDF) dos repasses marcados — com acréscimos e despesas descontadas */
+  onExtrato?: (ids: string[]) => void;
 }) {
   const [marcados, setMarcados] = React.useState<Set<string>>(new Set());
   const [ajustes, setAjustes] = React.useState<Record<Tipo, ItemRecibo[]>>(VAZIO);
@@ -150,6 +152,14 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenCh
             <span className="text-muted-foreground">Total do recibo</span>
             <span className="text-lg font-semibold"><Moeda valor={total} /></span>
           </div>
+          {!mudou && escolhidos.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              De onde vem: repasse do período {formatBRL(somar(escolhidos.map((x) => x.valor_bruto ?? 0)))}
+              {efeito(salvos) > 0 && marcados.has(repasse?.id ?? "") && <> + acréscimos {formatBRL(somar(salvos.acrescimos.map((a) => a.valor)))}</>}
+              {" "}− descontos e despesas da placa já descontados {formatBRL(somar(escolhidos.map((x) => x.valor_abatimentos ?? 0)))}.
+              {" "}As despesas vêm do bloco “Despesas da placa” (o líquido não fica negativo).
+            </p>
+          )}
           {total < 0 && <p className="text-sm text-destructive">Os descontos passam do valor do repasse.</p>}
           {mudou && editavel && <p className="text-xs text-muted-foreground">Alterações ainda não salvas — salvam ao fechar, ao gerar o recibo ou no botão Salvar.</p>}
         </div>
@@ -159,6 +169,10 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenCh
             <Button variant="outline" disabled={!mudou || incompleto || total < 0 || salvando || carregando} onClick={salvar}>
               {salvando ? <Loader2 className="animate-spin" /> : <Save />} Salvar
             </Button>
+          )}
+          {onExtrato && (
+            <Button variant="outline" disabled={!escolhidos.length || mudou || carregando} title={mudou ? "Salve antes para o extrato sair com os acréscimos e descontos novos" : "Extrato do locador com os repasses marcados"}
+              onClick={() => onExtrato(escolhidos.map((x) => x.id))}><FileText /> Extrato (PDF)</Button>
           )}
           <Button disabled={!escolhidos.length || incompleto || total < 0 || gerando || salvando || carregando} onClick={gerar}>
             {gerando ? <Loader2 className="animate-spin" /> : <FileText />} Gerar recibo (PDF)

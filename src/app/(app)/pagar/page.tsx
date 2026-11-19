@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth, exigirSessao } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { podeEscrever } from "@/lib/permissoes";
-import { lerParams, termoBusca } from "@/lib/consulta";
+import { lerParams, termoBusca, buscarTudo } from "@/lib/consulta";
 import { competenciaDe, fimDoMes, hojeSP } from "@/lib/calculos";
 import { CarregandoPagina } from "@/components/app/carregando";
 import { useAsyncPage } from "@/lib/use-async-page";
@@ -39,16 +39,27 @@ export default function PagarPage() {
     let qv = supabase.from("veiculos").select("id, placa, proprietario, empresa_id").neq("status", "vendido").order("placa");
     if (s.empresaId) qv = qv.eq("empresa_id", s.empresaId);
 
-    const [{ data: contasPagar }, { data: categorias }, { data: fornecedores }, { data: veiculos }, { data: contas }] = await Promise.all([
-      q.order("vencimento").order("descricao").limit(2000),
+    const [contasPagar, { data: categorias }, { data: fornecedores }, { data: veiculos }, { data: contas }] = await Promise.all([
+      // paginado: o Supabase devolve no máximo 1000 linhas por consulta
+      buscarTudo(q.order("vencimento").order("descricao").order("id")),
       supabase.from("categorias_despesa").select("id, nome, tipo").eq("ativo", true).order("nome"),
       supabase.from("fornecedores").select("id, nome").eq("ativo", true).order("nome"),
       qv,
       supabase.from("contas_bancarias").select("id, apelido, banco, empresa_id").eq("ativo", true).order("apelido"),
     ]);
 
+    // repasse em que cada conta "descontar do locador" foi descontada por inteiro (para o selo na lista)
+    const idsRepasse = [...new Set(contasPagar.map((c) => c.repasse_id).filter((x): x is string => !!x))];
+    const { data: reps } = idsRepasse.length
+      ? await supabase.from("repasses_v").select("id, periodo_inicio, periodo_fim, data_pagamento").in("id", idsRepasse)
+      : { data: [] };
+    const repasseDe = new Map((reps ?? []).map((r) => [r.id, r]));
+
     return {
-      linhas: (contasPagar ?? []) as LinhaConta[],
+      linhas: contasPagar.map((c) => {
+        const r = c.repasse_id ? repasseDe.get(c.repasse_id) : null;
+        return { ...c, repasse_info: r ? { periodo_inicio: r.periodo_inicio!, periodo_fim: r.periodo_fim!, data_pagamento: r.data_pagamento } : null };
+      }) as LinhaConta[],
       mes,
       foco: p.get("id"),
       opcoes: {

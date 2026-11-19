@@ -454,7 +454,7 @@ function HistoricoMedicao({ id }: { id: string }) {
 function itensDe(m: LinhaMedicao | null, tipo: "acrescimos" | "descontos"): ItemFatura[] {
   if (!m) return [];
   const salvos = m[`${tipo}_itens`];
-  if (salvos?.length) return salvos.map((i) => ({ descricao: i.descricao, valor: Number(i.valor), ...(i.descontar_locador === false ? { descontar_locador: false } : {}) }));
+  if (salvos?.length) return salvos.map((i) => ({ descricao: i.descricao, valor: Number(i.valor), ...(i.descontar_locador === true ? { descontar_locador: true } : {}) }));
   return m[tipo] > 0 ? [{ descricao: tipo === "acrescimos" ? "Acréscimos" : "Descontos", valor: m[tipo] }] : [];
 }
 
@@ -498,8 +498,8 @@ function ListaItensFatura({ titulo, nome, exemplo, itens, total, editavel, onCha
           {opcaoDono && (
             <label className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground"
               title="Sai do repasse do dono do veículo na mesma proporção do desconto do cliente">
-              <Checkbox checked={it.descontar_locador !== false} disabled={!editavel} aria-label={`Descontar do dono o ${nome} ${i + 1}`}
-                onCheckedChange={(v) => editar(i, { descontar_locador: v === true ? undefined : false })} />
+              <Checkbox checked={it.descontar_locador === true} disabled={!editavel} aria-label={`Descontar do dono o ${nome} ${i + 1}`}
+                onCheckedChange={(v) => editar(i, { descontar_locador: v === true ? true : undefined })} />
               Descontar do dono
             </label>
           )}
