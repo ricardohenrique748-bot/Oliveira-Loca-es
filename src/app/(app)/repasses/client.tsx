@@ -245,6 +245,10 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                         <TableCell className="text-right">
                           {/* em destaque o repasse do período (antes das despesas); o líquido sai embaixo */}
                           <Moeda valor={Math.round((r.valor_liquido + r.valor_abatimentos) * 100) / 100} className="font-semibold" />
+                          {/* fatura avulsa sem valor de repasse digitado: nasce zerada (SQL 0091) */}
+                          {!r.valor_bruto && (r.status === "previsto" || r.status === "liberado") && (
+                            <p><Badge variant="alerta" className="whitespace-nowrap"><AlertTriangle className="h-3 w-3" /> Definir valor</Badge></p>
+                          )}
                           {podeEditar && (r.status === "previsto" || r.status === "liberado") && (
                             <ValorMensalRepasse repasse={r} onSalvo={() => router.refresh()} />
                           )}
