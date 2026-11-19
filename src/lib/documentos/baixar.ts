@@ -135,7 +135,7 @@ export function baixarReciboRepassePDF(ids: string[]) {
   return gerar(async () => {
     const supabase = createClient();
     const { data: rs, error } = await supabase.from("repasses_v")
-      .select("id, placa, locador_id, empresa_id, periodo_inicio, periodo_fim, dias, valor_bruto, valor_liquido").in("id", ids);
+      .select("id, placa, locador_id, empresa_id, periodo_inicio, periodo_fim, dias, dias_placa, valor_bruto, valor_liquido").in("id", ids);
     if (error) throw error;
     const [r0] = rs ?? [];
     if (!r0?.locador_id || !r0.empresa_id) return null;
@@ -154,7 +154,7 @@ export function baixarReciboRepassePDF(ids: string[]) {
       ajustes: { acrescimos: acrescimos.map((a) => ({ descricao: a.descricao, valor: Number(a.valor) })), descontos: [] },
       repasses: (rs ?? []).map((r) => ({
         // o líquido gravado já soma os acréscimos; o recibo os soma de novo como linhas "(+)"
-        periodo_inicio: r.periodo_inicio!, periodo_fim: r.periodo_fim!, dias: r.dias, valor_bruto: r.valor_bruto ?? 0,
+        periodo_inicio: r.periodo_inicio!, periodo_fim: r.periodo_fim!, dias: r.dias_placa ?? r.dias, valor_bruto: r.valor_bruto ?? 0,
         valor_liquido: Math.round(((r.valor_liquido ?? 0) - acrescimoDe(r.id!)) * 100) / 100,
         abatimentos: (abat.data ?? []).filter((a) => a.repasse_id === r.id).map((a) => ({ descricao: a.descricao, valor: a.valor })),
       })),

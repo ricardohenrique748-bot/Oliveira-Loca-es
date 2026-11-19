@@ -71,10 +71,10 @@ export default function RelatoriosPage() {
       const res = await buscarTudo(q.order("data_vencimento").order("numero_nf").order("placa"));
       linhas = res as Linha[];
     } else if (r === "repasses") {
-      let q = supabase.from("repasses_v").select("locador_nome, placa, competencia, dias, valor_bruto, valor_abatimentos, valor_liquido, status, adiantado").gte("competencia", ini).lte("competencia", fim).neq("status", "cancelado");
+      let q = supabase.from("repasses_v").select("locador_nome, placa, competencia, dias, dias_placa, valor_bruto, valor_abatimentos, valor_liquido, status, adiantado").gte("competencia", ini).lte("competencia", fim).neq("status", "cancelado");
       if (emp) q = q.eq("empresa_id", emp);
       const res = await buscarTudo(q.order("locador_nome").order("competencia").order("id"));
-      linhas = res.map((x) => ({ ...x, adiantado: x.adiantado ? "Sim" : "" })) as Linha[];
+      linhas = res.map(({ dias_placa, ...x }) => ({ ...x, dias: dias_placa ?? x.dias, adiantado: x.adiantado ? "Sim" : "" })) as Linha[];
     } else if (r === "despesas") {
       let q = supabase.from("contas_pagar_v").select("categoria_nome, tipo, valor, valor_pago, pago_em, descontar_locador").gte("vencimento", ini).lte("vencimento", fim);
       if (emp) q = q.eq("empresa_id", emp);

@@ -1,5 +1,5 @@
 -- =====================================================================
--- 0089 Conta "descontar do locador" fica marcada como descontada
+-- 0090 Conta "descontar do locador" fica marcada como descontada
 -- Ao pagar o repasse, a conta passa a apontar para ele (contas_pagar.repasse_id)
 -- quando o que foi abatido em repasses PAGOS cobre o valor do locador.
 -- Antes comparava com o valor TOTAL da conta: com "valor para o locador"

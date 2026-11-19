@@ -140,7 +140,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
       { titulo: "Placa", valor: (l) => (l.tipo === "secao" || l.tipo === "secaoAcr" ? "" : formatPlaca(l.r.placa)) },
       { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : l.tipo === "secao" ? (rs.length > 1 ? "DESPESAS DESCONTADAS (todas as faturas)" : "DESPESAS DESCONTADAS") : l.tipo === "secaoAcr" ? "ACRÉSCIMOS" : l.tipo === "acr" ? `(+) ${l.a!.descricao}` : `(-) ${l.a!.descricao}`) },
       { titulo: "Período / data", valor: (l) => (l.tipo === "repasse" ? formatPeriodo(l.r.periodo_inicio, l.r.periodo_fim) : l.tipo === "abat" ? formatData(l.a!.vencimento) : "") },
-      { titulo: "Dias", valor: (l) => (l.tipo === "repasse" ? l.r.dias : null), tipo: "numero" },
+      { titulo: "Dias", valor: (l) => (l.tipo === "repasse" ? l.r.dias_placa ?? l.r.dias : null), tipo: "numero" },
       // repasse do período = bruto (+ acréscimos do recibo): é o que o locador tem a receber antes das despesas
       // período: mensal ÷ 30 × dias; os acréscimos vêm em linhas próprias
       { titulo: "Repasse", valor: (l) => (l.tipo === "repasse" ? l.r.valor_bruto : l.tipo === "acr" ? l.a!.valor : null), tipo: "moeda" },
@@ -233,7 +233,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                             Resp.: {r.responsavel_nome}{r.responsavel_whatsapp && ` · ${maskTelefone(r.responsavel_whatsapp)}`}</p>}
                         </TableCell>
                         <TableCell className="whitespace-nowrap"><span className="font-mono font-semibold">{formatPlaca(r.placa)}</span><p className="text-xs text-muted-foreground">{r.empresa_apelido}</p></TableCell>
-                        <TableCell className="whitespace-nowrap text-xs" title={formatPeriodo(r.periodo_inicio, r.periodo_fim)}>{diaMes(r.periodo_inicio)} a {diaMes(r.periodo_fim)} <span className="text-muted-foreground">· {r.dias} dias</span>
+                        <TableCell className="whitespace-nowrap text-xs" title={formatPeriodo(r.periodo_inicio, r.periodo_fim)}>{diaMes(r.periodo_inicio)} a {diaMes(r.periodo_fim)} <span className="text-muted-foreground">· {r.dias_placa ?? r.dias} dias</span>
                           <p className="text-muted-foreground">{r.medicao_emissao ? `fat. ${diaMes(r.medicao_emissao)}` : "a faturar"}{r.numero_nf && <span className="font-medium text-foreground"> · NF {r.numero_nf}</span>}</p>
                           <button type="button" onClick={() => void verFatura(r)} disabled={abrindoFatura === r.id} title="Abrir a fatura deste repasse"
                             className="mt-0.5 inline-flex items-center gap-1 text-primary-ink underline decoration-dotted underline-offset-2 hover:decoration-solid disabled:opacity-60">
@@ -411,7 +411,7 @@ function DialogoLancar({ aberto, onOpenChange, onEscolher }: { aberto: boolean; 
                     className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm"><span className="font-semibold">{r.locador_nome}</span> · <span className="font-mono">{formatPlaca(r.placa)}</span> <span className="text-xs text-muted-foreground">{r.empresa_apelido}</span></p>
-                      <p className="truncate text-xs text-muted-foreground">{r.cliente_nome} · {formatPeriodo(r.periodo_inicio, r.periodo_fim)} · {r.dias} dias</p>
+                      <p className="truncate text-xs text-muted-foreground">{r.cliente_nome} · {formatPeriodo(r.periodo_inicio, r.periodo_fim)} · {r.dias_placa ?? r.dias} dias</p>
                     </div>
                     {r.status === "liberado"
                       ? <Badge variant="ok">Cliente pagou</Badge>
@@ -559,7 +559,7 @@ function DialogoPagar({ repasse: inicial, selecaoInicial, locador: l, onOpenChan
                     <input type="radio" name="repasse-alvo" className="accent-primary" checked={x.id === r.id} disabled={!!salvando} onChange={() => setAlvoId(x.id)} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate"><span className="font-medium">{x.cliente_nome}</span>{x.contrato_numero && <span className="text-muted-foreground"> · {x.contrato_numero}</span>}{x.numero_nf && <span className="text-muted-foreground"> · NF {x.numero_nf}</span>}</p>
-                      <p className="text-xs text-muted-foreground">{formatPeriodo(x.periodo_inicio, x.periodo_fim)} · {x.dias} dias</p>
+                      <p className="text-xs text-muted-foreground">{formatPeriodo(x.periodo_inicio, x.periodo_fim)} · {x.dias_placa ?? x.dias} dias</p>
                     </div>
                     {x.status === "liberado" ? <Badge variant="ok">Cliente pagou</Badge> : <Badge variant="alerta">Aguardando cliente</Badge>}
                     <div className="text-right"><Moeda valor={x.valor_liquido} className="font-semibold" /><p className="text-[11px] text-muted-foreground">bruto {formatBRL(x.valor_bruto)}</p></div>
