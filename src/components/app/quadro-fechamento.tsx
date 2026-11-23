@@ -3,8 +3,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
 import { formatBRL } from "@/lib/calculos/dinheiro";
-import { formatHoras } from "@/lib/format";
-import { DESCONTOS_FECHAMENTO, calcularFechamento, type FechamentoEspelho } from "@/lib/calculos/espelho";
+import { DESCONTOS_FECHAMENTO, calcularFechamento, formatHorasRelogio, type FechamentoEspelho } from "@/lib/calculos/espelho";
 
 type Chave = keyof FechamentoEspelho;
 
@@ -52,7 +51,7 @@ export function QuadroFechamento({ totalHoras, valorMensal, franquia, fechamento
       {/* cabeçalho: total de horas, valor mensal e valor hora */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b-2 bg-muted/40 px-3 py-2">
         <span className="text-xs font-bold uppercase tracking-widest">Total:</span>
-        <span className="num rounded bg-yellow-300 px-2 py-0.5 font-bold text-black">{formatHoras(totalHoras).toUpperCase()}</span>
+        <span className="num rounded bg-yellow-300 px-2 py-0.5 font-bold text-black">{formatHorasRelogio(totalHoras).toUpperCase()}</span>
         <span className="ml-auto text-xs font-bold uppercase tracking-[0.3em]">Valor mensal</span>
         {editavel
           ? <InputMoeda aria-label="Valor mensal" className="h-8 w-40" value={valorMensal} onChange={(v) => onValorMensal?.(v)} placeholder="0,00" />
@@ -72,7 +71,7 @@ export function QuadroFechamento({ totalHoras, valorMensal, franquia, fechamento
 
       <div>
         {DESCONTOS_FECHAMENTO.map(([k, rotulo]) => <Linha key={k} rotulo={rotulo} valor={campoValor(k)} />)}
-        <Linha destaque rotulo={<>Pagamento horas excedente{r && r.horasExcedentes > 0 ? ` ${formatHoras(r.horasExcedentes).toUpperCase()}` : ""}</>}
+        <Linha destaque rotulo={<>Pagamento horas excedente{r && r.horasExcedentes > 0 ? ` ${formatHorasRelogio(r.horasExcedentes).toUpperCase()}` : ""}</>}
           valor={calculado(r?.valorExcedente)} />
         <Linha rotulo="Mobilização" valor={campoValor("mobilizacao")} />
         <Linha rotulo="Desmobilização" valor={campoValor("desmobilizacao")} />

@@ -8,8 +8,8 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Cabecalho, Confirmar, StatusBadge, rodarAcao } from "@/components/app/comuns";
 import { InputNumero } from "@/components/app/campos";
 import { QuadroFechamento } from "@/components/app/quadro-fechamento";
-import { formatCompetencia, formatDataHora, formatHoras, formatPlaca } from "@/lib/format";
-import { HORAS_FRANQUIA_PADRAO, calcularHorasDia, dataDaLinha, diasDoEspelho, linhasDoPeriodo, rotuloDias, totalHoras, type FechamentoEspelho, type LinhaEspelho } from "@/lib/calculos/espelho";
+import { formatCompetencia, formatDataHora, formatPlaca } from "@/lib/format";
+import { HORAS_FRANQUIA_PADRAO, calcularHorasDia, formatHorasRelogio, dataDaLinha, diasDoEspelho, linhasDoPeriodo, rotuloDias, totalHoras, type FechamentoEspelho, type LinhaEspelho } from "@/lib/calculos/espelho";
 import { cn } from "@/lib/utils";
 import { excluirEspelho, salvarEspelho } from "../actions";
 import { EnviarEspelhoDialog, EspelhoDadosDialog, type OpcoesEspelho } from "../client";
@@ -71,7 +71,7 @@ function PreencherLote({ onAplicar }: { onAplicar: (inicio: string, fim: string,
         Incluir sábados
       </label>
       <Button variant="outline" size="sm" disabled={!inicio || !fim} onClick={() => onAplicar(inicio, fim, intervalo, sabado)}>
-        <Wand2 /> Preencher dias vazios {horas != null && `(${formatHoras(horas)}/dia)`}
+        <Wand2 /> Preencher dias vazios {horas != null && `(${formatHorasRelogio(horas)}/dia)`}
       </Button>
     </Card>
   );
@@ -251,7 +251,7 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
           <tfoot>
             <tr className="border-t-2 font-semibold">
               <td colSpan={5} className="px-3 py-3 text-right uppercase text-muted-foreground">Total ({diasLancados} dia(s))</td>
-              <td className="num px-2 py-3 text-right text-base">{formatHoras(total)}</td>
+              <td className="num px-2 py-3 text-right text-base">{formatHorasRelogio(total)}</td>
               <td />
             </tr>
           </tfoot>
@@ -268,7 +268,7 @@ export function EditorEspelho({ espelho, podeEditar, opcoes }: { espelho: Espelh
         <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur">
           <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-3 px-1 lg:px-8">
             <span className="text-sm">
-              Total <strong className="num">{formatHoras(total)}</strong>
+              Total <strong className="num">{formatHorasRelogio(total)}</strong>
               {alterado && <span className="ml-2 text-status-alerta">· alterações não salvas</span>}
             </span>
             <Button disabled={!alterado || salvando} onClick={salvar}>

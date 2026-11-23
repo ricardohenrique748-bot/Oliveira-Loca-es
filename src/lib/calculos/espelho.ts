@@ -178,6 +178,11 @@ export function horasEmRelogio(h: number | null | undefined): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
+/** 242,5 → "242:30 h" (horas em relógio, no lugar do decimal) */
+export function formatHorasRelogio(h: number | null | undefined): string {
+  return h == null ? "—" : `${horasEmRelogio(h)} h`;
+}
+
 /** Horas do mês que o valor mensal cobre, quando não informado. */
 export const HORAS_FRANQUIA_PADRAO = 220;
 

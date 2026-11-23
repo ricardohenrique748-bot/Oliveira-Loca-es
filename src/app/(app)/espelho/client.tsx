@@ -13,10 +13,10 @@ import { SelectSimples } from "@/components/ui/select";
 import { BotaoCopiar, Cabecalho, Confirmar, StatusBadge, Vazio, rodarAcao } from "@/components/app/comuns";
 import { SeletorMes } from "@/components/app/seletor-mes";
 import { BarraFiltros, FiltroSelectUrl, useUrlParams } from "@/components/app/url";
-import { formatCompetencia, formatDataHora, formatHoras, formatPlaca, linkEmail, linkWhatsApp } from "@/lib/format";
+import { formatCompetencia, formatDataHora, formatPlaca, linkEmail, linkWhatsApp } from "@/lib/format";
 import { MODO_DEMO } from "@/lib/plataforma";
 import { criarEspelho, editarDadosEspelho, enviarEspelho, excluirEspelho } from "./actions";
-import { MAX_DIAS_ESPELHO, diasDoEspelho, erroDatas, rotuloDias } from "@/lib/calculos/espelho";
+import { MAX_DIAS_ESPELHO, diasDoEspelho, formatHorasRelogio, erroDatas, rotuloDias } from "@/lib/calculos/espelho";
 import { CalendarioDias } from "@/components/app/calendario-dias";
 
 export interface EspelhoLista {
@@ -100,7 +100,7 @@ export function EnviarEspelhoDialog({ espelho, aberto, onOpenChange, antesDeEnvi
   const mes = espelho.data_inicio || espelho.datas?.length
     ? rotuloDias(diasDoEspelho(espelho.competencia, espelho.data_inicio, espelho.data_fim, espelho.datas))
     : formatCompetencia(espelho.competencia, true);
-  const mensagem = `Olá! Segue o espelho de horas da placa ${formatPlaca(espelho.placa)} referente a ${mes} (${formatHoras(espelho.total_horas)}). `
+  const mensagem = `Olá! Segue o espelho de horas da placa ${formatPlaca(espelho.placa)} referente a ${mes} (${formatHorasRelogio(espelho.total_horas)}). `
     + `Por favor, confira e aprove pelo link: ${url}`;
   const whats = linkWhatsApp(espelho.cliente_whatsapp, mensagem);
   const email = linkEmail(espelho.cliente_email, `Espelho de horas ${formatPlaca(espelho.placa)} - ${mes}`, mensagem);
@@ -137,7 +137,7 @@ export function EnviarEspelhoDialog({ espelho, aberto, onOpenChange, antesDeEnvi
                 ? "O cliente recusou este espelho. Depois de corrigir as horas, reenvie: o link volta a aceitar resposta e a recusa anterior é apagada."
                 : "Ao liberar, o cliente consegue abrir o espelho pelo link, conferir as horas e aprovar ou recusar."}
             </p>
-            <p className="text-muted-foreground">Total lançado: <strong className="text-foreground">{formatHoras(espelho.total_horas)}</strong></p>
+            <p className="text-muted-foreground">Total lançado: <strong className="text-foreground">{formatHorasRelogio(espelho.total_horas)}</strong></p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -404,7 +404,7 @@ export function EspelhosCliente({ comp, historico, espelhos, opcoes, podeEditar 
         </BarraFiltros>
         {espelhos.length > 0 && (
           <p className="text-sm text-muted-foreground">
-            {espelhos.length} espelho(s) · <strong className="text-foreground">{formatHoras(total)}</strong>
+            {espelhos.length} espelho(s) · <strong className="text-foreground">{formatHorasRelogio(total)}</strong>
             {aguardando > 0 && <> · {aguardando} aguardando o cliente</>}
           </p>
         )}
@@ -445,7 +445,7 @@ export function EspelhosCliente({ comp, historico, espelhos, opcoes, podeEditar 
                     {e.cliente}
                     {e.obra && <div className="text-xs text-muted-foreground">{e.obra}</div>}
                   </TableCell>
-                  <TableCell className="num text-right">{formatHoras(e.total_horas)}</TableCell>
+                  <TableCell className="num text-right">{formatHorasRelogio(e.total_horas)}</TableCell>
                   <TableCell><StatusBadge status={e.status} /></TableCell>
                   <TableCell className="hidden max-w-xs text-xs text-muted-foreground md:table-cell">
                     {e.respondido_em ? (
