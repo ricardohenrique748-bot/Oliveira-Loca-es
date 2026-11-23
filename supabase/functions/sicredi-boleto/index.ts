@@ -279,6 +279,10 @@ async function pdf({ usuario, admin }: Ctx, id: string) {
   // se o banco recusar o PDF (ex.: Sicredi 406), desenha o boleto no app com os dados que já temos
   const bytes = await b.cobranca.pdf(b.linha_digitavel).catch((e) => {
     if (!(e instanceof ErroBanco)) throw e;
+    // Sicredi 422 "Título já liquidado ou baixado": não desenha boleto de título pago/cancelado
+    if (/liquidado|baixado/i.test(e.message)) {
+      throw new ErroUso("O banco informa que este boleto já foi pago ou cancelado. Clique em \"Consultar pagamento\" para atualizar no sistema.", 409);
+    }
     console.error("[pdf banco → desenhado no app]", e.status, JSON.stringify(e.corpo));
     return null;
   });

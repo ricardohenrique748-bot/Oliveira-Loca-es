@@ -22,7 +22,7 @@ begin
 
   -- placas da fatura: a da própria fatura, as dos itens e as dos repasses digitados
   create temp table if not exists _placas_avulsa (veiculo_id uuid, valor numeric) on commit drop;
-  delete from _placas_avulsa;
+  truncate _placas_avulsa;
   insert into _placas_avulsa (veiculo_id, valor)
   select veiculo_id, sum(valor) from (
     select m.veiculo_id as veiculo_id, 0::numeric as valor where m.veiculo_id is not null
