@@ -66,10 +66,17 @@ export default function RelatoriosPage() {
         .map((l): Linha => ({ ...l, qtd: res.filter((x) => x.cliente_fantasia === l.cliente && x.competencia === l.competencia).length }))
         .sort((a, b) => String(a.cliente).localeCompare(String(b.cliente)) || String(a.competencia).localeCompare(String(b.competencia)));
     } else if (r === "aging") {
-      let q = supabase.from("vw_aging_receber").select("cliente_nome, placa, numero_nf, data_emissao, data_vencimento, dias_atraso, valor_final, valor_recebido, saldo, faixa, empresa_apelido");
+      let q = supabase.from("vw_aging_receber").select("medicao_id, cliente_nome, placa, numero_nf, data_emissao, data_vencimento, dias_atraso, valor_final, valor_recebido, saldo, faixa, empresa_apelido");
       if (emp) q = q.eq("empresa_id", emp);
       const res = await buscarTudo(q.order("data_vencimento").order("numero_nf").order("placa"));
-      linhas = res as Linha[];
+      // fatura com contrato ou avulsa (sem contrato)
+      const ids = [...new Set(res.map((x) => x.medicao_id).filter((x): x is string => !!x))];
+      const comContrato = new Set<string>();
+      for (let i = 0; i < ids.length; i += 150) {
+        const { data } = await supabase.from("medicoes").select("id").in("id", ids.slice(i, i + 150)).not("contrato_id", "is", null);
+        (data ?? []).forEach((m) => comContrato.add(m.id));
+      }
+      linhas = res.map(({ medicao_id, ...x }) => ({ ...x, tipo_fatura: medicao_id && comContrato.has(medicao_id) ? "Contrato" : "Avulsa" })) as Linha[];
     } else if (r === "repasses") {
       let q = supabase.from("repasses_v").select("locador_nome, placa, competencia, dias, dias_placa, valor_bruto, valor_abatimentos, valor_liquido, status, adiantado").gte("competencia", ini).lte("competencia", fim).neq("status", "cancelado");
       if (emp) q = q.eq("empresa_id", emp);

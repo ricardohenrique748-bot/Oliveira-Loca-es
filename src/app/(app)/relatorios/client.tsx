@@ -50,12 +50,12 @@ const RELATORIOS: Record<Relatorio, { titulo: string; descricao: string; colunas
   aging: {
     titulo: "Aging do contas a receber", descricao: "Faturas em aberto (situação atual, independe do período).",
     colunas: [
-      { chave: "cliente_nome", titulo: "Cliente", largura: 22 }, { chave: "empresa_apelido", titulo: "Empresa" }, { chave: "placa", titulo: "Placa", tipo: "placa" },
+      { chave: "cliente_nome", titulo: "Cliente", largura: 22 }, { chave: "empresa_apelido", titulo: "Empresa" }, { chave: "tipo_fatura", titulo: "Tipo" }, { chave: "placa", titulo: "Placa", tipo: "placa" },
       { chave: "numero_nf", titulo: "NF" }, { chave: "data_emissao", titulo: "Emissão", tipo: "data" }, { chave: "data_vencimento", titulo: "Vencimento", tipo: "data" },
       { chave: "dias_atraso", titulo: "Dias atraso", tipo: "numero" }, { chave: "faixa", titulo: "Faixa" }, { chave: "valor_final", titulo: "Valor", tipo: "moeda" },
       { chave: "valor_recebido", titulo: "Recebido", tipo: "moeda" }, { chave: "saldo", titulo: "Saldo", tipo: "moeda" },
     ],
-    filtros: ["cliente_nome", "empresa_apelido", "placa", "faixa"],
+    filtros: ["cliente_nome", "empresa_apelido", "tipo_fatura", "placa", "faixa"],
   },
   repasses: {
     titulo: "Repasses por locador", descricao: "Repasses do período com abatimentos e situação.",
