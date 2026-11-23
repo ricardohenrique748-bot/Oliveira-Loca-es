@@ -124,8 +124,20 @@ export async function criarBoleto(b: Beneficiario, dados: DadosBoleto): Promise<
 }
 
 export async function pdfBoleto(b: Beneficiario, linhaDigitavel: string): Promise<Uint8Array> {
-  const r = await chamar(b, `/cobranca/boleto/v1/boletos/pdf?linhaDigitavel=${encodeURIComponent(linhaDigitavel)}`, { aceitar: "application/pdf" });
-  return new Uint8Array(await r.arrayBuffer());
+  // linha só com dígitos; Accept aberto (o gateway devolve 406 quando não gosta do Accept)
+  const linha = linhaDigitavel.replace(/\D/g, "");
+  const r = await chamar(b, `/cobranca/boleto/v1/boletos/pdf?linhaDigitavel=${linha}`, { aceitar: "application/pdf, application/octet-stream, */*" });
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  // às vezes vem JSON com o PDF em base64
+  if (!(bytes[0] === 0x25 && bytes[1] === 0x50)) { // não começa com "%P"(DF)
+    try {
+      const d = JSON.parse(new TextDecoder().decode(bytes));
+      const b64 = d?.pdf ?? d?.arquivo ?? d?.conteudo ?? d?.base64;
+      if (typeof b64 === "string") return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    } catch { /* não é JSON */ }
+    throw new ErroSicredi("Sicredi devolveu o PDF em formato inesperado", 502);
+  }
+  return bytes;
 }
 
 export async function consultarBoleto(b: Beneficiario, nossoNumero: string): Promise<SituacaoBoleto> {

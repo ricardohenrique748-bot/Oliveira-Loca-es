@@ -276,7 +276,12 @@ const conferirAmbiente = (b: BoletoConta) => {
 async function pdf({ usuario, admin }: Ctx, id: string) {
   const b = await boletoComConta(usuario, admin, id);
   conferirAmbiente(b);
-  const bytes = await b.cobranca.pdf(b.linha_digitavel);
+  // se o banco recusar o PDF (ex.: Sicredi 406), desenha o boleto no app com os dados que já temos
+  const bytes = await b.cobranca.pdf(b.linha_digitavel).catch((e) => {
+    if (!(e instanceof ErroBanco)) throw e;
+    console.error("[pdf banco → desenhado no app]", e.status, JSON.stringify(e.corpo));
+    return null;
+  });
   if (!bytes) return { dados: await dadosParaDesenhar(usuario, b) };
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));

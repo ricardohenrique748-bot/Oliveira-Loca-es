@@ -1,6 +1,6 @@
 "use client";
 /**
- * Boleto em PDF desenhado no navegador, para bancos cuja API não devolve o PDF (Itaú).
+ * Boleto em PDF desenhado no navegador, para bancos cuja API não devolve o PDF (Itaú) ou quando o banco recusa (Sicredi).
  * Layout Febraban simplificado: recibo do pagador + ficha de compensação com código de barras
  * (intercalado 2 de 5) e, quando houver, o QR Code PIX (BoleCode).
  * Os dados vêm prontos da Edge Function (acao "pdf" → { dados }).
@@ -110,7 +110,7 @@ export async function gerarBoletoPDF(d: DadosBoletoPDF): Promise<Blob> {
   cabecalhoBanco(y, linha);
   y += 10;
   const W1 = 145, W2 = L - W1;
-  caixa(M, y, W1, 9, "Local de pagamento", "Pagável em qualquer banco ou correspondente até o vencimento. Após o vencimento, no Itaú ou pelo app.");
+  caixa(M, y, W1, 9, "Local de pagamento", `Pagável em qualquer banco ou correspondente até o vencimento. Após o vencimento, no ${d.banco} ou pelo app.`);
   caixa(M + W1, y, W2, 9, "Vencimento", formatData(d.vencimento), { direita: true, negrito: true });
   y += 9;
   caixa(M, y, W1, 9, "Beneficiário", `${d.beneficiario.nome}  ${docFmt(d.beneficiario.documento)}${d.beneficiario.endereco ? ` - ${d.beneficiario.endereco}` : ""}`);
