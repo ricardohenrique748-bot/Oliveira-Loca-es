@@ -101,6 +101,12 @@ export function QuadroFechamento({ totalHoras, valorMensal, franquia, fechamento
                   value={fechamento.dias_trabalhados ?? null} onChange={(v) => mudar("dias_trabalhados", v)} />
               : <span className="num">{r ? fmtDias(r.diasTrabalhados) : "-"}</span>}
             <span className="font-bold italic">DIAS</span>
+            {/* dias digitados: cada dia vale as horas do dia × valor hora */}
+            {r?.diasDigitados && (editavel
+              ? <span className="flex items-center gap-1 normal-case">×
+                  <InputNumero aria-label="Horas por dia" casas={1} className="num h-7 w-14 text-right" placeholder="10"
+                    value={fechamento.horas_dia ?? null} onChange={(v) => mudar("horas_dia", v)} />h</span>
+              : <span className="normal-case">× {fmtDias(r.horasDia)} h</span>)}
           </span>} />
         <Linha forte rotulo="Valor dias em reparo mecânico" valor={calculado(r?.valorDiasReparo)} />
         <Linha rotulo="Valor total dos dias trabalhados" valor={calculado(r?.valorDiasTrabalhados)} />

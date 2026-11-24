@@ -186,6 +186,9 @@ export function formatHorasRelogio(h: number | null | undefined): string {
 /** Horas do mês que o valor mensal cobre, quando não informado. */
 export const HORAS_FRANQUIA_PADRAO = 220;
 
+/** Horas de um dia trabalhado no fechamento por dias. */
+export const HORAS_DIA_PADRAO = 10;
+
 export interface ValoresEspelho {
   /** valor mensal ÷ horas do mês, arredondado a 2 casas (como na planilha: 80.000 ÷ 220 = 363,64) */
   valorHora: number;
@@ -232,8 +235,10 @@ export interface FechamentoEspelho {
   dias_reparo?: number | null;
   /** base de dias do valor mensal (padrão 30) */
   dias_base?: number | null;
-  /** dias trabalhados digitados (no lugar de base − reparo) */
+  /** dias trabalhados digitados: valor = dias × horas do dia × valor hora */
   dias_trabalhados?: number | null;
+  /** horas de um dia trabalhado (padrão 10) */
+  horas_dia?: number | null;
   /** abaixo das horas do mês, cobra só as horas trabalhadas × valor hora */
   por_hora?: boolean;
 }
@@ -255,6 +260,10 @@ export interface ResultadoFechamento extends ValoresEspelho {
   valorDiasTrabalhados: number;
   /** cobrado pelas horas trabalhadas (abaixo das horas do mês) */
   porHora: boolean;
+  /** horas de um dia trabalhado (padrão 10) */
+  horasDia: number;
+  /** dias trabalhados digitados: valor = dias × horas do dia × valor hora */
+  diasDigitados: boolean;
   totalDescontos: number;
   totalBruto: number;
   totalLiquido: number;
@@ -265,7 +274,7 @@ const num = (v: number | null | undefined) => (typeof v === "number" && Number.i
 /** Lê o que veio do banco (jsonb) só com os campos conhecidos e numéricos. */
 export function normalizarFechamento(v: unknown): FechamentoEspelho {
   const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-  const chaves = [...DESCONTOS_FECHAMENTO.map(([k]) => k), "mobilizacao", "desmobilizacao", "dias_reparo", "dias_base", "dias_trabalhados"] as const;
+  const chaves = [...DESCONTOS_FECHAMENTO.map(([k]) => k), "mobilizacao", "desmobilizacao", "dias_reparo", "dias_base", "dias_trabalhados", "horas_dia"] as const;
   const out: FechamentoEspelho = {};
   for (const k of chaves) if (typeof o[k] === "number") out[k] = o[k] as number;
   if (o.por_hora === true) out.por_hora = true;
@@ -286,14 +295,19 @@ export function calcularFechamento(totalHorasEspelho: number, valorMensal: numbe
     ? Math.min(diasBase, Math.max(0, f.dias_trabalhados)) : diasBase - diasReparo);
   // abaixo das horas do mês e "cobrar pelas horas": horas trabalhadas × valor hora (as horas já refletem os dias parados)
   const porHora = !!f.por_hora && !!horasFranquia && totalHorasEspelho < horasFranquia;
+  // dias digitados: cada dia vale as horas do dia (padrão 10) × valor hora
+  const horasDia = num(f.horas_dia) || HORAS_DIA_PADRAO;
+  const diasDigitados = !porHora && typeof f.dias_trabalhados === "number";
+  // só os dias em reparo digitados descontam do valor mensal (nos outros modos o valor já vem das horas/dias)
+  const valorDiasReparo = porHora || diasDigitados ? 0 : arredonda2((valorMensal / diasBase) * diasReparo);
   const valorDiasTrabalhados = porHora
     ? arredonda2((Math.round(totalHorasEspelho * 60) / 60) * base.valorHora)
-    : arredonda2(valorMensal - (valorMensal / diasBase) * (diasBase - diasTrabalhados));
-  const valorDiasReparo = porHora ? 0 : arredonda2(valorMensal - valorDiasTrabalhados);
+    : diasDigitados ? arredonda2(diasTrabalhados * horasDia * base.valorHora)
+      : arredonda2(valorMensal - valorDiasReparo);
   const totalDescontos = arredonda2(DESCONTOS_FECHAMENTO.reduce((s, [k]) => s + num(f[k]), 0));
   const totalBruto = arredonda2(valorDiasTrabalhados + base.valorExcedente + num(f.mobilizacao) + num(f.desmobilizacao));
   return {
-    ...base, diasBase, diasReparo, diasTrabalhados, valorDiasReparo, valorDiasTrabalhados, porHora,
+    ...base, diasBase, diasReparo, diasTrabalhados, valorDiasReparo, valorDiasTrabalhados, porHora, horasDia, diasDigitados,
     totalDescontos, totalBruto, totalLiquido: arredonda2(totalBruto - totalDescontos),
   };
 }

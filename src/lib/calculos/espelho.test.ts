@@ -161,10 +161,14 @@ describe("fechamento como na planilha", () => {
   });
 
   it("dias trabalhados digitados", () => {
-    const r = calcularFechamento(160, 80_000, 220, { dias_trabalhados: 20 })!;
-    expect(r.diasTrabalhados).toBe(20);
-    expect(r.valorDiasTrabalhados).toBe(53333.33);
-    expect(r.valorDiasReparo).toBe(26666.67);
+    // 16 dias × 10 h × 363,64 = 58.182,40; sem valor de dias em reparo
+    const r = calcularFechamento(160, 80_000, 220, { dias_trabalhados: 16, desmobilizacao: 10_000 })!;
+    expect(r.diasTrabalhados).toBe(16);
+    expect(r.valorDiasTrabalhados).toBe(58182.4);
+    expect(r.valorDiasReparo).toBe(0);
+    expect(r.totalBruto).toBe(68182.4);
+    // horas do dia editáveis
+    expect(calcularFechamento(160, 80_000, 220, { dias_trabalhados: 16, horas_dia: 8 })!.valorDiasTrabalhados).toBe(46545.92);
   });
 
   it("lê do banco só os campos numéricos conhecidos", () => {
