@@ -114,7 +114,8 @@ describe("valores do espelho (franquia de horas)", () => {
   });
 
   it("horas quebradas", () => {
-    expect(calcularValoresEspelho(220.5, 80_000, 220)).toMatchObject({ horasExcedentes: 0.5, valorExcedente: 181.82, total: 80181.82 });
+    // como na planilha: 0:30 é cobrado como 0,30 h (0,30 × 363,64 = 109,09)
+    expect(calcularValoresEspelho(220.5, 80_000, 220)).toMatchObject({ horasExcedentes: 0.5, valorExcedente: 109.09, total: 80109.09 });
   });
 
   it("sem valor mensal ou horas do mês: não calcula", () => {
@@ -154,10 +155,10 @@ describe("fechamento como na planilha", () => {
     expect(calcularFechamento(160, 80_000, 220, {})!.valorDiasTrabalhados).toBe(80000);
   });
 
-  it("horas excedentes com minutos: 81:20 × 250 = 20.333,33", () => {
+  it("horas excedentes como na planilha: 81:20 × 250 = 81,20 × 250 = 20.300,00", () => {
     const r = calcularFechamento(301.33, 55_000, 220, {})!; // total guardado com 2 casas
     expect(r.valorHora).toBe(250);
-    expect(r.valorExcedente).toBe(20333.33);
+    expect(r.valorExcedente).toBe(20300);
   });
 
   it("dias trabalhados digitados", () => {

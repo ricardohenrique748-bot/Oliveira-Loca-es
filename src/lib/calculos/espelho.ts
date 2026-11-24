@@ -204,14 +204,21 @@ export interface ValoresEspelho {
  * é cobrado a valor hora. Ex.: 242 h, R$ 80.000 / 220 h → 22 h × 363,64 = 8.000,08; total 88.000,08.
  * Null sem valor mensal ou horas do mês.
  */
+/**
+ * Horas cobradas como na planilha do cliente: o relógio vira número (81:20 → 81,20; 10:30 → 10,30).
+ * Decisão da Oliveira em 24/11/2026 (não é 81,333 h). As horas chegam com 2 casas: volta ao minuto antes.
+ */
+export function horasComoNaPlanilha(horas: number): number {
+  const min = Math.round(horas * 60);
+  return Math.floor(min / 60) + (min % 60) / 100;
+}
+
 export function calcularValoresEspelho(totalHorasEspelho: number, valorMensal: number | null, horasFranquia: number | null): ValoresEspelho | null {
   if (!valorMensal || !horasFranquia || horasFranquia <= 0) return null;
   const valorHora = arredonda2(valorMensal / horasFranquia);
-  // multiplica as horas sem arredondar (81:20 = 81,333… h); arredondar antes perdia centavos (81,33 × 250 = 20.332,50)
-  // as horas vêm com 2 casas (301,33): volta ao minuto exato (81:20 → 81,3333…)
   const excedente = Math.round(Math.max(0, totalHorasEspelho - horasFranquia) * 60) / 60;
   const horasExcedentes = arredonda2(excedente);
-  const valorExcedente = arredonda2(excedente * valorHora);
+  const valorExcedente = arredonda2(horasComoNaPlanilha(excedente) * valorHora);
   return { valorHora, horasExcedentes, valorExcedente, total: arredonda2(valorMensal + valorExcedente) };
 }
 
@@ -301,7 +308,7 @@ export function calcularFechamento(totalHorasEspelho: number, valorMensal: numbe
   // só os dias em reparo digitados descontam do valor mensal (nos outros modos o valor já vem das horas/dias)
   const valorDiasReparo = porHora || diasDigitados ? 0 : arredonda2((valorMensal / diasBase) * diasReparo);
   const valorDiasTrabalhados = porHora
-    ? arredonda2((Math.round(totalHorasEspelho * 60) / 60) * base.valorHora)
+    ? arredonda2(horasComoNaPlanilha(totalHorasEspelho) * base.valorHora)
     : diasDigitados ? arredonda2(diasTrabalhados * horasDia * base.valorHora)
       : arredonda2(valorMensal - valorDiasReparo);
   const totalDescontos = arredonda2(DESCONTOS_FECHAMENTO.reduce((s, [k]) => s + num(f[k]), 0));
