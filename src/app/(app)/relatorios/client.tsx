@@ -2,7 +2,8 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronRight, FileSpreadsheet, FileText, Loader2, X } from "lucide-react";
-import { Label } from "@/components/ui/basicos";
+import { Badge, Label } from "@/components/ui/basicos";
+import { KpiCard } from "@/components/app/kpi";
 import { Button } from "@/components/ui/button";
 import { SelectBusca } from "@/components/ui/select-busca";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/overlays";
@@ -18,7 +19,18 @@ import { DetalhePlaca } from "./detalhe-placa";
 
 export type Relatorio = "dre_placa" | "dre_cliente" | "faturamento" | "aging" | "repasses" | "despesas" | "manutencao";
 type Linha = Record<string, string | number | null>;
-type Col = { chave: string; titulo: string; tipo?: "moeda" | "numero" | "data" | "pct" | "placa" | "competencia" | "status" | "horas" | "tipoOS"; largura?: number };
+type Col = { chave: string; titulo: string; tipo?: "moeda" | "numero" | "data" | "pct" | "placa" | "competencia" | "status" | "horas" | "tipoOS" | "faixa"; largura?: number };
+
+/** faixas do aging, iguais aos cards de Contas a receber */
+const FAIXAS = [
+  { chave: "a_vencer", rotulo: "A vencer", tom: undefined },
+  { chave: "1-30", rotulo: "1–30 dias", tom: "alerta" as const },
+  { chave: "31-60", rotulo: "31–60 dias", tom: "alerta" as const },
+  { chave: "61-90", rotulo: "61–90 dias", tom: "critico" as const },
+  { chave: "90+", rotulo: "+90 dias", tom: "critico" as const },
+];
+const rotuloFaixa = (v: string) => FAIXAS.find((f) => f.chave === v)?.rotulo ?? v;
+const placaOuAvulsa = (l: Linha) => (l.placa ? formatPlaca(String(l.placa)) : "Avulsa");
 
 const RELATORIOS: Record<Relatorio, { titulo: string; descricao: string; colunas: Col[]; /** colunas que viram filtro (valores distintos do relatório) */ filtros: string[] }> = {
   dre_placa: {
@@ -52,7 +64,7 @@ const RELATORIOS: Record<Relatorio, { titulo: string; descricao: string; colunas
     colunas: [
       { chave: "cliente_nome", titulo: "Cliente", largura: 22 }, { chave: "empresa_apelido", titulo: "Empresa" }, { chave: "tipo_fatura", titulo: "Tipo" }, { chave: "placa", titulo: "Placa", tipo: "placa" },
       { chave: "numero_nf", titulo: "NF" }, { chave: "data_emissao", titulo: "Emissão", tipo: "data" }, { chave: "data_vencimento", titulo: "Vencimento", tipo: "data" },
-      { chave: "dias_atraso", titulo: "Dias atraso", tipo: "numero" }, { chave: "faixa", titulo: "Faixa" }, { chave: "valor_final", titulo: "Valor", tipo: "moeda" },
+      { chave: "dias_atraso", titulo: "Dias atraso", tipo: "numero" }, { chave: "faixa", titulo: "Faixa", tipo: "faixa" }, { chave: "valor_final", titulo: "Valor", tipo: "moeda" },
       { chave: "valor_recebido", titulo: "Recebido", tipo: "moeda" }, { chave: "saldo", titulo: "Saldo", tipo: "moeda" },
     ],
     filtros: ["cliente_nome", "empresa_apelido", "tipo_fatura", "placa", "faixa"],
@@ -97,9 +109,55 @@ function rotuloFiltro(c: Col, v: string) {
     case "competencia": return formatCompetencia(v);
     case "status": return rotuloStatus(v);
     case "tipoOS": return ROTULOS.tipoOS[v as keyof typeof ROTULOS.tipoOS] ?? v;
+    case "faixa": return rotuloFaixa(v);
     default: return v;
   }
 }
+
+/** colunas do aging no mesmo formato da tela de Contas a receber */
+function colunasAging(linhas: Linha[]): ColumnDef<Linha, unknown>[] {
+  return [
+    { id: "placa", header: "Placa / cliente", meta: { tituloMobile: true }, cell: ({ row: { original: m } }) => (
+      <div className="max-w-[13rem]" title={`${m.cliente_nome ?? ""}${m.obra_nome ? ` · ${m.obra_nome}` : ""}`}>
+        <span className="font-mono font-semibold">{placaOuAvulsa(m)}</span> <span className="text-xs text-muted-foreground">{m.empresa_apelido}</span>
+        <p className="truncate text-xs text-muted-foreground">{m.cliente_nome}</p>
+        {m.obra_nome && <p className="truncate text-xs text-muted-foreground">{m.obra_nome}</p>}
+      </div>
+    ) },
+    { id: "numero_nf", header: "NF", cell: ({ row: { original: m } }) => <span className="num">{m.numero_nf ?? "—"}</span> },
+    { id: "periodo", header: "Período", cell: ({ row: { original: m } }) => (m.periodo_inicio
+      ? <span className="whitespace-nowrap text-xs leading-tight">{formatData(String(m.periodo_inicio))}<br /><span className="text-muted-foreground">a {formatData(String(m.periodo_fim))}</span></span>
+      : "—") },
+    { id: "data_vencimento", header: "Vencimento", cell: ({ row: { original: m } }) => (
+      <div className="whitespace-nowrap leading-tight">
+        {formatData(m.data_vencimento as string | null)}{m.status_exibicao === "vencido" && m.dias_atraso ? <Badge variant="critico" className="ml-1 px-1.5 py-0 text-[11px]">{m.dias_atraso} d</Badge> : null}
+        <p className="text-[11px] text-muted-foreground">emissão {formatData(m.data_emissao as string | null)}</p>
+      </div>
+    ) },
+    { id: "valor_final", header: "Valor", meta: { direita: true }, cell: ({ row: { original: m } }) => (
+      <div className="whitespace-nowrap leading-tight">
+        <Moeda valor={Number(m.valor_final)} />
+        {Number(m.valor_recebido) > 0 && <p className="text-[11px] text-status-ok">recebido <Moeda valor={Number(m.valor_recebido)} /></p>}
+      </div>
+    ), footer: () => (
+      <div className="leading-tight"><Moeda valor={somar(linhas.map((l) => Number(l.valor_final) || 0))} />
+        <p className="text-[11px] font-normal text-muted-foreground">recebido <Moeda valor={somar(linhas.map((l) => Number(l.valor_recebido) || 0))} /></p></div>
+    ) },
+    { id: "saldo", header: "Saldo", meta: { direita: true }, cell: ({ row: { original: m } }) => <Moeda valor={Number(m.saldo)} className="whitespace-nowrap font-semibold" />,
+      footer: () => <Moeda valor={somar(linhas.map((l) => Number(l.saldo) || 0))} /> },
+    { id: "status", header: "Status", cell: ({ row: { original: m } }) => (m.status_exibicao ? <StatusBadge status={String(m.status_exibicao)} className="whitespace-nowrap" /> : "—") },
+  ];
+}
+
+/** exportação do aging com as colunas da exportação de Contas a receber (+ tipo e faixa) */
+const EXPORT_AGING: ColunaExport<Linha>[] = [
+  { titulo: "Empresa", valor: (m) => m.empresa_apelido }, { titulo: "Cliente", valor: (m) => m.cliente_nome, largura: 22 },
+  { titulo: "Obra", valor: (m) => m.obra_nome, largura: 20 }, { titulo: "Tipo", valor: (m) => m.tipo_fatura }, { titulo: "Placa", valor: (m) => placaOuAvulsa(m) },
+  { titulo: "NF", valor: (m) => m.numero_nf }, { titulo: "Emissão", valor: (m) => m.data_emissao, tipo: "data" }, { titulo: "Vencimento", valor: (m) => m.data_vencimento, tipo: "data" },
+  { titulo: "Dias atraso", valor: (m) => (m.status_exibicao === "vencido" ? m.dias_atraso : null), tipo: "numero" }, { titulo: "Faixa", valor: (m) => rotuloFaixa(String(m.faixa ?? "")) },
+  { titulo: "Valor", valor: (m) => m.valor_final, tipo: "moeda" }, { titulo: "Recebido", valor: (m) => m.valor_recebido, tipo: "moeda" },
+  { titulo: "Saldo", valor: (m) => m.saldo, tipo: "moeda" }, { titulo: "Status", valor: (m) => (m.status_exibicao ? rotuloStatus(String(m.status_exibicao)) : "") },
+];
 
 /** campo de mês com calendário (grade de meses do ano) */
 function CampoMes({ id, rotulo, valor, onChange, min, max }: { id: string; rotulo: string; valor: string; onChange: (v: string) => void; min?: string; max?: string }) {
@@ -120,6 +178,7 @@ function celula(c: Col, v: string | number | null) {
     case "status": return <StatusBadge status={String(v)} />;
     case "horas": return formatHoras(Number(v));
     case "tipoOS": return ROTULOS.tipoOS[v as keyof typeof ROTULOS.tipoOS] ?? String(v);
+    case "faixa": return rotuloFaixa(String(v));
     case "numero": return Number(v).toLocaleString("pt-BR");
     default: return String(v);
   }
@@ -159,7 +218,20 @@ export function RelatoriosCliente({ carregando, tudo = false, relatorio, linhas:
   const limparFiltros = Object.fromEntries(TODOS_FILTROS.map((k) => [PARAM(k), null]));
   const descFiltros = ativos.map((f) => `${f.col.titulo}: ${f.opcoes.find((o) => o.value === f.valor)?.label}`).join(" · ");
 
-  const colunas = React.useMemo<ColumnDef<Linha, unknown>[]>(() => cfg.colunas.map((c, i): ColumnDef<Linha, unknown> => ({
+  const aging = relatorio === "aging";
+  // cards do aging: saldo por faixa com os outros filtros aplicados (o de faixa não, para os cards mostrarem todas)
+  const faixaSel = filtros.find((f) => f.col.chave === "faixa")?.valor ?? null;
+  const resumoAging = React.useMemo(() => {
+    if (!aging) return null;
+    const outros = ativos.filter((f) => f.col.chave !== "faixa");
+    const base = todas.filter((l) => outros.every((f) => String(l[f.col.chave] ?? "") === f.valor));
+    const r: Record<string, number> = Object.fromEntries(FAIXAS.map((f) => [f.chave, 0]));
+    for (const l of base) r[String(l.faixa)] = (r[String(l.faixa)] ?? 0) + (Number(l.saldo) || 0);
+    return { porFaixa: r, total: somar(Object.values(r)) };
+  }, [aging, ativos, todas]);
+
+  const colunasAgingMemo = React.useMemo(() => colunasAging(linhas), [linhas]);
+  const colunasPadrao = React.useMemo<ColumnDef<Linha, unknown>[]>(() => cfg.colunas.map((c, i): ColumnDef<Linha, unknown> => ({
     id: c.chave, header: c.titulo,
     meta: { direita: ["moeda", "numero", "pct", "horas"].includes(c.tipo ?? ""), tituloMobile: i === 0 },
     cell: ({ row }) => relatorio === "dre_placa" && c.chave === "placa" && row.original.veiculo_id
@@ -168,13 +240,17 @@ export function RelatoriosCliente({ carregando, tudo = false, relatorio, linhas:
       : celula(c, row.original[c.chave]),
     footer: () => (i === 0 ? "Total" : c.tipo === "moeda" && totais[c.chave] !== undefined ? <Moeda valor={totais[c.chave]} /> : null),
   })), [cfg, totais, relatorio]);
+  const colunas = aging ? colunasAgingMemo : colunasPadrao;
 
-  const exp: ColunaExport<Linha>[] = cfg.colunas.map((c) => ({
+  const expPadrao: ColunaExport<Linha>[] = cfg.colunas.map((c) => ({
     titulo: c.titulo, largura: c.largura,
     tipo: c.tipo === "moeda" ? "moeda" : c.tipo === "data" ? "data" : ["numero", "pct", "horas"].includes(c.tipo ?? "") ? "numero" : "texto",
-    valor: (l) => (c.tipo === "competencia" && l[c.chave] ? formatCompetencia(String(l[c.chave])) : c.tipo === "tipoOS" ? ROTULOS.tipoOS[l[c.chave] as keyof typeof ROTULOS.tipoOS] : l[c.chave]),
+    valor: (l) => (c.tipo === "competencia" && l[c.chave] ? formatCompetencia(String(l[c.chave])) : c.tipo === "tipoOS" ? ROTULOS.tipoOS[l[c.chave] as keyof typeof ROTULOS.tipoOS] : c.tipo === "faixa" ? rotuloFaixa(String(l[c.chave] ?? "")) : l[c.chave]),
   }));
-  const linhaTotais = cfg.colunas.map((c, i) => (i === 0 ? "Total" : c.tipo === "moeda" ? totais[c.chave] ?? "" : ""));
+  const exp = aging ? EXPORT_AGING : expPadrao;
+  const linhaTotais = aging
+    ? EXPORT_AGING.map((c, i) => (i === 0 ? "Total" : c.titulo === "Valor" ? totais.valor_final ?? "" : c.titulo === "Recebido" ? totais.valor_recebido ?? "" : c.titulo === "Saldo" ? totais.saldo ?? "" : ""))
+    : cfg.colunas.map((c, i) => (i === 0 ? "Total" : c.tipo === "moeda" ? totais[c.chave] ?? "" : ""));
 
   return (
     <div className="space-y-4">
@@ -209,8 +285,22 @@ export function RelatoriosCliente({ carregando, tudo = false, relatorio, linhas:
         {ativos.length > 0 && <Button variant="ghost" className="h-9" onClick={() => url.set(limparFiltros)}><X /> Limpar filtros</Button>}
         {carregando && <Loader2 className="mb-2 h-4 w-4 animate-spin text-muted-foreground" aria-label="Carregando" />}
       </BarraFiltros>
+      {resumoAging && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <button type="button" className="text-left" onClick={() => url.set({ [PARAM("faixa")]: null })}>
+            <KpiCard titulo="Total em aberto" valor={<Moeda valor={resumoAging.total} />} destaque={!faixaSel} />
+          </button>
+          {FAIXAS.map((f) => (
+            <button key={f.chave} type="button" className="text-left" onClick={() => url.set({ [PARAM("faixa")]: faixaSel === f.chave ? null : f.chave })}>
+              <KpiCard titulo={f.rotulo} valor={<Moeda valor={resumoAging.porFaixa[f.chave] ?? 0} />} tom={(resumoAging.porFaixa[f.chave] ?? 0) > 0 ? f.tom : undefined} destaque={faixaSel === f.chave} />
+            </button>
+          ))}
+        </div>
+      )}
       <p className="text-sm text-muted-foreground">{cfg.descricao}{ativos.length > 0 && ` · ${linhas.length} de ${todas.length} linhas`}</p>
-      <DataTable colunas={colunas} dados={linhas} getId={(l) => cfg.colunas.map((c) => String(l[c.chave] ?? "")).join("|")} rodape />
+      <DataTable colunas={colunas} dados={linhas} rodape compacta={aging}
+        getId={(l) => (aging && l.id ? String(l.id) : cfg.colunas.map((c) => String(l[c.chave] ?? "")).join("|"))}
+        classeLinha={aging ? (l) => (l.status_exibicao === "vencido" ? "border-l-2 border-l-status-critico" : undefined) : undefined} />
       {relatorio === "dre_placa" && <DetalhePlaca placa={detalhe} onOpenChange={(v) => !v && setDetalhe(null)} ini={ini} fim={fim} empresaId={empresaId} periodo={periodo} />}
     </div>
   );

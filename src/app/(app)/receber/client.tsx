@@ -32,7 +32,11 @@ export type LinhaReceber = {
   boleto?: Boleto | null;
   /** boletos em aberto (parcelas), por vencimento */
   boletos?: Boleto[];
+  /** repasse ao locador (soma dos não cancelados) e quanto dele já foi pago; null = fatura sem repasse */
+  repasse?: { valor: number; pago: number } | null;
 };
+/** o que fica no caixa: recebido menos o repasse ao locador */
+const liquidoCaixa = (m: LinhaReceber) => m.valor_recebido - (m.repasse?.valor ?? 0);
 export type ContatoCobranca = { cliente_id: string; obra_id: string | null; nome: string; email: string | null; whatsapp: string | null };
 /** boleto: conta de cobrança configurada (Sicredi com código do beneficiário ou Itaú com carteira); pix: o boleto sai com QR Code PIX */
 type Conta = Opcao & { empresa_id: string; boleto?: boolean; banco?: string; pix?: boolean; encargos?: EncargosBoleto };
@@ -47,9 +51,9 @@ const FAIXAS = [
   { chave: "90+", rotulo: "+90 dias", tom: "critico" as const },
 ];
 
-export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes, contas, contatos, templates, podeEditar, soAvulsas = false }: {
+export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes, contas, contatos, templates, podeEditar, soAvulsas = false, veRepasse = false }: {
   linhas: LinhaReceber[]; total: number; pagina: number; tamanho: number; aging: Record<string, number>; clientes: Opcao[];
-  contas: Conta[]; contatos: ContatoCobranca[]; templates: { email: string; whatsapp: string }; podeEditar: boolean; soAvulsas?: boolean;
+  contas: Conta[]; contatos: ContatoCobranca[]; templates: { email: string; whatsapp: string }; podeEditar: boolean; soAvulsas?: boolean; veRepasse?: boolean;
 }) {
   const router = useRouter();
   const url = useUrlParams();
@@ -117,6 +121,19 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
         <p className="text-[11px] font-normal text-muted-foreground">recebido <Moeda valor={somar(linhas.map((l) => l.valor_recebido))} /></p></div>
     ) },
     { accessorKey: "saldo", header: "Saldo", meta: { direita: true, ordem: "saldo" }, cell: ({ getValue }) => <Moeda valor={getValue() as number} className="whitespace-nowrap font-semibold" />, footer: () => <Moeda valor={somar(linhas.map((l) => l.saldo))} /> },
+    ...(veRepasse ? [
+      { id: "repasse", header: "Repasse", meta: { direita: true }, cell: ({ row: { original: m } }) => !m.repasse ? <span className="text-muted-foreground">—</span> : (
+        <div className="whitespace-nowrap leading-tight" title="Valor líquido do repasse ao locador">
+          <Moeda valor={m.repasse.valor} className="text-status-critico" />
+          <p className={`text-[11px] ${m.repasse.pago >= m.repasse.valor ? "text-status-ok" : "text-muted-foreground"}`}>
+            {m.repasse.pago >= m.repasse.valor ? "pago" : m.repasse.pago > 0 ? <>pago <Moeda valor={m.repasse.pago} /></> : "a pagar"}</p>
+        </div>
+      ), footer: () => <Moeda valor={somar(linhas.map((l) => l.repasse?.valor ?? 0))} /> },
+      { id: "liquido", header: "Líquido", meta: { direita: true }, cell: ({ row: { original: m } }) => m.valor_recebido > 0
+        ? <span title="Recebido menos o repasse ao locador"><Moeda valor={liquidoCaixa(m)} className="whitespace-nowrap font-semibold" /></span>
+        : <span className="text-muted-foreground" title="Nada recebido ainda">—</span>,
+        footer: () => <Moeda valor={somar(linhas.filter((l) => l.valor_recebido > 0).map(liquidoCaixa))} /> },
+    ] satisfies ColumnDef<LinhaReceber, unknown>[] : []),
     { accessorKey: "status_exibicao", header: "Status", cell: ({ getValue }) => <StatusBadge status={getValue() as string} className="whitespace-nowrap" /> },
     { id: "acoes", header: () => <span className="sr-only">Ações</span>, meta: { classe: "text-right" }, cell: ({ row: { original: m } }) => {
       const cs = contatosDe(m);
@@ -140,7 +157,7 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
         </div>
       );
     } },
-  ], [linhas, contatosDe, mensagem, templates, podeEditar, empresasBoleto]);
+  ], [linhas, contatosDe, mensagem, templates, podeEditar, empresasBoleto, veRepasse]);
 
   const totalAberto = Object.values(aging).reduce((a, b) => a + b, 0);
   const faixaAtual = url.get("faixa");
@@ -196,7 +213,13 @@ export function ReceberCliente({ linhas, total, pagina, tamanho, aging, clientes
           { titulo: "Emissão", valor: (m) => m.data_emissao, tipo: "data" }, { titulo: "Vencimento", valor: (m) => m.data_vencimento, tipo: "data" },
           { titulo: "Dias atraso", valor: (m) => (m.status_exibicao === "vencido" ? m.dias_atraso : null), tipo: "numero" },
           { titulo: "Valor", valor: (m) => m.valor_final, tipo: "moeda" }, { titulo: "Recebido", valor: (m) => m.valor_recebido, tipo: "moeda" },
-          { titulo: "Saldo", valor: (m) => m.saldo, tipo: "moeda" }, { titulo: "Status", valor: (m) => m.status_exibicao },
+          { titulo: "Saldo", valor: (m) => m.saldo, tipo: "moeda" },
+          ...(veRepasse ? [
+            { titulo: "Repasse locador", valor: (m: LinhaReceber) => m.repasse?.valor ?? null, tipo: "moeda" as const },
+            { titulo: "Repasse pago", valor: (m: LinhaReceber) => m.repasse?.pago ?? null, tipo: "moeda" as const },
+            { titulo: "Líquido (recebido − repasse)", valor: (m: LinhaReceber) => (m.valor_recebido > 0 ? liquidoCaixa(m) : null), tipo: "moeda" as const },
+          ] : []),
+          { titulo: "Status", valor: (m) => m.status_exibicao },
         ] }} />
 
       <DialogoBaixa medicao={baixando} contas={contas} podeEditar={podeEditar} onOpenChange={(v) => !v && setBaixando(null)} onFeito={() => router.refresh()} />

@@ -2,7 +2,7 @@ import React from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth, exigirSessao } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
-import { podeEscrever } from "@/lib/permissoes";
+import { podeEscrever, podeLer } from "@/lib/permissoes";
 import { lerParams } from "@/lib/consulta";
 import { getConfig } from "@/lib/config";
 import { hojeSP } from "@/lib/calculos";
@@ -78,7 +78,8 @@ export default function ReceberPage() {
     ]);
     const ids = [...new Set((linhas ?? []).map((m) => m.cliente_id!))];
     const medicoes = (linhas ?? []).map((m) => m.id!);
-    const [{ data: contatos }, { data: boletos }] = await Promise.all([
+    const veRepasse = podeLer(s, "repasses");
+    const [{ data: contatos }, { data: boletos }, { data: repasses }] = await Promise.all([
       ids.length
         ? supabase.from("contatos").select("cliente_id, obra_id, nome, email, whatsapp").in("cliente_id", ids).eq("recebe_fatura", true)
         : Promise.resolve({ data: [] }),
@@ -86,7 +87,18 @@ export default function ReceberPage() {
         ? supabase.from("boletos").select("*")
           .in("medicao_id", medicoes).in("status", ["emitido", "pago"]).order("created_at", { ascending: false })
         : Promise.resolve({ data: [] }),
+      // repasse ao locador (um por placa sublocada): mostra quanto da fatura fica de fato no caixa
+      veRepasse && medicoes.length
+        ? supabase.from("repasses").select("medicao_id, valor_liquido, status").in("medicao_id", medicoes).neq("status", "cancelado")
+        : Promise.resolve({ data: [] as { medicao_id: string; valor_liquido: number; status: string }[] }),
     ]);
+    const repasseDe = new Map<string, { valor: number; pago: number }>();
+    for (const r of repasses ?? []) {
+      const a = repasseDe.get(r.medicao_id) ?? { valor: 0, pago: 0 };
+      a.valor += Number(r.valor_liquido);
+      if (r.status === "pago") a.pago += Number(r.valor_liquido);
+      repasseDe.set(r.medicao_id, a);
+    }
     // o mais recente por medição (em aberto tem prioridade) e todos os em aberto (parcelas), por vencimento
     const boletoDe = new Map<string, Boleto>();
     const abertosDe = new Map<string, Boleto[]>();
@@ -101,7 +113,8 @@ export default function ReceberPage() {
     for (const a of aging ?? []) resumo[a.faixa!] = (resumo[a.faixa!] ?? 0) + Number(a.saldo);
 
     return {
-      linhas: ((linhas ?? []) as LinhaReceber[]).map((m) => ({ ...m, boleto: boletoDe.get(m.id) ?? null, boletos: abertosDe.get(m.id) ?? [] })),
+      linhas: ((linhas ?? []) as LinhaReceber[]).map((m) => ({ ...m, boleto: boletoDe.get(m.id) ?? null, boletos: abertosDe.get(m.id) ?? [], repasse: repasseDe.get(m.id) ?? null })),
+      veRepasse,
       total: count ?? 0,
       pagina: p.pagina,
       tamanho: p.tamanho,
