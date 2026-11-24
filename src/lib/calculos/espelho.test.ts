@@ -154,6 +154,12 @@ describe("fechamento como na planilha", () => {
     expect(calcularFechamento(160, 80_000, 220, {})!.valorDiasTrabalhados).toBe(80000);
   });
 
+  it("horas excedentes com minutos: 81:20 × 250 = 20.333,33", () => {
+    const r = calcularFechamento(301.33, 55_000, 220, {})!; // total guardado com 2 casas
+    expect(r.valorHora).toBe(250);
+    expect(r.valorExcedente).toBe(20333.33);
+  });
+
   it("dias trabalhados digitados", () => {
     const r = calcularFechamento(160, 80_000, 220, { dias_trabalhados: 20 })!;
     expect(r.diasTrabalhados).toBe(20);

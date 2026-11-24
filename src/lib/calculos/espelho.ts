@@ -204,8 +204,11 @@ export interface ValoresEspelho {
 export function calcularValoresEspelho(totalHorasEspelho: number, valorMensal: number | null, horasFranquia: number | null): ValoresEspelho | null {
   if (!valorMensal || !horasFranquia || horasFranquia <= 0) return null;
   const valorHora = arredonda2(valorMensal / horasFranquia);
-  const horasExcedentes = arredonda2(Math.max(0, totalHorasEspelho - horasFranquia));
-  const valorExcedente = arredonda2(horasExcedentes * valorHora);
+  // multiplica as horas sem arredondar (81:20 = 81,333… h); arredondar antes perdia centavos (81,33 × 250 = 20.332,50)
+  // as horas vêm com 2 casas (301,33): volta ao minuto exato (81:20 → 81,3333…)
+  const excedente = Math.round(Math.max(0, totalHorasEspelho - horasFranquia) * 60) / 60;
+  const horasExcedentes = arredonda2(excedente);
+  const valorExcedente = arredonda2(excedente * valorHora);
   return { valorHora, horasExcedentes, valorExcedente, total: arredonda2(valorMensal + valorExcedente) };
 }
 
@@ -284,7 +287,7 @@ export function calcularFechamento(totalHorasEspelho: number, valorMensal: numbe
   // abaixo das horas do mês e "cobrar pelas horas": horas trabalhadas × valor hora (as horas já refletem os dias parados)
   const porHora = !!f.por_hora && !!horasFranquia && totalHorasEspelho < horasFranquia;
   const valorDiasTrabalhados = porHora
-    ? arredonda2(totalHorasEspelho * base.valorHora)
+    ? arredonda2((Math.round(totalHorasEspelho * 60) / 60) * base.valorHora)
     : arredonda2(valorMensal - (valorMensal / diasBase) * (diasBase - diasTrabalhados));
   const valorDiasReparo = porHora ? 0 : arredonda2(valorMensal - valorDiasTrabalhados);
   const totalDescontos = arredonda2(DESCONTOS_FECHAMENTO.reduce((s, [k]) => s + num(f[k]), 0));
