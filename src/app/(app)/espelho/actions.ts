@@ -94,7 +94,7 @@ const valoresSchema = z.object({
   valor_mensal: z.number().min(0, "Valor mensal não pode ser negativo").max(999_999_999).nullable(),
   horas_franquia: z.number().gt(0, "Horas do mês devem ser maiores que zero").max(9999).nullable(),
   /** itens do fechamento: valores em reais e dias (todos opcionais, nunca negativos) */
-  fechamento: z.record(z.string(), z.number().min(0, "Valores do fechamento não podem ser negativos").max(999_999_999).nullable())
+  fechamento: z.record(z.string(), z.union([z.boolean(), z.number().min(0, "Valores do fechamento não podem ser negativos").max(999_999_999).nullable()]))
     .default({}).transform((f) => normalizarFechamento(f)),
 });
 

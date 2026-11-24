@@ -229,6 +229,10 @@ export interface FechamentoEspelho {
   dias_reparo?: number | null;
   /** base de dias do valor mensal (padrão 30) */
   dias_base?: number | null;
+  /** dias trabalhados digitados (no lugar de base − reparo) */
+  dias_trabalhados?: number | null;
+  /** abaixo das horas do mês, cobra só as horas trabalhadas × valor hora */
+  por_hora?: boolean;
 }
 
 export const DESCONTOS_FECHAMENTO = [
@@ -246,6 +250,8 @@ export interface ResultadoFechamento extends ValoresEspelho {
   diasTrabalhados: number;
   valorDiasReparo: number;
   valorDiasTrabalhados: number;
+  /** cobrado pelas horas trabalhadas (abaixo das horas do mês) */
+  porHora: boolean;
   totalDescontos: number;
   totalBruto: number;
   totalLiquido: number;
@@ -256,9 +262,10 @@ const num = (v: number | null | undefined) => (typeof v === "number" && Number.i
 /** Lê o que veio do banco (jsonb) só com os campos conhecidos e numéricos. */
 export function normalizarFechamento(v: unknown): FechamentoEspelho {
   const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-  const chaves = [...DESCONTOS_FECHAMENTO.map(([k]) => k), "mobilizacao", "desmobilizacao", "dias_reparo", "dias_base"] as const;
+  const chaves = [...DESCONTOS_FECHAMENTO.map(([k]) => k), "mobilizacao", "desmobilizacao", "dias_reparo", "dias_base", "dias_trabalhados"] as const;
   const out: FechamentoEspelho = {};
   for (const k of chaves) if (typeof o[k] === "number") out[k] = o[k] as number;
+  if (o.por_hora === true) out.por_hora = true;
   return out;
 }
 
@@ -271,12 +278,19 @@ export function calcularFechamento(totalHorasEspelho: number, valorMensal: numbe
   if (!base || !valorMensal) return null;
   const diasBase = num(f.dias_base) || 30;
   const diasReparo = Math.min(diasBase, Math.max(0, num(f.dias_reparo)));
-  const valorDiasReparo = arredonda2((valorMensal / diasBase) * diasReparo);
-  const valorDiasTrabalhados = arredonda2(valorMensal - valorDiasReparo);
+  // dias trabalhados digitados valem mais que base − reparo
+  const diasTrabalhados = arredonda2(typeof f.dias_trabalhados === "number"
+    ? Math.min(diasBase, Math.max(0, f.dias_trabalhados)) : diasBase - diasReparo);
+  // abaixo das horas do mês e "cobrar pelas horas": horas trabalhadas × valor hora (as horas já refletem os dias parados)
+  const porHora = !!f.por_hora && !!horasFranquia && totalHorasEspelho < horasFranquia;
+  const valorDiasTrabalhados = porHora
+    ? arredonda2(totalHorasEspelho * base.valorHora)
+    : arredonda2(valorMensal - (valorMensal / diasBase) * (diasBase - diasTrabalhados));
+  const valorDiasReparo = porHora ? 0 : arredonda2(valorMensal - valorDiasTrabalhados);
   const totalDescontos = arredonda2(DESCONTOS_FECHAMENTO.reduce((s, [k]) => s + num(f[k]), 0));
   const totalBruto = arredonda2(valorDiasTrabalhados + base.valorExcedente + num(f.mobilizacao) + num(f.desmobilizacao));
   return {
-    ...base, diasBase, diasReparo, diasTrabalhados: arredonda2(diasBase - diasReparo), valorDiasReparo, valorDiasTrabalhados,
+    ...base, diasBase, diasReparo, diasTrabalhados, valorDiasReparo, valorDiasTrabalhados, porHora,
     totalDescontos, totalBruto, totalLiquido: arredonda2(totalBruto - totalDescontos),
   };
 }

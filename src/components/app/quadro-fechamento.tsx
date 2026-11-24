@@ -2,10 +2,11 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { InputMoeda, InputNumero } from "@/components/app/campos";
+import { Checkbox } from "@/components/ui/basicos";
 import { formatBRL } from "@/lib/calculos/dinheiro";
 import { DESCONTOS_FECHAMENTO, calcularFechamento, formatHorasRelogio, type FechamentoEspelho } from "@/lib/calculos/espelho";
 
-type Chave = keyof FechamentoEspelho;
+type Chave = Exclude<keyof FechamentoEspelho, "por_hora">;
 
 const fmtDias = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 
@@ -69,6 +70,16 @@ export function QuadroFechamento({ totalHoras, valorMensal, franquia, fechamento
 
       {!r && editavel && <p className="border-b px-3 py-2 text-xs text-muted-foreground">Informe o valor mensal para calcular o fechamento.</p>}
 
+      {editavel ? (
+        <label className="flex cursor-pointer items-center gap-2 border-b px-3 py-2 text-xs">
+          <Checkbox checked={!!fechamento.por_hora} onCheckedChange={(v) => onFechamento?.({ ...fechamento, por_hora: v === true })} />
+          <span>Abaixo de {franquia ?? "-"} h no mês, cobrar só as horas trabalhadas (horas × valor hora)
+            {r?.porHora && <strong className="ml-1">· {formatHorasRelogio(totalHoras)} × {formatBRL(r.valorHora)}</strong>}</span>
+        </label>
+      ) : r?.porHora && (
+        <p className="border-b px-3 py-2 text-xs">Cobrado pelas horas trabalhadas: {formatHorasRelogio(totalHoras)} × {formatBRL(r.valorHora)}</p>
+      )}
+
       <div>
         {DESCONTOS_FECHAMENTO.map(([k, rotulo]) => <Linha key={k} rotulo={rotulo} valor={campoValor(k)} />)}
         <Linha destaque rotulo={<>Pagamento horas excedente{r && r.horasExcedentes > 0 ? ` ${formatHorasRelogio(r.horasExcedentes).toUpperCase()}` : ""}</>}
@@ -82,8 +93,15 @@ export function QuadroFechamento({ totalHoras, valorMensal, franquia, fechamento
               : <span className="num">{fechamento.dias_reparo ? fmtDias(fechamento.dias_reparo) : ""}</span>}
             <span className="font-bold italic">DIAS</span>
           </span>} />
-        <Linha rs={false} rotulo="Dias trabalhados" valor={
-          <span className="flex items-center gap-2"><span className="num">{r ? fmtDias(r.diasTrabalhados) : "-"}</span><span className="font-bold italic">DIAS</span></span>} />
+        <Linha rs={false} rotulo="Dias trabalhados" valor={r?.porHora
+          ? <span className="flex items-center gap-2"><span className="num">{formatHorasRelogio(totalHoras).replace(" h", "")}</span><span className="font-bold italic">HORAS</span></span>
+          : <span className="flex items-center gap-2">
+            {editavel
+              ? <InputNumero aria-label="Dias trabalhados" casas={1} className="num h-7 w-20 text-right" placeholder={r ? fmtDias(r.diasBase - r.diasReparo) : ""}
+                  value={fechamento.dias_trabalhados ?? null} onChange={(v) => mudar("dias_trabalhados", v)} />
+              : <span className="num">{r ? fmtDias(r.diasTrabalhados) : "-"}</span>}
+            <span className="font-bold italic">DIAS</span>
+          </span>} />
         <Linha forte rotulo="Valor dias em reparo mecânico" valor={calculado(r?.valorDiasReparo)} />
         <Linha rotulo="Valor total dos dias trabalhados" valor={calculado(r?.valorDiasTrabalhados)} />
         <Linha destaque rotulo="Valor total dos descontos" valor={calculado(r?.totalDescontos)} />

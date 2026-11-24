@@ -142,6 +142,25 @@ describe("fechamento como na planilha", () => {
     expect(r.totalLiquido).toBe(79999.58);
   });
 
+  it("cobrar pelas horas: abaixo das horas do mês vale horas × valor hora", () => {
+    const r = calcularFechamento(160, 80_000, 220, { por_hora: true, desmobilizacao: 10_000 })!;
+    expect(r.porHora).toBe(true);
+    expect(r.valorDiasTrabalhados).toBe(58182.4); // 160 × 363,64
+    expect(r.valorDiasReparo).toBe(0);
+    expect(r.totalBruto).toBe(68182.4);
+    // acima das horas do mês segue o valor mensal + excedente
+    expect(calcularFechamento(242, 80_000, 220, { por_hora: true })!.totalBruto).toBe(88000.08);
+    // sem a opção, continua o valor mensal cheio
+    expect(calcularFechamento(160, 80_000, 220, {})!.valorDiasTrabalhados).toBe(80000);
+  });
+
+  it("dias trabalhados digitados", () => {
+    const r = calcularFechamento(160, 80_000, 220, { dias_trabalhados: 20 })!;
+    expect(r.diasTrabalhados).toBe(20);
+    expect(r.valorDiasTrabalhados).toBe(53333.33);
+    expect(r.valorDiasReparo).toBe(26666.67);
+  });
+
   it("lê do banco só os campos numéricos conhecidos", () => {
     expect(normalizarFechamento({ combustivel: 10, lixo: 5, lavagem: "x" })).toEqual({ combustivel: 10 });
     expect(normalizarFechamento(null)).toEqual({});
