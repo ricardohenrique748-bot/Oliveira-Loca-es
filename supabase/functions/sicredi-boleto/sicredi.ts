@@ -35,6 +35,15 @@ function codigoAcesso(b: Beneficiario) {
   return k;
 }
 
+/** 30 s por chamada: sem resposta, avisa em vez de ficar pendurado (o boleto pode ter sido criado: conferir antes de repetir) */
+const buscar = (u: string, init: RequestInit) =>
+  fetch(u, { ...init, signal: AbortSignal.timeout(30_000) }).catch((e) => {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new ErroSicredi("O Sicredi não respondeu em 30 segundos. Consulte os boletos da fatura antes de tentar emitir de novo.", 504);
+    }
+    throw e;
+  });
+
 // ---------- token (cache por beneficiário enquanto a instância vive) ----------
 const tokens = new Map<string, { access: string; expira: number }>();
 
@@ -42,7 +51,7 @@ async function token(b: Beneficiario): Promise<string> {
   const chave = `${b.cooperativa}:${b.codigo}`;
   const t = tokens.get(chave);
   if (t && t.expira > Date.now() + 30_000) return t.access;
-  const r = await fetch(`${base()}/auth/openapi/token`, {
+  const r = await buscar(`${base()}/auth/openapi/token`, {
     method: "POST",
     headers: { "x-api-key": apiKey(), context: "COBRANCA", "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -59,7 +68,7 @@ async function token(b: Beneficiario): Promise<string> {
 }
 
 async function chamar(b: Beneficiario, caminho: string, init: RequestInit & { aceitar?: string } = {}) {
-  const r = await fetch(`${base()}${caminho}`, {
+  const r = await buscar(`${base()}${caminho}`, {
     ...init,
     headers: {
       "x-api-key": apiKey(),

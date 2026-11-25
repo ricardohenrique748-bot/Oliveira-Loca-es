@@ -11,7 +11,9 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
-    <!-- tema escuro por padrão, aplicado antes do React para não piscar -->
+    <!-- tema escuro por padrão, aplicado antes do React para não piscar.
+         ATENÇÃO: a CSP do vercel.json libera este script pelo hash (sha256-...). Mudou uma vírgula
+         aqui dentro, recalcule o hash e troque no vercel.json, senão o navegador bloqueia o script. -->
     <script>
       try {
         var t = localStorage.getItem("oliveira-theme");

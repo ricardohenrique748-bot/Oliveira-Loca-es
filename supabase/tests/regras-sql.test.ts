@@ -707,7 +707,8 @@ describe("repasse: descontos da fatura saem do dono", () => {
     const aplicar = (itens: unknown[], total: number) =>
       db.query("update public.medicoes set descontos_itens = $2::jsonb, descontos = $3 where id = $1", [rp.medicao_id, JSON.stringify(itens), total]);
 
-    await aplicar([{ descricao: "Dias parados", valor: desconto }], desconto);
+    // desde a 0089 o desconto da fatura só sai do repasse quando marcado "descontar do locador"
+    await aplicar([{ descricao: "Dias parados", valor: desconto, descontar_locador: true }], desconto);
     const esperado = Math.round(Number(rp.valor_bruto) * desconto / Number(rp.valor_base) * 100) / 100;
     expect(Number((await linha())?.valor)).toBeCloseTo(esperado, 2);
     const [r] = await q<{ a: string; l: string; b: string }>("select valor_abatimentos::text a, valor_liquido::text l, valor_bruto::text b from public.repasses where id = $1", [rp.id]);
@@ -855,5 +856,43 @@ describe("vencimento por dia fixo (paridade SQL × TS)", () => {
       const [r] = await q<{ v: string }>("select app.calcular_vencimento($1::date, $2, $3)::text as v", [emissao, prazo, dia]);
       expect(r.v, `${emissao} ${prazo} ${dia}`).toBe(calcularVencimento(emissao, prazo, dia));
     }
+  });
+});
+
+describe("arquivos por perfil (0096)", () => {
+  // [bucket, caminho, quem lê, quem envia]
+  const casos: [string, string, (keyof typeof U)[], (keyof typeof U)[]][] = [
+    ["comprovantes", "repasses/x.pdf", ["admin", "financeiro", "consulta"], ["admin", "financeiro"]],
+    ["comprovantes", "pagamentos/x.pdf", ["admin", "financeiro", "consulta"], ["admin", "financeiro"]],
+    ["anexos", "contas/x.pdf", ["admin", "financeiro", "consulta"], ["admin", "financeiro"]],
+    ["comprovantes", "recebimentos/x.pdf", ["admin", "financeiro", "faturamento", "consulta"], ["admin", "financeiro", "faturamento"]],
+    ["anexos", "faturas/x.pdf", ["admin", "financeiro", "faturamento", "consulta"], ["admin", "financeiro", "faturamento"]],
+    ["anexos", "contratos-assinados/2026/11/x.pdf", ["admin", "financeiro", "faturamento", "consulta"], ["admin", "financeiro", "faturamento"]],
+    ["anexos", "documentos/x.pdf", ["admin", "financeiro", "faturamento", "manutencao", "consulta"], ["admin", "financeiro", "manutencao"]],
+    ["fotos", "os/12/x.jpg", ["admin", "financeiro", "faturamento", "manutencao", "consulta"], ["admin", "financeiro", "manutencao"]],
+    ["anexos", "outra-pasta/x.pdf", ["admin", "financeiro"], ["admin", "financeiro"]],
+  ];
+  it("cada pasta segue o perfil da tela de origem", async () => {
+    for (const [bucket, nome, leem, enviam] of casos) {
+      for (const perfil of Object.keys(U) as (keyof typeof U)[]) {
+        const [r] = await comoUsuario(db, U[perfil], () => q<{ ler: boolean; enviar: boolean }>(
+          "select app.arquivo_permitido($1, $2, false) as ler, app.arquivo_permitido($1, $2, true) as enviar", [bucket, nome]));
+        expect(r.ler, `${perfil} lê ${bucket}/${nome}`).toBe(leem.includes(perfil));
+        expect(r.enviar, `${perfil} envia ${bucket}/${nome}`).toBe(enviam.includes(perfil));
+      }
+    }
+  });
+});
+
+describe("auditoria nos cadastros (0097)", () => {
+  it("alterar cliente registra quem, antes e depois", async () => {
+    const [c] = await q<{ id: string; razao_social: string }>("select id, razao_social from public.clientes order by created_at limit 1");
+    await comoUsuario(db, U.admin, () => q("update public.clientes set razao_social = razao_social || ' (teste)' where id = $1", [c.id]));
+    const [a] = await q<{ user_id: string; antes: string; depois: string }>(
+      "select user_id, antes->>'razao_social' as antes, depois->>'razao_social' as depois from public.auditoria where tabela = 'clientes' and registro_id = $1 order by id desc limit 1", [c.id]);
+    expect(a.user_id).toBe(U.admin);
+    expect(a.antes).toBe(c.razao_social);
+    expect(a.depois).toBe(`${c.razao_social} (teste)`);
+    await q("update public.clientes set razao_social = $2 where id = $1", [c.id, c.razao_social]);
   });
 });

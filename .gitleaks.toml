@@ -1,0 +1,18 @@
+# Varredura de segredos (gitleaks) usada na verificação do GitHub.
+# Regras padrão do gitleaks + exceções abaixo, que NÃO são segredos:
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valores públicos ou de teste local"
+regexes = [
+  # chave publicável do Supabase: pública por definição (vai no navegador); o acesso é protegido pelo RLS
+  '''sb_publishable_[A-Za-z0-9_-]+''',
+  # senha dos usuários de teste do seed local (@oliveira.local), nunca usada em produção
+  '''Oliveira@2026''',
+]
+paths = [
+  # tipos gerados do banco e lockfile: só nomes e hashes de pacotes
+  '''src/lib/supabase/database\.types\.ts''',
+  '''package-lock\.json''',
+]

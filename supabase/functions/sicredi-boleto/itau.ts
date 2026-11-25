@@ -70,7 +70,14 @@ function httpClient(): Deno.HttpClient | undefined {
   cliente = cert && key ? Deno.createHttpClient({ cert, key }) : undefined;
   return cliente;
 }
-const buscar = (u: string, init: RequestInit) => fetch(u, { ...init, client: httpClient() } as RequestInit);
+/** 30 s por chamada: sem resposta, avisa em vez de ficar pendurado (o boleto pode ter sido criado: conferir antes de repetir) */
+const buscar = (u: string, init: RequestInit) =>
+  fetch(u, { ...init, client: httpClient(), signal: AbortSignal.timeout(30_000) } as RequestInit).catch((e) => {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new ErroItau("O Itaú não respondeu em 30 segundos. Consulte os boletos da fatura antes de tentar emitir de novo.", 504);
+    }
+    throw e;
+  });
 
 // ---------- token (cache por client_id enquanto a instância vive) ----------
 const tokens = new Map<string, { access: string; expira: number }>();

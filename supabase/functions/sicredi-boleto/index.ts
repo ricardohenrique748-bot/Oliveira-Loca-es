@@ -50,8 +50,8 @@ Deno.serve(async (req) => {
     const corpo = await req.json().catch(() => ({}));
     const ctx = { usuario, admin, userId: user.id };
     switch (corpo.acao) {
-      case "emitir": return json(await emitir(ctx, corpo));
-      case "emitir_parcelas": return json(await emitirParcelas(ctx, corpo));
+      case "emitir": return json(await comTrava(ctx, corpo.medicao_id, () => emitir(ctx, corpo)));
+      case "emitir_parcelas": return json(await comTrava(ctx, corpo.medicao_id, () => emitirParcelas(ctx, corpo)));
       case "pdf": return json(await pdf(ctx, corpo.boleto_id));
       case "atualizar": return json(await atualizar(ctx, corpo.boleto_ids));
       case "baixar": return json(await baixar(ctx, corpo.boleto_id));
@@ -70,6 +70,31 @@ Deno.serve(async (req) => {
 });
 
 type Ctx = { usuario: SupabaseClient; admin: SupabaseClient; userId: string };
+
+// ---------- trava por fatura (migration 0094) ----------
+const TRAVA_MS = 2 * 60_000;
+
+/**
+ * Uma emissão por fatura de cada vez: grava a trava (chave primária = fatura) antes de chamar o banco.
+ * Duplo clique ou outra aba recebem 409 em vez de gerar um segundo boleto real.
+ * Trava com mais de 2 minutos é de uma execução que caiu no meio e é descartada.
+ */
+async function comTrava<T>({ admin, userId }: Ctx, medicaoId: unknown, emitirAgora: () => Promise<T>): Promise<T> {
+  if (typeof medicaoId !== "string" || !/^[0-9a-f-]{36}$/i.test(medicaoId)) throw new ErroUso("Medição não encontrada.", 404);
+  await admin.from("boletos_emissao_trava").delete().eq("medicao_id", medicaoId).lt("criado_em", new Date(Date.now() - TRAVA_MS).toISOString());
+  const { error } = await admin.from("boletos_emissao_trava").insert({ medicao_id: medicaoId, user_id: userId });
+  // sem a migration 0094 a tabela não existe: segue como antes (sem trava) em vez de parar a emissão
+  const semTabela = error && (error.code === "42P01" || error.code === "PGRST205");
+  if (error && !semTabela) {
+    if (error.code === "23505") throw new ErroUso("Já tem uma emissão de boleto em andamento para esta fatura. Aguarde alguns segundos e atualize a tela antes de tentar de novo.", 409);
+    throw error;
+  }
+  try {
+    return await emitirAgora();
+  } finally {
+    if (!semTabela) await admin.from("boletos_emissao_trava").delete().eq("medicao_id", medicaoId).eq("user_id", userId);
+  }
+}
 
 // ---------- emitir ----------
 type EncargosCorpo = { multa_pct?: number | null; juros?: number | null; juros_tipo?: string | null; apos_vencimento?: string | null; dias_apos_vencimento?: number | null };
@@ -238,7 +263,7 @@ async function pagadorDoCliente(usuario: SupabaseClient, admin: SupabaseClient, 
 
   let end = { cep: digitos(c.cep), endereco: c.endereco, cidade: c.cidade, uf: c.uf };
   if ((!end.cep || !end.endereco || !end.cidade || !end.uf) && documento.length === 14) {
-    const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${documento}`).catch(() => null);
+    const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${documento}`, { signal: AbortSignal.timeout(10_000) }).catch(() => null);
     if (r?.ok) {
       const d = await r.json();
       const rua = [d.descricao_tipo_de_logradouro, d.logradouro].filter(Boolean).join(" ");
@@ -277,7 +302,7 @@ async function pdf({ usuario, admin }: Ctx, id: string) {
   const b = await boletoComConta(usuario, admin, id);
   conferirAmbiente(b);
   // se o banco recusar o PDF (ex.: Sicredi 406), desenha o boleto no app com os dados que já temos
-  const bytes = await b.cobranca.pdf(b.linha_digitavel).catch((e) => {
+  const bytes = await b.cobranca.pdf(b.linha_digitavel).catch((e: unknown) => {
     if (!(e instanceof ErroBanco)) throw e;
     // Sicredi 422 "Título já liquidado ou baixado": não desenha boleto de título pago/cancelado
     if (/liquidado|baixado/i.test(e.message)) {
