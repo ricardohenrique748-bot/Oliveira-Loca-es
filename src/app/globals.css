@@ -117,6 +117,57 @@
   }
 }
 
+/*
+ * Tabela que vira cartões no celular (< 768 px): cada linha é um cartão, cada célula uma linha
+ * "rótulo: valor" (rótulo vem de data-rotulo na célula). No computador continua tabela normal.
+ * Uso: <Table className="tabela-cartoes"> e <TableCell data-rotulo="Valor">.
+ */
+@media (max-width: 767px) {
+  .tabela-cartoes,
+  .tabela-cartoes tbody,
+  .tabela-cartoes tfoot,
+  .tabela-cartoes tr,
+  .tabela-cartoes td {
+    display: block;
+    width: 100%;
+  }
+  .tabela-cartoes thead {
+    display: none;
+  }
+  .tabela-cartoes tr {
+    border-bottom: 1px solid hsl(var(--border));
+    padding: 0.5rem 0;
+  }
+  .tabela-cartoes td {
+    padding: 0.25rem 1rem !important;
+    text-align: left !important;
+    border: 0;
+  }
+  .tabela-cartoes td[data-rotulo]::before {
+    content: attr(data-rotulo);
+    display: block;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: hsl(var(--muted-foreground));
+  }
+  /* conteúdo das células alinhado à esquerda (no computador muitas são à direita) */
+  .tabela-cartoes td > * {
+    justify-content: flex-start !important;
+    align-items: flex-start !important;
+    text-align: left !important;
+  }
+  .tabela-cartoes td:empty {
+    display: none;
+  }
+  .tabela-cartoes .whitespace-nowrap {
+    white-space: normal;
+  }
+  .tabela-cartoes .max-w-52 {
+    max-width: none;
+  }
+}
+
 /* login: autopreenchimento do navegador sem o fundo azul-claro */
 .login-campo:-webkit-autofill,
 .login-campo:-webkit-autofill:hover,

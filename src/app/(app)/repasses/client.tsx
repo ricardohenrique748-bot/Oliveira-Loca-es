@@ -209,7 +209,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
         <Card>
           <CardContent className="p-0 sm:p-0">
             {/* 8 colunas: período+NF e contrato+responsável juntos, para caber na tela sem cortar */}
-            <Table className="text-sm [&_td]:px-2.5 [&_th]:px-2.5 [&_td:first-child]:pl-4 [&_th:first-child]:pl-4">
+            <Table className="tabela-cartoes text-sm [&_td]:px-2.5 [&_th]:px-2.5 [&_td:first-child]:pl-4 [&_th:first-child]:pl-4">
               <TableHeader><TableRow className="hover:bg-transparent">
                 <TableHead>Parceiro</TableHead><TableHead>Contrato</TableHead><TableHead>Placa</TableHead>
                 <TableHead>Período / NF</TableHead>
@@ -226,14 +226,14 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                   return (
                     <React.Fragment key={r.id}>
                       <TableRow className={cn(r.adiantado && "bg-red-50 dark:bg-red-950/40", r.status === "liberado" && "bg-green-50/60 dark:bg-green-950/20")}>
-                        <TableCell className="font-medium">{r.locador_nome}</TableCell>
-                        <TableCell className="max-w-52">
+                        <TableCell data-rotulo="Parceiro" className="font-medium">{r.locador_nome}</TableCell>
+                        <TableCell data-rotulo="Contrato" className="max-w-52">
                           <p>{r.cliente_nome}</p>{r.obra_nome && <p className="text-xs text-muted-foreground">{r.obra_nome}</p>}
                           {r.responsavel_nome && <p className="truncate text-xs text-muted-foreground" title={[r.responsavel_nome, r.responsavel_whatsapp ? maskTelefone(r.responsavel_whatsapp) : r.responsavel_email].filter(Boolean).join(" · ")}>
                             Resp.: {r.responsavel_nome}{r.responsavel_whatsapp && ` · ${maskTelefone(r.responsavel_whatsapp)}`}</p>}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap"><span className="font-mono font-semibold">{formatPlaca(r.placa)}</span><p className="text-xs text-muted-foreground">{r.empresa_apelido}</p></TableCell>
-                        <TableCell className="whitespace-nowrap text-xs" title={formatPeriodo(r.periodo_inicio, r.periodo_fim)}>{diaMes(r.periodo_inicio)} a {diaMes(r.periodo_fim)} <span className="text-muted-foreground">· {r.dias_placa ?? r.dias} dias</span>
+                        <TableCell data-rotulo="Placa" className="whitespace-nowrap"><span className="font-mono font-semibold">{formatPlaca(r.placa)}</span><p className="text-xs text-muted-foreground">{r.empresa_apelido}</p></TableCell>
+                        <TableCell data-rotulo="Período / NF" className="whitespace-nowrap text-xs" title={formatPeriodo(r.periodo_inicio, r.periodo_fim)}>{diaMes(r.periodo_inicio)} a {diaMes(r.periodo_fim)} <span className="text-muted-foreground">· {r.dias_placa ?? r.dias} dias</span>
                           <p className="text-muted-foreground">{r.medicao_emissao ? `fat. ${diaMes(r.medicao_emissao)}` : "a faturar"}{r.numero_nf && <span className="font-medium text-foreground"> · NF {r.numero_nf}</span>}</p>
                           <button type="button" onClick={() => void verFatura(r)} disabled={abrindoFatura === r.id} title="Abrir a fatura deste repasse"
                             className="mt-0.5 inline-flex items-center gap-1 text-primary-ink underline decoration-dotted underline-offset-2 hover:decoration-solid disabled:opacity-60">
@@ -241,8 +241,8 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                           </button>
                           {r.medicao_vencimento && <p className="text-muted-foreground">venc. {diaMes(r.medicao_vencimento)}</p>}
                         </TableCell>
-                        <TableCell className="text-right"><Moeda valor={r.medicao_valor} /></TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-rotulo="Valor da fatura" className="text-right"><Moeda valor={r.medicao_valor} /></TableCell>
+                        <TableCell data-rotulo="Repasse" className="text-right">
                           {/* em destaque o repasse do período (antes das despesas); o líquido sai embaixo */}
                           <Moeda valor={Math.round((r.valor_liquido + r.valor_abatimentos) * 100) / 100} className="font-semibold" />
                           {/* fatura avulsa sem valor de repasse digitado: nasce zerada (SQL 0091) */}
@@ -264,14 +264,14 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                           ) : r.valor_abatimentos > 0 && <p className="whitespace-nowrap text-xs text-muted-foreground" title="Despesas da placa descontadas nesta fatura (veja o bloco da placa)">despesas {formatBRL(r.valor_abatimentos)}</p>}
                           {r.valor_abatimentos > 0 && <p className="whitespace-nowrap text-xs font-medium" title="Repasse do período menos as despesas: o que vai ser pago">líquido {formatBRL(r.valor_liquido)}</p>}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-rotulo="Status">
                           <StatusBadge status={r.status} />
                           {r.adiantado && <Badge variant="critico" className="ml-1"><AlertTriangle className="h-3 w-3" /> Adiantado</Badge>}
                           <p className="whitespace-nowrap text-xs text-muted-foreground">{r.status === "pago" ? formatData(r.data_pagamento) : SITUACAO_CLIENTE[r.medicao_status] ?? r.medicao_status}</p>
                         </TableCell>
                         <TableCell className="text-right">
-                          {/* ícones em cima e "Pagar" embaixo: a coluna fica estreita e a tabela cabe na tela */}
-                          <div className="flex flex-col items-end gap-1">
+                          {/* ícones em cima e "Pagar" embaixo: a coluna fica estreita e a tabela cabe na tela; no celular, lado a lado */}
+                          <div className="flex items-center gap-2 md:flex-col md:items-end md:gap-1">
                           <div className="flex items-center justify-end whitespace-nowrap">
                           <Button variant="ghost" size="icon-sm" title="Extrato desta fatura (PDF)" aria-label={`Extrato PDF da fatura ${formatPlaca(r.placa)} ${formatPeriodo(r.periodo_inicio, r.periodo_fim)}`}
                             onClick={() => extrato(locadorDe(r.locador_id, r.locador_nome), [r])}><FileText /></Button>

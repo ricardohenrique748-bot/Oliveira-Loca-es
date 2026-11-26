@@ -225,8 +225,10 @@ export function DataTable<T>({
 function CartaoPadrao<T>({ row }: { row: Row<T> }) {
   const celulas = row.getVisibleCells().filter((c) => !c.column.columnDef.meta?.ocultarMobile && c.column.id !== "_sel");
   const titulo = celulas.find((c) => c.column.columnDef.meta?.tituloMobile) ?? celulas[0];
-  const resto = celulas.filter((c) => c !== titulo && c.column.id !== "_acoes");
-  const acoes = celulas.find((c) => c.column.id === "_acoes");
+  // coluna de botões: "_acoes" (padrão) ou "acoes" (Receber, Pagar, Licenciamento)
+  const ehAcoes = (id: string) => id === "_acoes" || id === "acoes";
+  const resto = celulas.filter((c) => c !== titulo && !ehAcoes(c.column.id));
+  const acoes = celulas.find((c) => ehAcoes(c.column.id));
   return (
     <div className="space-y-1.5">
       {titulo && <div className="font-semibold">{flexRender(titulo.column.columnDef.cell, titulo.getContext())}</div>}

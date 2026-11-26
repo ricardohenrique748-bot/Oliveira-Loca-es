@@ -252,7 +252,7 @@ export function ContratosCliente({ linhas, total, pagina, tamanho, opcoes, empre
           <Moeda valor={somar([c.valor_mensal, ...extras.map((p) => p.valor_mensal ?? 0)])} />
           {extras.length > 0 && <span className="text-xs text-muted-foreground"> ({extras.length + 1} placas)</span>}{c.tipo_cobranca !== "mensal" && <span className="text-xs text-muted-foreground">{c.tipo_cobranca === "hora" ? "/h" : "/dia"}</span>}
           {c.valor_repasse_mensal != null && (
-            <p className="text-xs text-muted-foreground">repasse <Moeda valor={c.valor_repasse_mensal} /> · margem {Math.round((m / c.valor_mensal) * 100)}%</p>
+            <p className="flex flex-wrap gap-x-1 text-xs text-muted-foreground">repasse <Moeda valor={c.valor_repasse_mensal} /> · margem {Math.round((m / c.valor_mensal) * 100)}%</p>
           )}
         </div>
       );

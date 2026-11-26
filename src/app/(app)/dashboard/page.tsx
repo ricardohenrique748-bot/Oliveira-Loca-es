@@ -145,25 +145,26 @@ export default function DashboardPage() {
             {preventivas}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
+          <div className="grid gap-4 [&>*]:min-w-0 sm:grid-cols-2 lg:grid-cols-12">
             <div className="lg:col-span-4"><CartaoFrota dados={d} /></div>
-            <div className="grid gap-4 lg:col-span-3">
+            <div className="grid gap-4 [&>*]:min-w-0 lg:col-span-3">
               <CartaoDestaque titulo="A faturar" valor={formatBRL(k.aFaturar)} sub={`${k.qtdAFaturar} ${k.qtdAFaturar === 1 ? "medição" : "medições"} aguardando nota`} icone={ClipboardList} href="/medicoes?comp=todas" />
               <CartaoDestaque titulo="A pagar · 7 dias" valor={formatBRL(k.pagar7)} sub={`${k.qtdPagar7} ${k.qtdPagar7 === 1 ? "conta" : "contas"} vencendo`} icone={Receipt} href="/pagar" />
             </div>
             <div className="sm:col-span-2 lg:col-span-5"><GraficoAging dados={d} /></div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-12">
-            <div className="lg:col-span-8"><GraficoFaturamento dados={d} /></div>
-            <div className="lg:col-span-4">{hojePainel}</div>
+          <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-12">
+            {/* min-w-0: sem ele o gráfico estica a coluna e a página rola para o lado no celular */}
+            <div className="min-w-0 lg:col-span-8"><GraficoFaturamento dados={d} /></div>
+            <div className="min-w-0 lg:col-span-4">{hojePainel}</div>
           </div>
 
           <PainelMargemPlaca dados={d} mes={mes} />
         </>
       ) : (
         <>
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-12">
+          <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2 xl:grid-cols-12">
             <div className="xl:col-span-4"><CartaoFrota dados={d} /></div>
             <div className="xl:col-span-3">
               {preventivas}
