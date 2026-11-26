@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { montarContrato, type DadosContrato } from "./contrato";
 import { montarFatura, type DadosFatura } from "./fatura";
-import { montarProposta, type DadosProposta } from "./proposta";
+import { montarProposta, type DadosProposta, type EmpresaDoc } from "./proposta";
 import { baixarDocumentoPDF, documentoPDFBase64 } from "./pdf";
 import { montarReciboDescontos, montarReciboRepasse, type DadosReciboRepasse } from "./recibo-repasse";
 export type { ItemRecibo } from "./recibo-repasse";
@@ -139,23 +139,29 @@ export function baixarReciboRepassePDF(ids: string[]) {
     if (error) throw error;
     const [r0] = rs ?? [];
     if (!r0?.locador_id || !r0.empresa_id) return null;
+    // um recibo é de um locador só (pode ter várias placas e várias empresas pagadoras)
+    if ((rs ?? []).some((r) => r.locador_id !== r0.locador_id)) throw new Error("Os repasses escolhidos são de parceiros diferentes: gere um recibo para cada parceiro.");
+    const empresaIds = [...new Set((rs ?? []).map((r) => r.empresa_id).filter((x): x is string => !!x))];
     const [loc, emp, abat, aj] = await Promise.all([
       supabase.from("locadores").select("nome, cpf_cnpj, chave_pix, tipo_chave_pix, banco, nome_titular_pix").eq("id", r0.locador_id).maybeSingle(),
-      supabase.from("empresas").select(EMPRESA).eq("id", r0.empresa_id).maybeSingle(),
+      supabase.from("empresas").select(`id, ${EMPRESA}`).in("id", empresaIds),
       supabase.from("repasse_abatimentos").select("repasse_id, descricao, valor").in("repasse_id", ids),
       supabase.from("repasse_ajustes").select("repasse_id, descricao, valor").eq("tipo", "acrescimo").in("repasse_id", ids).order("ordem"),
     ]);
     for (const x of [loc, emp, abat, aj]) if (x.error) throw x.error;
-    if (!loc.data || !emp.data) return null;
+    const empresas = (emp.data ?? []) as unknown as (EmpresaDoc & { id: string })[];
+    const empresaDe = (id: string | null) => empresas.find((e) => e.id === id);
+    if (!loc.data || !empresaDe(r0.empresa_id)) return null;
     const acrescimos = aj.data ?? [];
-    const acrescimoDe = (id: string) => acrescimos.filter((a) => a.repasse_id === id).reduce((s, a) => s + Number(a.valor), 0);
+    const acrescimosDe = (id: string) => acrescimos.filter((a) => a.repasse_id === id).map((a) => ({ descricao: a.descricao, valor: Number(a.valor) }));
     const dados: DadosReciboRepasse = {
-      placa: r0.placa ?? "", empresa: emp.data, locador: loc.data as DadosReciboRepasse["locador"], data: hojeSP(),
-      ajustes: { acrescimos: acrescimos.map((a) => ({ descricao: a.descricao, valor: Number(a.valor) })), descontos: [] },
+      placa: r0.placa ?? "", empresa: empresaDe(r0.empresa_id)!, locador: loc.data as DadosReciboRepasse["locador"], data: hojeSP(),
       repasses: (rs ?? []).map((r) => ({
-        // o líquido gravado já soma os acréscimos; o recibo os soma de novo como linhas "(+)"
+        placa: r.placa ?? "", empresa: empresaDe(r.empresa_id) ?? empresaDe(r0.empresa_id)!,
+        // o líquido gravado já soma os acréscimos; o recibo os mostra como linhas "(+)" do próprio repasse
         periodo_inicio: r.periodo_inicio!, periodo_fim: r.periodo_fim!, dias: r.dias_placa ?? r.dias, valor_bruto: r.valor_bruto ?? 0,
-        valor_liquido: Math.round(((r.valor_liquido ?? 0) - acrescimoDe(r.id!)) * 100) / 100,
+        valor_liquido: Math.round(((r.valor_liquido ?? 0) - acrescimosDe(r.id!).reduce((s, a) => s + a.valor, 0)) * 100) / 100,
+        acrescimos: acrescimosDe(r.id!),
         abatimentos: (abat.data ?? []).filter((a) => a.repasse_id === r.id).map((a) => ({ descricao: a.descricao, valor: a.valor })),
       })),
     };

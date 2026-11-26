@@ -168,6 +168,36 @@ describe("recibo de repasse ao locador", () => {
     expect(t).toContain("já descontadas as despesas");
   });
 
+  it("várias placas e duas empresas pagadoras: um recibo só, com subtotal de cada empresa", () => {
+    const tdts = { ...base.empresa, razao_social: "TDTS Transportes Ltda", cnpj: "11.111.111/0001-11" };
+    const d = montarReciboRepasse({ ...base, repasses: [
+      { placa: "BWY2D41", periodo_inicio: "2026-09-01", periodo_fim: "2026-09-30", dias: 30, valor_bruto: 5300, valor_liquido: 3798.34,
+        abatimentos: [{ descricao: "8,5 diárias", valor: 1501.66 }] },
+      { placa: "DWK9E10", empresa: tdts, periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 15, valor_bruto: 3000, valor_liquido: 3000, abatimentos: [] },
+    ] });
+    const t = texto(d);
+    expect(t).toContain("Placas BWY2D41, DWK9E10");
+    expect(t).toContain("Subtotal · Oliveira Locações Ltda");
+    expect(t).toContain("Subtotal · TDTS Transportes Ltda");
+    expect(t).toContain("de TDTS Transportes Ltda, CNPJ 11.111.111/0001-11, a importância de R$ 3.000,00");
+    expect(t).toContain("totalizando R$ 6.798,34");
+    expect(t).toContain("dos veículos placas BWY2D41 e DWK9E10");
+    expect(d.arquivo).toBe("recibo_repasse_BWY2D41_DWK9E10_2026-09-01_a_2026-10-31");
+  });
+
+  it("várias placas da mesma empresa: sem subtotal, texto no plural", () => {
+    const d = montarReciboRepasse({ ...base, repasses: [
+      { placa: "BWY2D41", periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 31, valor_bruto: 2000, valor_liquido: 2000, abatimentos: [] },
+      { placa: "DWK9E10", periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 31, valor_bruto: 3000, valor_liquido: 3000,
+        acrescimos: [{ descricao: "Frete", valor: 500 }], abatimentos: [] },
+    ] });
+    const t = texto(d);
+    expect(t).not.toContain("Subtotal");
+    expect(t).toContain("(+) Frete");
+    expect(t).toContain("cinco mil e quinhentos reais");
+    expect(t).toContain("dos veículos placas BWY2D41 e DWK9E10");
+  });
+
   it("acréscimos e descontos digitados só no recibo", () => {
     const d = montarReciboRepasse({ ...base, repasses: [{ periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 31, valor_bruto: 3000, valor_liquido: 3000, abatimentos: [] }],
       ajustes: { acrescimos: [{ descricao: "Frete", valor: 500 }], descontos: [{ descricao: "Adiantamento", valor: 1000 }] } });

@@ -360,7 +360,9 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
       )}
 
       <DialogoReciboRepasse onExtrato={(ids) => { const rs = repasses.filter((x) => ids.includes(x.id)); if (rs.length) void extrato(locadorDe(rs[0].locador_id, rs[0].locador_nome), rs); }}
-        repasse={recibo ? repasses.find((x) => x.id === recibo.id) ?? recibo : null} mesmaPlaca={recibo ? repasses.filter((x) => x.veiculo_id === recibo.veiculo_id && x.status !== "cancelado") : []}
+        repasse={recibo ? repasses.find((x) => x.id === recibo.id) ?? recibo : null} doParceiro={recibo ? repasses.filter((x) => x.locador_id === recibo.locador_id && x.status !== "cancelado"
+          // da placa clicada, todos (até os pagos, para reemitir); das outras placas, só os que ainda vão ser pagos
+          && (x.veiculo_id === recibo.veiculo_id || x.status !== "pago")) : []}
         podeEditar={podeEditar} onOpenChange={(v) => !v && setRecibo(null)} onSalvo={() => router.refresh()} />
       <DialogoReciboDescontos placa={reciboDescontos?.placa ?? null} descontos={reciboDescontos?.ds ?? SEM_DESCONTOS} onOpenChange={(v) => !v && setReciboDescontos(null)} />
       <DialogoDetalhe medicao={fatura} baseDias={baseDias} podeEditar={podeEditarFatura} onOpenChange={(v) => !v && setFatura(null)}

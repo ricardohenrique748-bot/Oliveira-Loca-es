@@ -21,14 +21,14 @@ const VAZIO: Record<Tipo, ItemRecibo[]> = { acrescimos: [], descontos: [] };
 const efeito = (a: Record<Tipo, ItemRecibo[]>) => somar([...a.acrescimos.map((x) => x.valor), ...a.descontos.map((x) => -x.valor)]);
 
 /**
- * Recibo do repasse para o locador assinar. Começa com o repasse clicado; os outros da mesma placa
- * na lista podem entrar no mesmo recibo. Acréscimos e descontos digitados aqui ficam gravados no
+ * Recibo do repasse para o locador assinar. Começa com o repasse clicado; os outros do mesmo parceiro
+ * (de qualquer placa) podem entrar no mesmo recibo, com os valores somados. Acréscimos e descontos digitados aqui ficam gravados no
  * repasse clicado (mudam o líquido a pagar) — salvos ao gerar o PDF ou no botão Salvar.
  */
-export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenChange, onSalvo, onExtrato }: {
+export function DialogoReciboRepasse({ repasse, doParceiro, podeEditar, onOpenChange, onSalvo, onExtrato }: {
   repasse: RepasseRecibo | null;
-  /** repasses da mesma placa na lista (inclui o clicado) */
-  mesmaPlaca: RepasseRecibo[];
+  /** repasses do mesmo parceiro na lista, de todas as placas (inclui o clicado) */
+  doParceiro: RepasseRecibo[];
   podeEditar: boolean;
   onOpenChange: (v: boolean) => void;
   onSalvo: () => void;
@@ -79,7 +79,10 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenCh
     if (antes.id === repasseId && antes.liquido !== liquidoLista) setNaLista(efeito(salvosRef.current));
   }, [repasseId, liquidoLista]);
 
-  const opcoes = [...mesmaPlaca].sort((a, b) => a.periodo_inicio.localeCompare(b.periodo_inicio));
+  // a placa clicada primeiro; depois as outras do parceiro
+  const opcoes = [...doParceiro].sort((a, b) => Number(b.placa === repasse?.placa) - Number(a.placa === repasse?.placa)
+    || a.placa.localeCompare(b.placa) || a.periodo_inicio.localeCompare(b.periodo_inicio));
+  const variasPlacas = new Set(opcoes.map((r) => r.placa)).size > 1;
   const escolhidos = opcoes.filter((r) => marcados.has(r.id));
   const marcar = (id: string, sim: boolean) => setMarcados((m) => { const n = new Set(m); if (sim) n.add(id); else n.delete(id); return n; });
 
@@ -130,7 +133,7 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenCh
     <Dialog open={!!repasse} onOpenChange={fechar}>
       <DialogContent tamanho="lg">
         <DialogHeader>
-          <DialogTitle>Recibo do repasse · <span className="font-mono">{repasse ? formatPlaca(repasse.placa) : ""}</span></DialogTitle>
+          <DialogTitle>Recibo do repasse · <span className="font-mono">{[...new Set(escolhidos.map((r) => formatPlaca(r.placa)))].join(", ") || (repasse ? formatPlaca(repasse.placa) : "")}</span></DialogTitle>
           <DialogDescription>
             {editavel
               ? "Acréscimos e descontos incluídos aqui ficam salvos neste repasse e mudam o valor a pagar ao dono."
@@ -139,12 +142,12 @@ export function DialogoReciboRepasse({ repasse, mesmaPlaca, podeEditar, onOpenCh
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Repasses no recibo</Label>
+            <Label>Repasses no recibo{variasPlacas && <span className="ml-1 font-normal text-muted-foreground">· marque as placas do parceiro que entram no mesmo recibo</span>}</Label>
             <div className="divide-y rounded-md border">
               {opcoes.map((r) => (
                 <label key={r.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
-                  <Checkbox checked={marcados.has(r.id)} onCheckedChange={(v) => marcar(r.id, v === true)} aria-label={`Incluir ${formatPeriodo(r.periodo_inicio, r.periodo_fim)}`} />
-                  <span className="flex-1">Repasse · {formatPeriodo(r.periodo_inicio, r.periodo_fim)}</span>
+                  <Checkbox checked={marcados.has(r.id)} onCheckedChange={(v) => marcar(r.id, v === true)} aria-label={`Incluir ${formatPlaca(r.placa)} ${formatPeriodo(r.periodo_inicio, r.periodo_fim)}`} />
+                  <span className="flex-1">Repasse · {variasPlacas && <span className="font-mono">{formatPlaca(r.placa)} · </span>}{formatPeriodo(r.periodo_inicio, r.periodo_fim)}</span>
                   <Moeda valor={r.valor_liquido} />
                 </label>
               ))}
