@@ -301,6 +301,7 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                       {ultimoDaPlaca && <BlocoDespesasPlaca placa={r.placa} veiculoId={r.veiculo_id} despesas={despesasDaPlaca(r.veiculo_id)}
                         faturas={ordenados.filter((x) => x.veiculo_id === r.veiculo_id && aberta(x))} podeEditar={podeEditar}
                         onPagar={(f, ids) => { setSelecaoPagar(ids); setPagando(f); }} onExtrato={extratoSelecao}
+                        onDefinir={async (f, ids) => { const res = await definirDescontosRepasse(f.id, ids); if (!res.ok) { toast.error(res.erro); return false; } router.refresh(); return true; }}
                         aberto={!abertos.has(`placa-${r.veiculo_id}`)} onAlternar={() => setAbertos((x) => { const n = new Set(x); const k = `placa-${r.veiculo_id}`; if (n.has(k)) n.delete(k); else n.add(k); return n; })} />}
                     </React.Fragment>
                   );
@@ -659,9 +660,12 @@ function DialogoPagar({ repasse: inicial, selecaoInicial, locador: l, onOpenChan
  * Todas as despesas "descontar do locador" da placa juntas (não por fatura), logo depois das faturas dela.
  * Marque as despesas, escolha a fatura e clique em Pagar: a tela de pagamento abre com elas.
  */
-function BlocoDespesasPlaca({ placa, despesas, faturas, podeEditar, onPagar, onExtrato, aberto, onAlternar }: {
+function BlocoDespesasPlaca({ placa, despesas, faturas, podeEditar, onPagar, onExtrato, onDefinir, aberto, onAlternar }: {
   placa: string; veiculoId: string; despesas: DespesaDaPlaca[]; faturas: Repasse[]; podeEditar: boolean;
-  onPagar: (fatura: Repasse, contas: string[]) => void; onExtrato: (fatura: Repasse, contas: string[]) => void; aberto: boolean; onAlternar: () => void;
+  onPagar: (fatura: Repasse, contas: string[]) => void; onExtrato: (fatura: Repasse, contas: string[]) => void;
+  /** grava a escolha no repasse (assim a lista, o recibo e o extrato usam as mesmas despesas) */
+  onDefinir: (fatura: Repasse, contas: string[]) => Promise<boolean>;
+  aberto: boolean; onAlternar: () => void;
 }) {
   // fatura a pagar: a primeira com o cliente já pago; senão a mais antiga
   const padrao = (faturas.find((f) => f.status === "liberado") ?? faturas[0])?.id ?? null;
@@ -680,7 +684,22 @@ function BlocoDespesasPlaca({ placa, despesas, faturas, podeEditar, onPagar, onE
   const total = somar(despesas.map(valorDe));
   const marcadas = despesas.filter((d) => sel.has(d.id));
   const rotulo = (r: Repasse) => `${diaMes(r.periodo_inicio)} a ${diaMes(r.periodo_fim)} · ${r.cliente_nome}`;
-  const alternar = (id: string, v: boolean) => setSel((x) => { const n = new Set(x); if (v) n.add(id); else n.delete(id); return n; });
+  // marcar/desmarcar grava logo no repasse (com um respiro de 0,6 s para cliques seguidos virarem uma gravação só)
+  const [salvando, setSalvando] = React.useState(false);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const escolher = (nova: Set<string>) => {
+    setSel(nova);
+    if (timer.current) clearTimeout(timer.current);
+    const alvo = fatura;
+    timer.current = setTimeout(async () => {
+      setSalvando(true);
+      const ok = await onDefinir(alvo, [...nova]);
+      setSalvando(false);
+      if (!ok) setSel(daFatura(alvo.id)); // não gravou: volta ao que está no banco
+    }, 600);
+  };
+  React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const alternar = (id: string, v: boolean) => { const n = new Set(sel); if (v) n.add(id); else n.delete(id); escolher(n); };
   return (
     <>
       <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -689,7 +708,7 @@ function BlocoDespesasPlaca({ placa, despesas, faturas, podeEditar, onPagar, onE
             {aberto ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             <span className="font-medium">Despesas da placa <span className="font-mono">{formatPlaca(placa)}</span> ({despesas.length})</span>
             <span className="text-status-critico">−{formatBRL(total)}</span>
-            <span className="text-xs text-muted-foreground">· todas juntas — marque as que vão sair no pagamento</span>
+            <span className="text-xs text-muted-foreground">· todas juntas — marque as que saem deste repasse (fica salvo: vale para o recibo, o extrato e o pagamento)</span>
           </button>
         </TableCell>
       </TableRow>
@@ -717,8 +736,9 @@ function BlocoDespesasPlaca({ placa, despesas, faturas, podeEditar, onPagar, onE
         <TableRow className="bg-muted/40 hover:bg-muted/40">
           <TableCell colSpan={8} className="py-2">
             <div className="flex flex-wrap items-center justify-end gap-2 text-sm">
-              <Button type="button" size="xs" variant="ghost" onClick={() => setSel(new Set(despesas.map((d) => d.id)))}>Marcar todas</Button>
-              <Button type="button" size="xs" variant="ghost" onClick={() => setSel(new Set())}>Desmarcar</Button>
+              {salvando && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> salvando escolha…</span>}
+              <Button type="button" size="xs" variant="ghost" disabled={salvando} onClick={() => escolher(new Set(despesas.map((d) => d.id)))}>Marcar todas</Button>
+              <Button type="button" size="xs" variant="ghost" disabled={salvando} onClick={() => escolher(new Set())}>Desmarcar</Button>
               <span className="text-muted-foreground">Pagar a fatura</span>
               <select aria-label="Fatura a pagar" value={fatura.id} onChange={(e) => setFaturaId(e.target.value)}
                 className="h-8 max-w-72 rounded-md border bg-background px-2 text-xs">
