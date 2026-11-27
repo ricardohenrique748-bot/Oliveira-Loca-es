@@ -74,6 +74,15 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
   const [recibo, setRecibo] = React.useState<Repasse | null>(null);
   const [reciboDescontos, setReciboDescontos] = React.useState<{ placa: string | null; ds: DescontoPendente[] } | null>(null);
   const [abertos, setAbertos] = React.useState<Set<string>>(new Set());
+  // repasse pago aberto na lista: despesas da placa que não couberam nele (ficam para o próximo), lidas ao abrir
+  const [restantes, setRestantes] = React.useState<Record<string, DespesaADescontar[] | "carregando">>({});
+  const carregarRestantes = (r: Repasse) => {
+    if (r.status !== "pago" || restantes[r.id]) return;
+    setRestantes((x) => ({ ...x, [r.id]: "carregando" }));
+    despesasADescontar([r.veiculo_id], [r.id])
+      .then((ds) => setRestantes((x) => ({ ...x, [r.id]: ds })))
+      .catch((e) => { console.error(e); setRestantes((x) => { const n = { ...x }; delete n[r.id]; return n; }); toast.error("Não foi possível ler as despesas que ficam para o próximo repasse"); });
+  };
   // placas com repasse aberto na lista: as despesas pendentes delas aparecem dentro do repasse, desmarcadas
   const placasAbertas = React.useMemo(() => new Set(repasses.filter((r) => r.status === "previsto" || r.status === "liberado").map((r) => r.veiculo_id)), [repasses]);
   // descontos sem repasse: uma linha por placa na própria tabela, "aguardando fatura"
@@ -244,7 +253,8 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                   const abs = abatDe(r.id).filter((a) => !aberta(r) || !a.conta_pagar_id);
                   const ultimoDaPlaca = ordenados[i + 1]?.veiculo_id !== r.veiculo_id;
                   const aberto = abertos.has(r.id);
-                  const alternar = () => setAbertos((x) => { const n = new Set(x); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; });
+                  const alternar = () => { if (!aberto) carregarRestantes(r); setAbertos((x) => { const n = new Set(x); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; }); };
+                  const resto = restantes[r.id];
                   return (
                     <React.Fragment key={r.id}>
                       <TableRow className={cn(r.adiantado && "bg-red-50 dark:bg-red-950/40", r.status === "liberado" && "bg-green-50/60 dark:bg-green-950/20")}>
@@ -320,6 +330,26 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
                           <TableCell colSpan={2} />
                         </TableRow>
                       ))}
+                      {/* repasse pago: as despesas que não couberam nele (o desconto vai até o valor do repasse) */}
+                      {aberto && r.status === "pago" && (resto === "carregando" ? (
+                        <TableRow className="bg-muted/30 text-xs hover:bg-muted/30"><TableCell colSpan={8} className="pl-8 text-muted-foreground"><Loader2 className="mr-1 inline h-3 w-3 animate-spin" /> Buscando despesas que ficaram para o próximo repasse…</TableCell></TableRow>
+                      ) : resto && resto.length > 0 && (<>
+                        <TableRow className="bg-muted/30 text-xs hover:bg-muted/30">
+                          <TableCell colSpan={8} className="pl-8 pt-3 font-semibold uppercase text-muted-foreground">Ficam para o próximo repasse (não couberam neste)</TableCell>
+                        </TableRow>
+                        {[...resto].sort((x, y) => (x.data ?? "9999").localeCompare(y.data ?? "9999")).map((d, k) => (
+                          <TableRow key={`resto-${k}`} className="bg-muted/30 text-xs hover:bg-muted/30">
+                            <TableCell colSpan={5} className="pl-8 text-muted-foreground">(−) {d.descricao}{d.data && ` · ${formatData(d.data)}`}</TableCell>
+                            <TableCell className="text-right"><Moeda valor={-d.valor} className="text-status-alerta" /></TableCell>
+                            <TableCell colSpan={2} className="text-muted-foreground">a descontar</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/30 text-xs font-semibold hover:bg-muted/30">
+                          <TableCell colSpan={5} className="pl-8">{r.locador_nome} ainda deve (descontado nos próximos repasses da placa)</TableCell>
+                          <TableCell className="text-right"><Moeda valor={-somar(resto.map((d) => d.valor))} className="text-status-alerta" /></TableCell>
+                          <TableCell colSpan={2} />
+                        </TableRow>
+                      </>))}
                       {ultimoDaPlaca && <BlocoDespesasPlaca placa={r.placa} veiculoId={r.veiculo_id} despesas={despesasDaPlaca(r.veiculo_id)}
                         faturas={ordenados.filter((x) => x.veiculo_id === r.veiculo_id && aberta(x))} podeEditar={podeEditar}
                         onPagar={(f, ids) => { setSelecaoPagar(ids); setPagando(f); }} onExtrato={extratoSelecao}
