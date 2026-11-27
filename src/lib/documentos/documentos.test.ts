@@ -168,6 +168,18 @@ describe("recibo de repasse ao locador", () => {
     expect(t).toContain("já descontadas as despesas");
   });
 
+  it("despesas maiores que o repasse: o que não coube sai como saldo para o próximo repasse", () => {
+    const d = montarReciboRepasse({ ...base, repasses: [{ periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", dias: 15, valor_bruto: 3000, valor_liquido: 0,
+      abatimentos: [{ descricao: "Borracharia", valor: 3000 }] }],
+      pendentes: [{ placa: "DWK9E10", descricao: "Haiti mecânico", data: "2026-12-03", valor: 2061.5 }, { placa: "DWK9E10", descricao: "Rodan", data: "2026-11-27", valor: 400 }] });
+    const t = texto(d);
+    expect(t).toContain("Despesas que ficam para o próximo repasse");
+    expect(t).toContain("(-) Haiti mecânico");
+    expect(t).toMatch(/2\.461,50/);
+    expect(t.indexOf("Rodan")).toBeLessThan(t.indexOf("Haiti"));
+    expect(t).toContain("serão descontadas nos próximos repasses");
+  });
+
   it("várias placas e duas empresas pagadoras: um recibo só, com subtotal de cada empresa", () => {
     const tdts = { ...base.empresa, razao_social: "TDTS Transportes Ltda", cnpj: "11.111.111/0001-11" };
     const d = montarReciboRepasse({ ...base, repasses: [

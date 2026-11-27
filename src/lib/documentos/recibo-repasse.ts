@@ -30,6 +30,8 @@ export interface DadosReciboRepasse {
   data: string;
   /** digitados na hora de gerar: só saem no recibo, não mudam o repasse registrado (contam na empresa padrão) */
   ajustes?: { acrescimos: ItemRecibo[]; descontos: ItemRecibo[] };
+  /** despesas que não couberam neste repasse (o desconto vai até o valor dele): ficam para o próximo */
+  pendentes?: { placa: string; descricao: string; data: string | null; valor: number }[];
 }
 export type ItemRecibo = { descricao: string; valor: number };
 
@@ -93,6 +95,20 @@ export function montarReciboRepasse(d: DadosReciboRepasse): Documento {
   const veiculos = placas.length > 1 ? `dos veículos placas ${lista(placas)}` : `do veículo placa ${placa}`;
   const ressalva = temAcrescimo ? ", já considerados os acréscimos e descontos acima" : temAbatimento ? ", já descontadas as despesas acima" : "";
 
+  // o que não coube neste repasse: o locador assina ciência de que sai no próximo
+  const pendentes = [...(d.pendentes ?? [])].sort((a, b) => (a.data ?? "9999").localeCompare(b.data ?? "9999") || a.descricao.localeCompare(b.descricao));
+  const totalPendente = somar(pendentes.map((p) => p.valor));
+  const blocosPendentes: Bloco[] = pendentes.length ? [
+    { t: "espaco", mm: 4 },
+    { t: "secao", texto: "Despesas que ficam para o próximo repasse" },
+    { t: "tabela", cabecalho: ["Descrição", "Data", "Placa", "Valor"], direita: [3], larguras: [0, 26, 24, 30],
+      linhas: pendentes.map((p) => [`(-) ${p.descricao}`, formatData(p.data), formatPlaca(p.placa), `- ${formatBRL(p.valor)}`]),
+      total: ["Saldo a descontar nos próximos repasses", "", "", `- ${formatBRL(totalPendente)}`] },
+  ] : [];
+  const ciencia = pendentes.length
+    ? ` Estou ciente de que as despesas que não couberam neste repasse, no total de ${formatBRL(totalPendente)} (${valorPorExtenso(totalPendente)}), serão descontadas nos próximos repasses.`
+    : "";
+
   const blocos: Bloco[] = [
     { t: "titulo", texto: "REPASSE", sub: `${placas.length > 1 ? "Placas" : "Placa"} ${placa} · ${formatPeriodo(ini, fim)}` },
     { t: "secao", texto: "Locador" },
@@ -102,8 +118,9 @@ export function montarReciboRepasse(d: DadosReciboRepasse): Documento {
     { t: "secao", texto: "Discriminação" },
     { t: "tabela", cabecalho: ["Descrição", "Período", "Dias", "Valor"], linhas, direita: [2, 3], larguras: [0, 40, 16, 30],
       total: [temAbatimento || temAcrescimo ? "Total líquido do repasse" : "Total do repasse", "", "", formatBRL(liquido)] },
+    ...blocosPendentes,
     { t: "espaco", mm: 4 },
-    { t: "paragrafo", texto: `${recebi}referente ao repasse da locação ${veiculos} no período de ${formatData(ini)} a ${formatData(fim)}${ressalva}, dando plena quitação ${variasEmpresas ? "destes valores" : "deste valor"}.` },
+    { t: "paragrafo", texto: `${recebi}referente ao repasse da locação ${veiculos} no período de ${formatData(ini)} a ${formatData(fim)}${ressalva}, dando plena quitação ${variasEmpresas ? "destes valores" : "deste valor"}.${ciencia}` },
     { t: "espaco", mm: 2 },
     { t: "paragrafo", alinhar: "direita", texto: `${d.empresa.cidade ? `${d.empresa.cidade}${d.empresa.uf ? `/${d.empresa.uf}` : ""}, ` : ""}${formatData(d.data)}` },
     { t: "espaco", mm: 10 },

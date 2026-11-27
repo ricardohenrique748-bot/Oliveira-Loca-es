@@ -131,22 +131,55 @@ export function baixarFaturaPDF(id: string, baseDias: number) {
  * Recibo para o locador assinar: os repasses escolhidos (mesma placa), com os abatimentos de cada um.
  * Descontos salvos no repasse já vêm nos abatimentos; acréscimos salvos saem como linhas "(+)".
  */
+export type DespesaADescontar = { placa: string; descricao: string; data: string | null; valor: number };
+
+/**
+ * Despesas "descontar do locador" das placas que ainda não saíram de nenhum repasse pago nem dos repasses
+ * `ids` (os do recibo/extrato). O desconto em cada repasse vai só até o valor dele; o que não coube
+ * fica aqui e é descontado no próximo repasse da placa.
+ */
+export async function despesasADescontar(veiculoIds: string[], ids: string[]): Promise<DespesaADescontar[]> {
+  const veics = [...new Set(veiculoIds.filter(Boolean))];
+  if (!veics.length) return [];
+  const supabase = createClient();
+  const [{ data: contas, error: e1 }, { data: reps, error: e2 }] = await Promise.all([
+    supabase.from("contas_pagar_v").select("id, placa, descricao, vencimento, valor, valor_locador")
+      .in("veiculo_id", veics).eq("descontar_locador", true).order("vencimento"),
+    supabase.from("repasses").select("id").in("veiculo_id", veics).eq("status", "pago"),
+  ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+  const contam = [...new Set([...(reps ?? []).map((r) => r.id), ...ids])];
+  const contaIds = (contas ?? []).map((c) => c.id!).filter(Boolean);
+  const { data: abats, error: e3 } = contam.length && contaIds.length
+    ? await supabase.from("repasse_abatimentos").select("conta_pagar_id, valor").in("repasse_id", contam).in("conta_pagar_id", contaIds)
+    : { data: [], error: null };
+  if (e3) throw e3;
+  const abatido = new Map<string, number>();
+  for (const a of abats ?? []) if (a.conta_pagar_id) abatido.set(a.conta_pagar_id, (abatido.get(a.conta_pagar_id) ?? 0) + Number(a.valor));
+  return (contas ?? [])
+    .map((c) => ({ placa: c.placa ?? "", descricao: c.descricao ?? "Despesa", data: c.vencimento,
+      valor: Math.round((Number(c.valor_locador ?? c.valor ?? 0) - (abatido.get(c.id!) ?? 0)) * 100) / 100 }))
+    .filter((x) => x.valor > 0.004);
+}
+
 export function baixarReciboRepassePDF(ids: string[]) {
   return gerar(async () => {
     const supabase = createClient();
     const { data: rs, error } = await supabase.from("repasses_v")
-      .select("id, placa, locador_id, empresa_id, periodo_inicio, periodo_fim, dias, dias_placa, valor_bruto, valor_liquido").in("id", ids);
+      .select("id, placa, veiculo_id, locador_id, empresa_id, periodo_inicio, periodo_fim, dias, dias_placa, valor_bruto, valor_liquido").in("id", ids);
     if (error) throw error;
     const [r0] = rs ?? [];
     if (!r0?.locador_id || !r0.empresa_id) return null;
     // um recibo é de um locador só (pode ter várias placas e várias empresas pagadoras)
     if ((rs ?? []).some((r) => r.locador_id !== r0.locador_id)) throw new Error("Os repasses escolhidos são de parceiros diferentes: gere um recibo para cada parceiro.");
     const empresaIds = [...new Set((rs ?? []).map((r) => r.empresa_id).filter((x): x is string => !!x))];
-    const [loc, emp, abat, aj] = await Promise.all([
+    const [loc, emp, abat, aj, pendentes] = await Promise.all([
       supabase.from("locadores").select("nome, cpf_cnpj, chave_pix, tipo_chave_pix, banco, nome_titular_pix").eq("id", r0.locador_id).maybeSingle(),
       supabase.from("empresas").select(`id, ${EMPRESA}`).in("id", empresaIds),
       supabase.from("repasse_abatimentos").select("repasse_id, descricao, valor").in("repasse_id", ids),
       supabase.from("repasse_ajustes").select("repasse_id, descricao, valor").eq("tipo", "acrescimo").in("repasse_id", ids).order("ordem"),
+      despesasADescontar((rs ?? []).map((r) => r.veiculo_id ?? ""), ids),
     ]);
     for (const x of [loc, emp, abat, aj]) if (x.error) throw x.error;
     const empresas = (emp.data ?? []) as unknown as (EmpresaDoc & { id: string })[];
@@ -164,6 +197,7 @@ export function baixarReciboRepassePDF(ids: string[]) {
         acrescimos: acrescimosDe(r.id!),
         abatimentos: (abat.data ?? []).filter((a) => a.repasse_id === r.id).map((a) => ({ descricao: a.descricao, valor: a.valor })),
       })),
+      pendentes,
     };
     return montarReciboRepasse(dados);
   });

@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { InputMoeda } from "@/components/app/campos";
 import { alterarValorRepasse, buscarRepassesPendentes, definirDescontosRepasse, despesasParaPagar, pagarRepasse, type DespesaPlaca } from "./actions";
 import { DialogoReciboDescontos, DialogoReciboRepasse } from "./recibo";
+import { despesasADescontar, type DespesaADescontar } from "@/lib/documentos/baixar";
 
 export type Repasse = {
   id: string; medicao_id: string; locador_id: string; locador_nome: string; empresa_id: string; empresa_apelido: string; veiculo_id: string; placa: string;
@@ -119,8 +120,16 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
    * PDF enviado ao locador: valor do repasse (mensal ÷ 30 × dias), despesas descontadas e líquido.
    * Faturas em cima (uma por linha) e TODAS as despesas descontadas juntas embaixo, por data — sem separar por fatura.
    */
-  const extrato = async (loc: Locador, rs: Repasse[], abatsSimulados?: Abatimento[], ficaParaDepois = 0) => {
-    type L = { tipo: "repasse" | "secao" | "abat" | "secaoAcr" | "acr"; r: Repasse; a: Abatimento | null };
+  const extrato = async (loc: Locador, rs: Repasse[], abatsSimulados?: Abatimento[], pendentesSimulados?: DespesaADescontar[]) => {
+    type L = { tipo: "repasse" | "secao" | "abat" | "secaoAcr" | "acr" | "secaoPend" | "pend"; r: Repasse; a: Abatimento | null; placa?: string };
+    // despesas que não couberam (o desconto em cada repasse vai até o valor dele): ficam para o próximo repasse
+    let pend: DespesaADescontar[];
+    try { pend = pendentesSimulados ?? await despesasADescontar(rs.map((r) => r.veiculo_id), rs.map((r) => r.id)); }
+    catch (e) { console.error(e); pend = []; toast.error("Não foi possível ler as despesas que ficam para o próximo repasse"); }
+    const ficaParaDepois = somar(pend.map((p) => p.valor));
+    const pendentes = [...pend].sort((a, b) => (a.data ?? "9999").localeCompare(b.data ?? "9999") || a.descricao.localeCompare(b.descricao))
+      .map((p, i): L => ({ tipo: "pend", r: rs[0], placa: p.placa,
+        a: { id: `pend-${i}`, repasse_id: rs[0].id, conta_pagar_id: null, ordem_servico_id: null, descricao: p.descricao, valor: p.valor, vencimento: p.data, os_numero: null } }));
     // acréscimos do recibo (somam ao repasse do período)
     const acrs = rs.flatMap((r) => acrescimos.filter((x) => x.repasse_id === r.id)
       .map((x): L => ({ tipo: "acr", r, a: { id: `acr-${r.id}-${x.descricao}`, repasse_id: r.id, conta_pagar_id: null, ordem_servico_id: null, descricao: x.descricao, valor: x.valor, vencimento: null, os_numero: null } })));
@@ -133,20 +142,23 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
       ...rs.map((r): L => ({ tipo: "repasse", r, a: null })),
       ...(acrs.length ? [{ tipo: "secaoAcr", r: rs[0], a: null } as L, ...acrs] : []),
       ...(descontos.length ? [{ tipo: "secao", r: rs[0], a: null } as L, ...descontos] : []),
+      ...(pendentes.length ? [{ tipo: "secaoPend", r: rs[0], a: null } as L, ...pendentes] : []),
     ];
     const ini = rs.reduce((m, r) => (r.periodo_inicio < m ? r.periodo_inicio : m), rs[0].periodo_inicio);
     const fim = rs.reduce((m, r) => (r.periodo_fim > m ? r.periodo_fim : m), rs[0].periodo_fim);
     await exportarPDF(`extrato_${loc.nome}`, `Extrato do locador — ${loc.nome}`, [
-      { titulo: "Placa", valor: (l) => (l.tipo === "secao" || l.tipo === "secaoAcr" ? "" : formatPlaca(l.r.placa)) },
-      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : l.tipo === "secao" ? (rs.length > 1 ? "DESPESAS DESCONTADAS (todas as faturas)" : "DESPESAS DESCONTADAS") : l.tipo === "secaoAcr" ? "ACRÉSCIMOS" : l.tipo === "acr" ? `(+) ${l.a!.descricao}` : `(-) ${l.a!.descricao}`) },
-      { titulo: "Período / data", valor: (l) => (l.tipo === "repasse" ? formatPeriodo(l.r.periodo_inicio, l.r.periodo_fim) : l.tipo === "abat" ? formatData(l.a!.vencimento) : "") },
+      { titulo: "Placa", valor: (l) => (l.tipo === "secao" || l.tipo === "secaoAcr" || l.tipo === "secaoPend" ? "" : formatPlaca(l.placa ?? l.r.placa)) },
+      { titulo: "Cliente / descrição", valor: (l) => (l.tipo === "repasse" ? `${l.r.cliente_nome} · ${l.r.empresa_apelido}` : l.tipo === "secao" ? (rs.length > 1 ? "DESPESAS DESCONTADAS (todas as faturas)" : "DESPESAS DESCONTADAS") : l.tipo === "secaoAcr" ? "ACRÉSCIMOS" : l.tipo === "secaoPend" ? "FICAM PARA O PRÓXIMO REPASSE (não couberam neste)" : l.tipo === "acr" ? `(+) ${l.a!.descricao}` : `(-) ${l.a!.descricao}`) },
+      { titulo: "Período / data", valor: (l) => (l.tipo === "repasse" ? formatPeriodo(l.r.periodo_inicio, l.r.periodo_fim) : l.tipo === "abat" || l.tipo === "pend" ? formatData(l.a!.vencimento) : "") },
       { titulo: "Dias", valor: (l) => (l.tipo === "repasse" ? l.r.dias_placa ?? l.r.dias : null), tipo: "numero" },
       // repasse do período = bruto (+ acréscimos do recibo): é o que o locador tem a receber antes das despesas
       // período: mensal ÷ 30 × dias; os acréscimos vêm em linhas próprias
       { titulo: "Repasse", valor: (l) => (l.tipo === "repasse" ? l.r.valor_bruto : l.tipo === "acr" ? l.a!.valor : null), tipo: "moeda" },
       { titulo: "Abatimento", valor: (l) => (l.tipo === "abat" ? l.a!.valor : null), tipo: "moeda" },
+      // o que fica para depois sai na coluna própria: não entra no total abatido agora
+      ...(pendentes.length ? [{ titulo: "Próximo repasse", valor: (l: L) => (l.tipo === "pend" ? l.a!.valor : null), tipo: "moeda" as const }] : []),
       { titulo: "Líquido", valor: (l) => (l.tipo === "repasse" ? l.r.valor_liquido : null), tipo: "moeda" },
-      { titulo: "Situação", valor: (l) => (l.tipo === "repasse" ? (l.r.status === "pago" ? `Pago ${formatData(l.r.data_pagamento)}` : l.r.status) : "") },
+      { titulo: "Situação", valor: (l) => (l.tipo === "repasse" ? (l.r.status === "pago" ? `Pago ${formatData(l.r.data_pagamento)}` : l.r.status) : l.tipo === "pend" ? "a descontar" : "") },
     ], linhas, {
       subtitulo: `Período: ${formatData(ini)} a ${formatData(fim)}`,
       resumo: [
@@ -156,30 +168,40 @@ export function RepassesCliente({ repasses, abatimentos, locadores, placas, desc
         ...(totalAcr > 0 ? [["Acréscimos", formatBRL(totalAcr)] as [string, string]] : []),
         ["Abatimentos", formatBRL(somar(rs.map((r) => r.valor_abatimentos)))],
         ["Total líquido", formatBRL(somar(rs.map((r) => r.valor_liquido)))],
-        ...(ficaParaDepois > 0 ? [["Fica para o próximo repasse", `${formatBRL(ficaParaDepois)} (despesas que não couberam nesta fatura)`] as [string, string]] : []),
+        ...(ficaParaDepois > 0 ? [["Fica para o próximo repasse", `${formatBRL(ficaParaDepois)} (despesas que não couberam neste repasse)`] as [string, string]] : []),
         ...(somar(rs.map((r) => r.valor_liquido)) < 0 ? [["Saldo do locador", `${loc.nome} deve ${formatBRL(-somar(rs.map((r) => r.valor_liquido)))} (despesas maiores que o repasse)`] as [string, string]] : []),
       ],
-      totais: ["Total", "", "", "", somar(rs.map((r) => r.valor_bruto)) + totalAcr, somar(rs.map((r) => r.valor_abatimentos)), somar(rs.map((r) => r.valor_liquido)), ""],
+      totais: ["Total", "", "", "", somar(rs.map((r) => r.valor_bruto)) + totalAcr, somar(rs.map((r) => r.valor_abatimentos)),
+        ...(pendentes.length ? [ficaParaDepois] : []), somar(rs.map((r) => r.valor_liquido)), ""],
       rodape: ["Valores proporcionais aos dias medidos (base 30). Abatimentos referentes a despesas do veículo marcadas “descontar do locador”.",
         ...(ficaParaDepois > 0 ? ["O desconto em cada fatura vai até o valor dela (o líquido não fica negativo); o que não coube é descontado no próximo repasse da placa."] : [])],
     });
   };
 
-  /** extrato só da fatura escolhida no bloco da placa, com as despesas marcadas (como ficará ao pagar) */
   const r2 = (v: number) => Math.round(v * 100) / 100;
-  /** quanto ainda cabe de despesas nesta fatura: bruto (+ acréscimos) − descontos da própria fatura/recibo */
-  /** extrato só da fatura escolhida no bloco da placa, com as despesas marcadas (como ficará ao pagar) */
+  /**
+   * Extrato só da fatura escolhida no bloco da placa, com as despesas marcadas, como ficará ao pagar:
+   * igual ao banco, o desconto vai por vencimento até o valor do repasse (o líquido não fica negativo);
+   * o que não couber e as despesas desmarcadas saem como "ficam para o próximo repasse".
+   */
   const extratoSelecao = (f: Repasse, ids: string[]) => {
     const daFatura = abatDe(f.id).filter((a) => !a.conta_pagar_id); // descontos da fatura/recibo saem primeiro
+    const acr = somar(acrescimos.filter((x) => x.repasse_id === f.id).map((x) => x.valor));
+    let disponivel = r2(f.valor_bruto + acr - somar(daFatura.map((a) => a.valor)));
     const sim: Abatimento[] = [...daFatura];
-    for (const d of despesasDaPlaca(f.veiculo_id).filter((x) => ids.includes(x.id))) {
-      sim.push({ id: `sim-${d.id}`, repasse_id: f.id, conta_pagar_id: d.id, ordem_servico_id: null, descricao: d.descricao,
-        valor: r2(somar(Object.values(d.porRepasse)) + d.pendente), vencimento: d.vencimento, os_numero: null });
+    const pend: DespesaADescontar[] = [];
+    for (const d of despesasDaPlaca(f.veiculo_id)) {
+      const valor = r2(somar(Object.values(d.porRepasse)) + d.pendente);
+      const usar = ids.includes(d.id) ? Math.max(0, Math.min(valor, disponivel)) : 0;
+      if (usar > 0) {
+        sim.push({ id: `sim-${d.id}`, repasse_id: f.id, conta_pagar_id: d.id, ordem_servico_id: null, descricao: d.descricao, valor: usar, vencimento: d.vencimento, os_numero: null });
+        disponivel = r2(disponivel - usar);
+      }
+      if (valor - usar > 0.004) pend.push({ placa: f.placa, descricao: d.descricao, data: d.vencimento, valor: r2(valor - usar) });
     }
     const total = r2(somar(sim.map((a) => a.valor)));
-    // o líquido pode ficar negativo: é o saldo que o locador fica devendo
     void extrato(locadorDe(f.locador_id, f.locador_nome),
-      [{ ...f, valor_abatimentos: total, valor_liquido: r2(f.valor_liquido + f.valor_abatimentos - total) }], sim);
+      [{ ...f, valor_abatimentos: total, valor_liquido: r2(f.valor_bruto + acr - total) }], sim, pend);
   };
 
   return (
