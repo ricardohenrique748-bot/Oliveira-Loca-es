@@ -157,7 +157,14 @@ export async function despesasADescontar(veiculoIds: string[], ids: string[]): P
   if (e3) throw e3;
   const abatido = new Map<string, number>();
   for (const a of abats ?? []) if (a.conta_pagar_id) abatido.set(a.conta_pagar_id, (abatido.get(a.conta_pagar_id) ?? 0) + Number(a.valor));
+  // só as despesas marcadas nestes repasses (escolha gravada ao pagar); sem escolha gravada, todas da placa
+  const { data: escolhas, error: e4 } = ids.length
+    ? await supabase.from("repasse_descontos_escolha" as never).select("conta_pagar_id").in("repasse_id", ids).eq("incluir", true)
+    : { data: [], error: null };
+  if (e4) throw e4;
+  const marcadas = new Set(((escolhas ?? []) as unknown as { conta_pagar_id: string }[]).map((x) => x.conta_pagar_id));
   return (contas ?? [])
+    .filter((c) => !marcadas.size || marcadas.has(c.id!))
     .map((c) => ({ placa: c.placa ?? "", descricao: c.descricao ?? "Despesa", data: c.vencimento,
       valor: Math.round((Number(c.valor_locador ?? c.valor ?? 0) - (abatido.get(c.id!) ?? 0)) * 100) / 100 }))
     .filter((x) => x.valor > 0.004);
